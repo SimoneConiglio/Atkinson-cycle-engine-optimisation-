@@ -8,7 +8,10 @@ version = "1.0.0"
 description = "Multi-objective optimization of an EX-link Atkinson-cycle engine mechanism, with GEMSEO"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+# Upper bound mirrors GEMSEO, which caps itself at <3.14; without it a user on
+# 3.14 gets an opaque resolution failure from a dependency instead of a clear
+# message from this package.
+requires-python = ">=3.10,<3.14"
 authors = [{ name = "Simone Coniglio", email = "simone.coniglio91@gmail.com" }]
 keywords = [
     "optimization",

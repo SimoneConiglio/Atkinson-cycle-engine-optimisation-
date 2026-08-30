@@ -13,6 +13,10 @@ concurrency:
 env:
   MPLBACKEND: Agg
 
+# Every job installs into a uv-managed virtualenv rather than with
+# `uv pip install --system`. The runner's system interpreter is PEP 668
+# externally-managed, so `--system` is refused outright; it would also have
+# ignored the matrix version and tested one Python three times.
 jobs:
   test:
     name: test (python ${{ matrix.python-version }})
@@ -29,14 +33,14 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python
-        run: uv python install ${{ matrix.python-version }}
+      - name: Create a virtualenv on Python ${{ matrix.python-version }}
+        run: uv venv --python ${{ matrix.python-version }}
 
       - name: Install the project
-        run: uv pip install --system -e ".[dev,moea]"
+        run: uv pip install -e ".[dev,moea]"
 
       - name: Run the fast tests
-        run: pytest -m "not slow" --cov --cov-report=term-missing
+        run: .venv/bin/pytest -m "not slow" --cov --cov-report=term-missing
 
   slow:
     name: optimizer tests
@@ -46,10 +50,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv python install 3.11
-      - run: uv pip install --system -e ".[dev,moea]"
-      - name: Run the full suite
-        run: pytest -m slow
+      - run: uv venv --python 3.11
+      - run: uv pip install -e ".[dev,moea]"
+      - name: Run the optimizer tests
+        run: .venv/bin/pytest -m slow
 
   lint:
     name: lint and types
@@ -59,8 +63,25 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv python install 3.11
-      - run: uv pip install --system -e ".[dev,moea]"
-      - run: ruff check src tests examples
-      - run: ruff format --check src tests examples
-      - run: mypy src/exlink
+      - run: uv venv --python 3.11
+      - run: uv pip install -e ".[dev,moea]"
+      - run: .venv/bin/ruff check src tests examples
+      - run: .venv/bin/ruff format --check src tests examples
+      - run: .venv/bin/mypy src/exlink
+
+  package:
+    name: build and install the wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Build the sdist and wheel
+        run: uv build --out-dir dist
+      - name: Install the wheel into a clean environment
+        run: |
+          uv venv --python 3.11 /tmp/wheel-env
+          uv pip install --python /tmp/wheel-env/bin/python dist/*.whl
+      - name: Check the console script runs without the source tree
+        run: cd /tmp && /tmp/wheel-env/bin/exlink analyse --samples 360
