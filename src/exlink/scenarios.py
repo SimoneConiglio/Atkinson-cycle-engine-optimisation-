@@ -811,15 +811,31 @@ the sizing step, a bisection, has no useful derivative to give it anyway.
 """
 
 DEFAULT_MDA_SETTINGS: dict[str, Any] = {
-    "tolerance": 1.0e-8,
+    "tolerance": 1.0e-6,
     "max_mda_iter": 300,
     "warm_start": True,
 }
-"""Settings for the inner MDA.
+"""Settings for the inner MDA, chosen against measured cost.
 
-``warm_start`` matters more than it looks: successive design points during an
-optimization are close together, so starting each MDA from the previous
-converged sections turns a 70-sweep solve into a handful.
+Every objective evaluation runs this MDA to convergence, so its settings set
+the price of the whole optimization.  From a cold start at 1000 rpm and 360
+crank angles:
+
+==========  =======  ======  ==========================
+tolerance   sweeps   time    section error vs 1e-8
+==========  =======  ======  ==========================
+``1e-8``    56       9.3 s   --
+``1e-6``    44       6.9 s   2e-6 mm
+``1e-4``    31       5.1 s   2e-4 mm
+==========  =======  ======  ==========================
+
+``1e-6`` buys sub-micron sections for three quarters of the cost, which is far
+inside anything a part would be made to.
+
+``warm_start`` matters more than the tolerance: successive design points during
+an optimization are close together, so starting each MDA from the previous
+converged sections turns a ~50-sweep solve into a handful, and takes the cost
+per evaluation from around 9 s to under 2.
 """
 
 
@@ -942,6 +958,11 @@ def minimise_mass(
     The natural single-objective reading of the coupled problem: the report's
     efficiency becomes a constraint to hold, and the mass the dynamics creates
     becomes the thing to reduce.
+
+    Budget realistically.  Every evaluation runs an MDA to convergence, and a
+    derivative-free search over eleven variables needs a few hundred of them
+    before it moves: 250 evaluations take the published geometry from 1.03 kg to
+    0.24 kg at 1000 rpm, while 60 barely leave the starting point.
 
     Args:
         algorithm: A single-objective GEMSEO optimizer.

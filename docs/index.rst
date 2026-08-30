@@ -20,6 +20,11 @@ Start here
    print(format_analysis(analyse(PUBLISHED_DESIGN)))
    outcome = refine(PUBLISHED_DESIGN)
 
+   # size the parts, with inertia in the load path
+   from exlink import solve_for_design
+   sized = solve_for_design(PUBLISHED_DESIGN, speed_rpm=1000.0)
+   print(sized.total_mass_kg, sized.feasible)
+
 API
 ---
 
@@ -33,6 +38,18 @@ Physics
 .. automodule:: exlink.loads
 .. automodule:: exlink.metrics
 .. automodule:: exlink.model
+
+Sizing and dynamics
+~~~~~~~~~~~~~~~~~~~
+
+The iteration the report defers: inertia in the load path, parts sized against
+static, fatigue and buckling failure, and the fixed point that couples them.
+
+.. automodule:: exlink.derivatives
+.. automodule:: exlink.materials
+.. automodule:: exlink.dynamics
+.. automodule:: exlink.sizing
+.. automodule:: exlink.coupled
 
 Optimization
 ~~~~~~~~~~~~
