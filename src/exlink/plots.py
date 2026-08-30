@@ -381,3 +381,163 @@ def plot_convergence(outcome: Any) -> Figure:
         ax.legend(loc="best")
         figure.tight_layout()
     return figure
+
+
+def _load_axes(ax: Axes, result: Any, joint: str = "R1") -> Axes:
+    """Draw a joint's reaction over the revolution onto existing axes."""
+    degrees = np.degrees(result.loads.kinematics.theta_1)
+    magnitude = np.linalg.norm(result.loads.reaction[joint], axis=1)
+    ax.plot(degrees, magnitude, lw=1.8, color="#c0392b")
+    ax.set_xlabel(r"crank angle $\theta_1$ [deg]")
+    ax.set_ylabel(f"$|F_{{{joint}}}|$ [N]")
+    ax.set_xlim(0.0, 360.0)
+    ax.set_xticks(np.arange(0.0, 361.0, 60.0))
+    return ax
+
+
+def plot_bearing_loads(results: Sequence[Any], labels: Sequence[str]) -> Figure:
+    """Compare a joint reaction across several engine speeds.
+
+    Shows what adding inertia actually does: the mean torque is untouched, but
+    the peak reaction climbs as the square of speed, and that peak is what sizes
+    the parts.
+
+    Args:
+        results: Coupled results, one per speed.
+        labels: A label for each.
+
+    Returns:
+        The figure.
+    """
+    with plt.style.context(STYLE):
+        figure, axes = plt.subplots(1, 2, figsize=(11.0, 4.2))
+        colours = plt.get_cmap("viridis")(np.linspace(0.15, 0.85, len(results)))
+        for result, label, colour in zip(results, labels, colours, strict=True):
+            degrees = np.degrees(result.loads.kinematics.theta_1)
+            axes[0].plot(
+                degrees,
+                np.linalg.norm(result.loads.reaction["R1"], axis=1) / 1000.0,
+                lw=1.8,
+                color=colour,
+                label=label,
+            )
+            axes[1].plot(
+                degrees, result.loads.torque / 1000.0, lw=1.8, color=colour, label=label
+            )
+        axes[0].set_ylabel("crankshaft bearing load [kN]")
+        axes[0].set_title("peak load grows as the square of speed")
+        axes[1].set_ylabel(r"torque $M_r$ [N.m]")
+        axes[1].set_title("mean torque is unchanged by it")
+        for ax in axes:
+            ax.set_xlabel(r"crank angle $\theta_1$ [deg]")
+            ax.set_xlim(0.0, 360.0)
+            ax.set_xticks(np.arange(0.0, 361.0, 90.0))
+            ax.legend(loc="best", framealpha=0.9)
+        figure.tight_layout()
+    return figure
+
+
+def plot_sizing(result: Any) -> Figure:
+    """Show the sized sections, what drove each, and where the mass went.
+
+    Args:
+        result: A :class:`~exlink.coupled.CoupledResult`.
+
+    Returns:
+        The figure.
+    """
+    names = list(result.sizing)
+    items = [result.sizing[n] for n in names]
+    positions = np.arange(len(names))
+    mode_colour = {"static": "#2980b9", "fatigue": "#c0392b", "buckling": "#e67e22"}
+
+    with plt.style.context(STYLE):
+        figure, axes = plt.subplots(1, 3, figsize=(13.0, 4.4))
+        colours = [mode_colour[i.critical_mode] for i in items]
+
+        axes[0].barh(positions, [i.diameter for i in items], color=colours)
+        axes[0].set_xlabel("required diameter [mm]")
+        axes[0].set_title("sections")
+
+        axes[1].barh(positions, [1000.0 * i.mass_kg for i in items], color=colours)
+        axes[1].set_xlabel("mass [g]")
+        axes[1].set_title(f"total {result.total_mass_kg:.3f} kg, piston included")
+
+        width = 0.26
+        for offset, (attribute, label) in enumerate(
+            (
+                ("static_utilisation", "static"),
+                ("fatigue_utilisation", "fatigue"),
+                ("buckling_utilisation", "buckling"),
+            )
+        ):
+            axes[2].barh(
+                positions + (offset - 1) * width,
+                [getattr(i, attribute) for i in items],
+                height=width,
+                color=mode_colour[label],
+                label=label,
+            )
+        axes[2].axvline(1.0, color="#2c3e50", ls="--", lw=1.0)
+        axes[2].set_xlabel("utilisation")
+        axes[2].set_title("which mode binds")
+        axes[2].legend(loc="lower right", framealpha=0.9)
+
+        for ax in axes:
+            ax.set_yticks(positions)
+            ax.set_yticklabels(names)
+            ax.invert_yaxis()
+        figure.suptitle(
+            f"sizing at {result.speed * 60.0 / (2.0 * np.pi):.0f} rpm   "
+            f"({result.iterations} MDA sweeps)",
+            fontsize=11,
+        )
+        figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    return figure
+
+
+def plot_mass_vs_speed(speeds: Sequence[float], results: Sequence[Any]) -> Figure:
+    """Structural mass against engine speed, on log axes.
+
+    The slope is the story: a bending-critical member needs ``d ~ F^(1/3)``, so
+    its mass goes as ``F^(2/3)`` while the inertia force it creates goes as its
+    own mass -- composing to ``m ~ (C Omega^2)^3``. A cubic-in-acceleration,
+    sixth-power-in-speed sensitivity is why the answer collapses so sharply.
+
+    Args:
+        speeds: Crankshaft speeds [rev/min].
+        results: The coupled result at each, feasible or not.
+
+    Returns:
+        The figure.
+    """
+    with plt.style.context(STYLE):
+        figure, ax = plt.subplots(figsize=(7.0, 4.4))
+        usable = [(s, r) for s, r in zip(speeds, results, strict=True) if r.feasible]
+        failed = [(s, r) for s, r in zip(speeds, results, strict=True) if not r.feasible]
+        if usable:
+            ax.plot(
+                [s for s, _ in usable],
+                [r.total_mass_kg for _, r in usable],
+                "o-",
+                color="#2980b9",
+                lw=2.0,
+                label="buildable",
+            )
+        if failed:
+            ax.plot(
+                [s for s, _ in failed],
+                [r.total_mass_kg for _, r in failed],
+                "x",
+                ms=10,
+                color="#c0392b",
+                mew=2.0,
+                label="loop runs away",
+            )
+        ax.set_xlabel("crankshaft speed [rpm]")
+        ax.set_ylabel("total moving mass [kg]")
+        ax.set_yscale("log")
+        ax.set_title("structural mass against engine speed")
+        ax.legend(loc="best", framealpha=0.9)
+        figure.tight_layout()
+    return figure

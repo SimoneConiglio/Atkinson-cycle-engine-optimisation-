@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
 import pytest
 
 from exlink import (
@@ -240,3 +241,54 @@ def test_feasibility_tolerates_a_constraint_sitting_on_its_bound() -> None:
     )
     assert is_feasible(analysis, targets=on_bound)
     assert not is_feasible(analysis, targets=outside)
+
+
+def test_the_coupled_scenario_carries_the_dynamic_constraints() -> None:
+    """The MDF problem keeps the report's constraints and adds its own."""
+    from exlink.scenarios import COUPLED_INEQUALITY_OUTPUTS, build_coupled_scenario
+
+    problem = build_coupled_scenario(speed_rpm=1000.0).formulation.optimization_problem
+    names = set(problem.scalar_constraint_names)
+    assert set(INEQUALITY_OUTPUTS) <= names
+    assert set(COUPLED_INEQUALITY_OUTPUTS) <= names
+    assert problem.objective.name == "total_mass"
+
+
+def test_the_coupled_scenario_uses_an_mda() -> None:
+    """Without one, the coupling would simply be evaluated in the wrong order."""
+    from exlink.scenarios import build_coupled_scenario
+
+    scenario = build_coupled_scenario(speed_rpm=1000.0)
+    mda = scenario.formulation.mda
+    couplings = set(mda.coupling_structure.strong_couplings)
+    assert "diameters" in couplings
+    assert {"member_axial", "member_bending"} & couplings
+
+
+def test_the_bearing_margin_is_signed_against_its_limit() -> None:
+    from exlink.scenarios import BearingMarginDiscipline
+
+    discipline = BearingMarginDiscipline(limit=10_000.0)
+    safe = discipline.execute({"peak_bearing_load": np.array([5_000.0])})
+    unsafe = discipline.execute({"peak_bearing_load": np.array([20_000.0])})
+    assert float(safe["bearing_margin"][0]) < 0.0
+    assert float(unsafe["bearing_margin"][0]) > 0.0
+
+
+@pytest.mark.slow
+def test_minimising_mass_beats_the_quasi_static_design() -> None:
+    """The payoff: with inertia in the loop the optimizer finds a far lighter design.
+
+    The report's geometry is near-singular because that maximises the
+    quasi-static lever arm. Once the parts have to survive their own inertia
+    that becomes the expensive choice, and a short local search should already
+    find a much lighter design at a comparable efficiency.
+    """
+    from exlink.coupled import solve_for_design
+    from exlink.scenarios import minimise_mass
+
+    start = solve_for_design(REFINED_DESIGN, speed_rpm=1000.0, samples=360, max_iterations=400)
+    outcome = minimise_mass(speed_rpm=1000.0, max_iter=60, relative=0.30, min_efficiency=0.24)
+    found = solve_for_design(outcome.design, speed_rpm=1000.0, samples=360, max_iterations=400)
+    assert found.feasible
+    assert found.total_mass_kg < start.total_mass_kg

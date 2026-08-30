@@ -44,19 +44,28 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 from gemseo import create_scenario
 from gemseo.algos.design_space import DesignSpace
 from gemseo.algos.opt.factory import OptimizationLibraryFactory
 from gemseo.algos.pareto.pareto_front import ParetoFront
+from gemseo.core.discipline import Discipline
 from gemseo.scenarios.base_scenario import BaseScenario
+from gemseo.typing import StrKeyMapping
 
 from .constants import DEFAULT_SPEC, DEFAULT_TARGETS, DesignTargets, EngineSpec
 from .design import GLOBAL_BOUNDS, VARIABLE_NAMES, Bounds, Design
-from .disciplines import ExlinkDiscipline
+from .disciplines import (
+    COUPLED_SAMPLES,
+    DynamicsDiscipline,
+    ExlinkDiscipline,
+    StructureDiscipline,
+)
+from .dynamics import DEFAULT_SPEED_RPM
 from .kinematics import DEFAULT_SAMPLES
+from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .model import Analysis, analyse
 from .reference import PUBLISHED_DESIGN
 
@@ -748,4 +757,258 @@ def format_analysis(analysis: Analysis, title: str = "analysis") -> str:
         lines.append(f"  {label:<26} {value:>14}   {target}")
     lines.append("")
     lines.append(f"  feasible: {is_feasible(analysis)}")
+    return "\n".join(lines)
+
+
+# =============================================================================
+# The coupled problem
+#
+# Everything above optimizes the report's own formulation, in which geometry
+# determines performance one way.  Adding the sizing discipline and inertia
+# closes a loop between them, so these scenarios use the MDF formulation: every
+# objective evaluation runs an MDA to convergence before the optimizer sees a
+# number.
+# =============================================================================
+
+COUPLED_OBJECTIVE_NAMES: tuple[str, str, str, str] = (
+    "neg_efficiency",
+    "height",
+    "width",
+    "total_mass",
+)
+"""``f(X) = (-eta, H, B, M)^T``: the report's three objectives plus mass.
+
+Structural mass cannot appear in the report's formulation at all -- nothing in
+it determines a cross-section.  It only becomes an objective once the parts are
+sized, and it is the objective the dynamics most affects.
+"""
+
+COUPLED_INEQUALITY_OUTPUTS: tuple[str, ...] = (
+    "saturation_margin",
+    "slenderness_margin",
+    "bearing_margin",
+)
+"""Constraints that exist only once the loads are dynamic.
+
+``saturation_margin``
+    Positive when some member has been driven to the diameter ceiling, i.e. the
+    sizing loop ran away rather than settling: no section is thick enough to
+    survive the inertia its own mass creates.
+``slenderness_margin``
+    Positive when a connecting link has grown thicker than a third of its
+    length, at which point calling it a rod -- and sizing it as a beam -- has
+    stopped being credible.
+``bearing_margin``
+    Peak crankshaft bearing reaction against its limit.
+"""
+
+DEFAULT_MDA = "MDAGaussSeidel"
+"""Fixed-point sweep, which is what this coupling wants.
+
+The loop gain is sub-linear (see :mod:`exlink.coupled`), so plain Gauss-Seidel
+converges without needing the coupled Jacobians a Newton MDA would demand -- and
+the sizing step, a bisection, has no useful derivative to give it anyway.
+"""
+
+DEFAULT_MDA_SETTINGS: dict[str, Any] = {
+    "tolerance": 1.0e-8,
+    "max_mda_iter": 300,
+    "warm_start": True,
+}
+"""Settings for the inner MDA.
+
+``warm_start`` matters more than it looks: successive design points during an
+optimization are close together, so starting each MDA from the previous
+converged sections turns a 70-sweep solve into a handful.
+"""
+
+
+class BearingMarginDiscipline(Discipline):
+    """Turns the peak bearing reaction into a signed constraint.
+
+    A one-line discipline rather than a constraint offset, so that the limit
+    travels with the problem and shows up in the coupling graph.
+
+    Args:
+        limit: Allowable peak bearing reaction [N].
+        name: Discipline name.
+    """
+
+    auto_detect_grammar_files: ClassVar[bool] = False
+
+    def __init__(self, limit: float = DEFAULT_TARGETS.max_bearing_load, name: str = "") -> None:
+        super().__init__(name=name)
+        self.limit = limit
+        self.input_grammar.update_from_names(["peak_bearing_load"])
+        self.output_grammar.update_from_names(["bearing_margin"])
+        self.default_input_data = {"peak_bearing_load": np.zeros(1)}
+
+    def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
+        load = float(np.ravel(dict(input_data)["peak_bearing_load"])[0])
+        return {"bearing_margin": np.array([load / self.limit - 1.0])}
+
+
+def build_coupled_scenario(
+    objective: str | Sequence[str] = "total_mass",
+    bounds: Bounds = GLOBAL_BOUNDS,
+    initial: Design | None = None,
+    speed_rpm: float = DEFAULT_SPEED_RPM,
+    samples: int = COUPLED_SAMPLES,
+    spec: EngineSpec = DEFAULT_SPEC,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    material: Material = DEFAULT_MATERIAL,
+    safety: SafetyFactors = DEFAULT_SAFETY,
+    relax_equalities: bool = True,
+    equality_tolerance: dict[str, float] | None = None,
+    max_height: float = float("inf"),
+    max_width: float = float("inf"),
+    mda_name: str = DEFAULT_MDA,
+    mda_settings: dict[str, Any] | None = None,
+) -> BaseScenario:
+    """Assemble the coupled scenario, under the MDF formulation.
+
+    Three disciplines take part.  :class:`~exlink.disciplines.ExlinkDiscipline`
+    supplies the report's own objectives and constraints and is feed-forward
+    from the design variables.  The other two --
+    :class:`~exlink.disciplines.DynamicsDiscipline` and
+    :class:`~exlink.disciplines.StructureDiscipline` -- are strongly coupled to
+    each other through the section diameters and the internal load histories,
+    and MDF puts an MDA around them so that every point the optimizer evaluates
+    is a converged one.
+
+    Args:
+        objective: Output name, or several for a multi-objective run.
+        bounds: The design box.
+        initial: Starting design.
+        speed_rpm: Crankshaft speed [rev/min].
+        samples: Crank angles per revolution.
+        spec: Fixed engine data.
+        targets: Constraint right-hand sides.
+        material: The material.
+        safety: The design factors.
+        relax_equalities: Express the two equalities as pairs of inequalities.
+            On by default here: the coupled problem is harder, and few
+            algorithms that cope with it also take equality constraints.
+        equality_tolerance: Overrides for the relaxed half-widths.
+        max_height: Moving upper limit on ``H`` [mm].
+        max_width: Moving upper limit on ``B`` [mm].
+        mda_name: Inner MDA.
+        mda_settings: Overrides for :data:`DEFAULT_MDA_SETTINGS`.
+
+    Returns:
+        A scenario ready to execute.
+    """
+    disciplines = [
+        ExlinkDiscipline(samples=samples, spec=spec, targets=targets),
+        DynamicsDiscipline(
+            speed_rpm=speed_rpm,
+            samples=samples,
+            material=material,
+            safety=safety,
+            spec=spec,
+        ),
+        StructureDiscipline(samples=samples, material=material, safety=safety, spec=spec),
+        BearingMarginDiscipline(limit=targets.max_bearing_load),
+    ]
+    settings = dict(DEFAULT_MDA_SETTINGS)
+    settings.update(mda_settings or {})
+
+    scenario = create_scenario(
+        disciplines,
+        objective,
+        build_design_space(bounds, initial),
+        formulation_name="MDF",
+        main_mda_name=mda_name,
+        main_mda_settings=settings,
+    )
+    _attach_constraints(scenario, relax_equalities, equality_tolerance, max_height, max_width)
+    for name in COUPLED_INEQUALITY_OUTPUTS:
+        scenario.add_constraint(name, constraint_type="ineq")
+    return scenario
+
+
+def minimise_mass(
+    algorithm: str = "NLOPT_COBYLA",
+    bounds: Bounds | None = None,
+    initial: Design | None = None,
+    speed_rpm: float = DEFAULT_SPEED_RPM,
+    max_iter: int = 300,
+    relative: float = 0.25,
+    min_efficiency: float = 0.25,
+    **kwargs: Any,
+) -> Outcome:
+    """Minimise total moving mass at a floor on efficiency.
+
+    The natural single-objective reading of the coupled problem: the report's
+    efficiency becomes a constraint to hold, and the mass the dynamics creates
+    becomes the thing to reduce.
+
+    Args:
+        algorithm: A single-objective GEMSEO optimizer.
+        bounds: The design box; defaults to a window around ``initial``.
+        initial: Starting design; defaults to the refined reference.
+        speed_rpm: Crankshaft speed [rev/min].
+        max_iter: Evaluation budget.
+        relative: Half-width of the default box, as a fraction of ``|X_0|``.
+        min_efficiency: Floor on ``eta``.
+        **kwargs: Forwarded to :func:`build_coupled_scenario`.
+
+    Returns:
+        The outcome; its :attr:`Outcome.design` is the lightest design found.
+    """
+    from .reference import REFINED_DESIGN
+
+    start = REFINED_DESIGN if initial is None else initial
+    box = Bounds.around(start, relative=relative) if bounds is None else bounds
+    scenario = build_coupled_scenario(
+        "total_mass", bounds=box, initial=start, speed_rpm=speed_rpm, **kwargs
+    )
+    scenario.add_constraint(
+        "efficiency",
+        constraint_type="ineq",
+        value=min_efficiency,
+        positive=True,
+        constraint_name="efficiency_floor",
+    )
+    settings: dict[str, Any] = {"max_iter": max_iter}
+    scenario.execute(algo_name=algorithm, **settings)
+    design = _best_design(scenario)
+    return Outcome(
+        design=design,
+        analysis=analyse(design, samples=COUPLED_SAMPLES),
+        algorithm=algorithm,
+        scenario=scenario,
+    )
+
+
+def format_coupled(result: Any, title: str = "coupled sizing") -> str:
+    """Render a :class:`~exlink.coupled.CoupledResult` as an aligned table."""
+    lines = [title, "=" * len(title), ""]
+    lines.append(
+        f"  speed {result.speed * 60.0 / (2.0 * np.pi):.0f} rpm"
+        f"   |   {result.iterations} MDA sweeps, residual {result.residual:.2e}"
+        f"   |   {'converged' if result.converged else 'NOT CONVERGED'}"
+        f"{'  SATURATED' if result.saturated else ''}"
+    )
+    lines.append("")
+    lines.append(
+        f"  {'member':<14}{'d [mm]':>9}{'mass [g]':>11}{'peak sigma':>12}"
+        f"{'  critical':>12}{'  static':>9}{'fatigue':>9}{'buckling':>10}"
+    )
+    for name, item in result.sizing.items():
+        lines.append(
+            f"  {name:<14}{item.diameter:>9.2f}{1.0e6 * item.mass:>11.1f}"
+            f"{item.peak_stress:>12.1f}{item.critical_mode:>12}"
+            f"{item.static_utilisation:>9.3f}{item.fatigue_utilisation:>9.3f}"
+            f"{item.buckling_utilisation:>10.3f}"
+        )
+    lines.append("")
+    lines.append(
+        f"  piston crown {result.piston_crown_thickness:.2f} mm, "
+        f"{1.0e6 * result.piston_mass:.1f} g"
+    )
+    lines.append(f"  total moving mass    {result.total_mass_kg:8.3f} kg")
+    lines.append(f"  peak bearing load    {result.peak_bearing_load:8.0f} N")
+    lines.append(f"  mean torque          {result.loads.mean_torque:8.1f} N.mm")
+    lines.append(f"  worst matrix cond.   {result.loads.conditioning:8.3g}")
     return "\n".join(lines)

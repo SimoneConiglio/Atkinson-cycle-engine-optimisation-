@@ -12,6 +12,12 @@ driven by `GEMSEO <https://gemseo.readthedocs.io>`_, so the same problem can be
 handed to a gradient-based solver, a differential-evolution search, an augmented
 Lagrangian, or NSGA-II without rewriting anything.
 
+The report stops before sizing the parts, because their masses are not known
+until they have a shape.  :mod:`exlink.dynamics`, :mod:`exlink.sizing` and
+:mod:`exlink.coupled` carry out that next iteration, which closes a loop:
+sections set the masses, the masses set the inertia loads, and the loads set the
+sections.  That coupling has to be solved, and GEMSEO solves it with an MDA.
+
 Quick start::
 
     from exlink import analyse, PUBLISHED_DESIGN
@@ -19,6 +25,11 @@ Quick start::
 
     from exlink.scenarios import maximise_efficiency
     result = maximise_efficiency()
+
+    # size the parts, with inertia in the load path
+    from exlink import solve_for_design
+    sized = solve_for_design(PUBLISHED_DESIGN, speed_rpm=1000.0)
+    print(sized.total_mass_kg, sized.diameters)
 """
 
 from __future__ import annotations
@@ -31,6 +42,7 @@ from .constants import (
     EngineSpec,
     PenaltyValues,
 )
+from .coupled import CoupledResult, solve_coupled, solve_for_design
 from .cycle import Phase, PhaseError, Phases, Thermodynamics
 from .design import (
     GLOBAL_BOUNDS,
@@ -39,35 +51,51 @@ from .design import (
     Bounds,
     Design,
 )
+from .dynamics import DEFAULT_SPEED_RPM, MEMBER_NAMES, DynamicLoads, MassProperties
 from .kinematics import Kinematics
 from .loads import Loads
+from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .metrics import Metrics
-from .model import Analysis, analyse
+from .model import Analysis, SolvedAnalysis, analyse
 from .reference import PUBLISHED_DESIGN, PUBLISHED_METRICS
+from .sizing import MemberSizing
 
 __all__ = [
+    "DEFAULT_MATERIAL",
     "DEFAULT_PENALTY",
+    "DEFAULT_SAFETY",
     "DEFAULT_SPEC",
+    "DEFAULT_SPEED_RPM",
     "DEFAULT_TARGETS",
     "GLOBAL_BOUNDS",
+    "MEMBER_NAMES",
     "PUBLISHED_DESIGN",
     "PUBLISHED_METRICS",
     "VARIABLE_DESCRIPTIONS",
     "VARIABLE_NAMES",
     "Analysis",
     "Bounds",
+    "CoupledResult",
     "Design",
     "DesignTargets",
+    "DynamicLoads",
     "EngineSpec",
     "Kinematics",
     "Loads",
+    "MassProperties",
+    "Material",
+    "MemberSizing",
     "Metrics",
     "PenaltyValues",
     "Phase",
     "PhaseError",
     "Phases",
+    "SafetyFactors",
+    "SolvedAnalysis",
     "Thermodynamics",
     "analyse",
+    "solve_coupled",
+    "solve_for_design",
 ]
 
 __version__ = "1.0.0"

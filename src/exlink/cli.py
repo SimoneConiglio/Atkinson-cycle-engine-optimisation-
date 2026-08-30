@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .design import GLOBAL_BOUNDS, VARIABLE_DESCRIPTIONS, VARIABLE_NAMES, Bounds, Design
+from .dynamics import DEFAULT_SPEED_RPM
 from .model import analyse
 from .reference import PUBLISHED_DESIGN
 
@@ -166,6 +167,36 @@ def _cmd_refine(args: argparse.Namespace) -> int:
     return 0 if outcome.feasible else 1
 
 
+def _cmd_size(args: argparse.Namespace) -> int:
+    from .coupled import solve_for_design
+    from .scenarios import format_coupled
+
+    design = load_design(args.design)
+    result = solve_for_design(
+        design,
+        speed_rpm=args.rpm,
+        samples=args.samples,
+        max_iterations=args.max_iterations,
+        relaxation=args.relaxation,
+    )
+    print(format_coupled(result, f"sizing at {args.rpm:.0f} rpm"))
+    if not result.converged:
+        print("\nthe sizing loop did not converge: try --relaxation 0.5")
+    elif result.saturated:
+        print(
+            "\nsome member hit the diameter ceiling: at this speed the mechanism"
+            "\ncannot be built to carry the inertia its own mass creates."
+        )
+    if args.plot:
+        from .plots import plot_sizing
+
+        path = Path(args.plot)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        plot_sizing(result).savefig(path, dpi=args.dpi, bbox_inches="tight")
+        print(f"\nwritten: {path}")
+    return 0 if result.feasible else 1
+
+
 def _cmd_pareto(args: argparse.Namespace) -> int:
     from .plots import plot_pareto
     from .scenarios import local_pareto, pareto_front
@@ -301,6 +332,28 @@ def build_parser() -> argparse.ArgumentParser:
     pareto_parser.add_argument("--dpi", type=int, default=140)
     pareto_parser.add_argument("--save", default=None)
     pareto_parser.set_defaults(func=_cmd_pareto)
+
+    size_parser = subparsers.add_parser(
+        "size", help="size the parts with inertia in the load path"
+    )
+    add_design(size_parser)
+    size_parser.add_argument(
+        "--rpm",
+        type=float,
+        default=DEFAULT_SPEED_RPM,
+        help="crankshaft speed; the single strongest driver of the answer",
+    )
+    size_parser.add_argument("--samples", type=int, default=180)
+    size_parser.add_argument("--max-iterations", type=int, default=400, dest="max_iterations")
+    size_parser.add_argument(
+        "--relaxation",
+        type=float,
+        default=1.0,
+        help="under-relaxation in (0, 1]; below 1 damps a stiff loop",
+    )
+    size_parser.add_argument("--plot", default=None, help="write a sizing figure here")
+    size_parser.add_argument("--dpi", type=int, default=140)
+    size_parser.set_defaults(func=_cmd_size)
 
     return parser
 

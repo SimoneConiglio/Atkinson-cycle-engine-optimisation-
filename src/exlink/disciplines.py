@@ -37,8 +37,17 @@ from .constants import (
     EngineSpec,
     PenaltyValues,
 )
+from .coupled import INITIAL_DIAMETER
 from .design import VARIABLE_NAMES, Design
+from .dynamics import (
+    DEFAULT_SPEED_RPM,
+    MEMBER_NAMES,
+    mass_properties,
+    rpm_to_rad_per_s,
+)
+from .dynamics import solve as solve_dynamics
 from .kinematics import DEFAULT_SAMPLES
+from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .model import (
     EQUALITY_NAMES,
     INEQUALITY_NAMES,
@@ -48,6 +57,15 @@ from .model import (
     inequality_constraints,
 )
 from .reference import PUBLISHED_DESIGN
+from .sizing import (
+    MAX_DIAMETER,
+    MEMBER_IS_SLENDER,
+    STATIONS,
+    member_lengths,
+    member_loads,
+    piston_mass,
+    size_from_arrays,
+)
 
 #: Outputs produced by :class:`ExlinkDiscipline`, in a stable order.
 OUTPUT_NAMES: tuple[str, ...] = (
@@ -214,3 +232,256 @@ class PenalisedExlinkDiscipline(ExlinkDiscipline):
         residual = np.asarray(equality, dtype=float)
         penalty = float(residual @ residual + violated @ violated)
         return float(-metrics.efficiency + penalty / self.penalty_parameter**2)
+
+
+# =============================================================================
+# The coupled sizing problem
+#
+# Everything above is the report's own, one-way problem: geometry in, efficiency
+# and envelope out.  What follows adds the iteration the report deferred, and it
+# is genuinely two-way.  :class:`DynamicsDiscipline` needs the member sections
+# to know the inertia forces; :class:`StructureDiscipline` needs the resulting
+# internal loads to choose those sections.  Neither can run first, so an MDA has
+# to resolve them -- see :func:`exlink.scenarios.build_coupled_scenario`.
+# =============================================================================
+
+COUPLING_AXIAL = "member_axial"
+"""Internal axial force of every member, flattened [N]."""
+
+COUPLING_BENDING = "member_bending"
+"""Internal bending moment of every member, flattened [N.mm]."""
+
+COUPLING_DIAMETERS = "diameters"
+"""Section diameter of every member, in the order of ``MEMBER_NAMES`` [mm]."""
+
+COUPLED_SAMPLES = 360
+"""Crank angles per revolution used inside the coupled disciplines.
+
+This sets the size of the coupling vector -- one value per member, per angle,
+per station -- so there is a real incentive to keep it small.  It is set by
+``g`` rather than by the loads, which are smooth and would be happy with far
+fewer.
+
+``g`` is the difference between two nearly equal maxima of ``lambda``, so its
+*absolute* error is what matters against a 0.01 mm bound, and on a coarse grid
+that error is not small: for the refined reference, ``g`` reads 0.0086 mm at
+180 angles against a converged 0.0060 mm -- 44 % high.  Optimizing against a
+constraint measured that badly lands the design outside the real one.  At 360
+angles the error is 3e-4 mm, or 3 % of the bound; 720 brings it to 1e-5 mm at
+twice the cost.  See ``tests/test_coupled.py``.
+"""
+
+
+def _initial_diameters() -> np.ndarray:
+    """Starting sections for the MDA [mm]."""
+    return np.full(len(MEMBER_NAMES), INITIAL_DIAMETER)
+
+
+class DynamicsDiscipline(Discipline):
+    """Loads on the mechanism at speed, given the member sections.
+
+    Takes the eleven design variables, the section diameters and the crankshaft
+    speed; returns the internal load history of every member together with the
+    output torque and the bearing loads.
+
+    Args:
+        speed_rpm: Crankshaft speed [rev/min].
+        samples: Crank angles per revolution.
+        stations: Sections evaluated along each member.
+        material: The material, for its density.
+        safety: The design factors, used only to size the piston crown.
+        spec: Fixed engine data.
+        name: Discipline name.
+    """
+
+    auto_detect_grammar_files: ClassVar[bool] = False
+
+    def __init__(
+        self,
+        speed_rpm: float = DEFAULT_SPEED_RPM,
+        samples: int = COUPLED_SAMPLES,
+        stations: int = STATIONS,
+        material: Material = DEFAULT_MATERIAL,
+        safety: SafetyFactors = DEFAULT_SAFETY,
+        spec: EngineSpec = DEFAULT_SPEC,
+        name: str = "",
+    ) -> None:
+        super().__init__(name=name)
+        self.speed_rpm = speed_rpm
+        self.samples = samples
+        self.stations = stations
+        self.material = material
+        self.safety = safety
+        self.spec = spec
+
+        self.input_grammar.update_from_names([*VARIABLE_NAMES, COUPLING_DIAMETERS])
+        self.output_grammar.update_from_names(
+            [
+                COUPLING_AXIAL,
+                COUPLING_BENDING,
+                # Named apart from ExlinkDiscipline's quasi-static ``mean_torque``
+                # so both can appear in one problem. The two are provably equal:
+                # at constant speed the inertia forces do no net work over a
+                # closed cycle, so they reshape the torque curve without moving
+                # its mean. ``tests/test_dynamics.py`` pins that.
+                "dynamic_mean_torque",
+                "peak_bearing_load",
+                "conditioning",
+                "analysable",
+                "piston_mass",
+            ]
+        )
+        self.default_input_data = {
+            **PUBLISHED_DESIGN.to_mapping(),
+            COUPLING_DIAMETERS: _initial_diameters(),
+        }
+
+    def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
+        data = dict(input_data)
+        design = Design.from_mapping(data)
+        diameters = np.asarray(data[COUPLING_DIAMETERS], dtype=float).ravel()
+        shape = (len(MEMBER_NAMES), self.samples, self.stations)
+
+        analysis = analyse(design, samples=self.samples, spec=self.spec)
+        if not analysis.valid:
+            # A design the kinematics cannot even close has no load case.  Return
+            # zeros and flag it: the structural discipline then sizes to its floor
+            # and the optimizer is steered by the constraints it can still see.
+            return {
+                COUPLING_AXIAL: np.zeros(shape).ravel(),
+                COUPLING_BENDING: np.zeros(shape).ravel(),
+                "dynamic_mean_torque": np.zeros(1),
+                "peak_bearing_load": np.zeros(1),
+                "conditioning": np.array([1.0e12]),
+                "analysable": np.zeros(1),
+                "piston_mass": np.zeros(1),
+            }
+
+        solved = analysis.require_solved()
+        _, piston = piston_mass(solved.thermodynamics, self.material, self.safety, self.spec)
+        properties = mass_properties(
+            solved.kinematics,
+            dict(zip(MEMBER_NAMES, diameters, strict=True)),
+            self.material.density,
+            piston,
+            self.spec,
+        )
+        loads = solve_dynamics(
+            solved.kinematics,
+            solved.thermodynamics.piston_force,
+            properties,
+            rpm_to_rad_per_s(self.speed_rpm),
+            self.spec,
+        )
+        per_member = member_loads(loads, stations=self.stations)
+        axial = np.stack([per_member[n][0] for n in MEMBER_NAMES])
+        bending = np.stack([per_member[n][1] for n in MEMBER_NAMES])
+        bearing = float(np.max(np.linalg.norm(loads.reaction["R1"], axis=1)))
+        return {
+            COUPLING_AXIAL: axial.ravel(),
+            COUPLING_BENDING: bending.ravel(),
+            "dynamic_mean_torque": np.array([loads.mean_torque]),
+            "peak_bearing_load": np.array([bearing]),
+            "conditioning": np.array([loads.conditioning]),
+            "analysable": np.ones(1),
+            "piston_mass": np.array([1000.0 * piston]),
+        }
+
+
+class StructureDiscipline(Discipline):
+    """Section sizes that survive a given load history.
+
+    Takes the design variables and the internal load histories; returns the
+    diameter each member needs to satisfy yield, fatigue and buckling, together
+    with the mass that follows.
+
+    Args:
+        samples: Crank angles per revolution, matching the dynamics discipline.
+        stations: Sections evaluated along each member.
+        material: The material.
+        safety: The design factors.
+        spec: Fixed engine data.
+        name: Discipline name.
+    """
+
+    auto_detect_grammar_files: ClassVar[bool] = False
+
+    def __init__(
+        self,
+        samples: int = COUPLED_SAMPLES,
+        stations: int = STATIONS,
+        material: Material = DEFAULT_MATERIAL,
+        safety: SafetyFactors = DEFAULT_SAFETY,
+        spec: EngineSpec = DEFAULT_SPEC,
+        name: str = "",
+    ) -> None:
+        super().__init__(name=name)
+        self.samples = samples
+        self.stations = stations
+        self.material = material
+        self.safety = safety
+        self.spec = spec
+
+        self.input_grammar.update_from_names(
+            [*VARIABLE_NAMES, COUPLING_AXIAL, COUPLING_BENDING, "piston_mass"]
+        )
+        self.output_grammar.update_from_names(
+            [
+                COUPLING_DIAMETERS,
+                "member_mass",
+                "structural_mass",
+                "total_mass",
+                "max_utilisation",
+                "saturation_margin",
+                "slenderness_margin",
+            ]
+        )
+        shape = (len(MEMBER_NAMES), samples, stations)
+        self.default_input_data = {
+            **PUBLISHED_DESIGN.to_mapping(),
+            COUPLING_AXIAL: np.zeros(shape).ravel(),
+            COUPLING_BENDING: np.zeros(shape).ravel(),
+            "piston_mass": np.zeros(1),
+        }
+
+    def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
+        data = dict(input_data)
+        design = Design.from_mapping(data)
+        shape = (len(MEMBER_NAMES), self.samples, self.stations)
+        axial = np.asarray(data[COUPLING_AXIAL], dtype=float).reshape(shape)
+        bending = np.asarray(data[COUPLING_BENDING], dtype=float).reshape(shape)
+        lengths = member_lengths(design)
+
+        sizing = size_from_arrays(axial, bending, lengths, self.material, self.safety)
+        diameters = np.array([sizing[n].diameter for n in MEMBER_NAMES])
+        masses = np.array([sizing[n].mass for n in MEMBER_NAMES])
+        utilisation = max(
+            max(s.static_utilisation, s.fatigue_utilisation, s.buckling_utilisation)
+            for s in sizing.values()
+        )
+        structural = 1000.0 * float(masses.sum())
+        piston = float(np.ravel(data["piston_mass"])[0])
+        return {
+            COUPLING_DIAMETERS: diameters,
+            "member_mass": masses,
+            "structural_mass": np.array([structural]),
+            "total_mass": np.array([structural + piston]),
+            "max_utilisation": np.array([utilisation]),
+            # Negative while every member stays clear of the diameter ceiling;
+            # positive means the loop has run away and no section is thick enough.
+            "saturation_margin": np.array([float(diameters.max()) - 0.98 * MAX_DIAMETER]),
+            # A connecting link thicker than a third of its own length is no
+            # longer a rod and its beam idealisation has stopped being credible.
+            # Crank throws are exempt -- see MEMBER_IS_SLENDER.
+            "slenderness_margin": np.array(
+                [
+                    float(
+                        np.max(
+                            (diameters / lengths)[MEMBER_IS_SLENDER],
+                            initial=0.0,
+                        )
+                    )
+                    - 0.34
+                ]
+            ),
+        }

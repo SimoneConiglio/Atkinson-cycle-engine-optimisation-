@@ -112,6 +112,14 @@ class DesignTargets:
     max_side_load: float = 0.02
     """Upper bound on ``gamma = max(D) / max(P)``, the piston side-load ratio."""
 
+    max_bearing_load: float = 25_000.0
+    """Upper bound on the peak crankshaft bearing reaction [N].
+
+    Only meaningful once inertia is in the load path: at rest this mechanism
+    peaks near 7.7 kN, but the reaction grows as the square of engine speed and
+    is what a plain bearing actually has to survive.
+    """
+
 
 @dataclass(frozen=True)
 class PenaltyValues:

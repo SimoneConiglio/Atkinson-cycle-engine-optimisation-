@@ -341,3 +341,184 @@ final step — the augmented Lagrangian, started from the published table — la
 on a fully feasible design at **η = 27.87 %** against the reported 27.76 %, with
 `W`, `g`, `STE`, `ε` and `γ` all matching closely (see the table in the README).
 That design ships as `exlink.reference.REFINED_DESIGN`.
+
+
+---
+
+## 9. Sizing the parts, and the coupling that creates
+
+The report stops before this deliberately:
+
+> to have the masses of the pieces we have to know their shape so we should have
+> a first design, so those passages are for another iteration.
+
+That iteration is `exlink.dynamics`, `exlink.sizing` and `exlink.coupled`. It
+closes a loop the quasi-static study does not have:
+
+```
+    section diameters ──▶ member masses ──▶ inertia forces ──▶ internal loads
+            ▲                                                        │
+            └──────────── sizing against yield, ─────────────────────┘
+                          fatigue and buckling
+```
+
+Neither half can go first. That is a genuine multidisciplinary coupling, and it
+has to be **solved** rather than sequenced.
+
+### 9.1 Why the report's solution method cannot just be extended
+
+Without inertia every rod is a **two-force member**: the forces at its two ends
+are equal, opposite and collinear with the rod. That is exactly what lets the
+report eliminate unknowns one body at a time, piston to crankshaft.
+
+Add mass and that collapses. A rod with a distributed d'Alembert load has end
+forces that are neither collinear nor equal, so no body can be solved before its
+neighbours. The whole mechanism must be solved at once.
+
+Counting with Gruebler over 7 links (6 moving plus ground), 8 lower pairs (7
+revolutes and the piston's guide) and 1 higher pair (the gear mesh):
+
+```
+M = 3(7 − 1) − 2(8) − 1 = 1
+```
+
+One degree of freedom, so the load problem is statically determinate: **18
+unknowns against 6 bodies × 3 equilibrium equations**. `exlink.dynamics.solve`
+assembles and solves that 18×18 system at every crank angle.
+
+The determinant of that matrix is the same quantity condition (4a) protects: at
+a critical configuration the mechanism gains a degree of freedom, the matrix goes
+singular, and the internal forces blow up. The condition number is reported so
+the connection is visible rather than implied.
+
+### 9.2 Accelerations
+
+Every history is smooth and periodic on a uniform grid, so the Fourier
+derivative is exact where a finite difference is only `O(h²)`. That matters
+because accelerations are *second* derivatives: on a 0.5° grid a
+finite-difference second derivative loses about six digits, enough to pollute
+the inertia forces and, through them, the sizing loop. Angles that accumulate
+whole turns — `theta_2 = −2 theta_1 + theta_f` — are split into ramp plus
+periodic part first (`exlink.derivatives`).
+
+Constant crankshaft speed is inherited from the report, and simplifies the
+bookkeeping in two ways worth stating:
+
+- both shafts turn at constant rate, so neither has angular acceleration and
+  neither contributes an inertia couple;
+- shafts and gears are concentric with their own axes, so their centres of mass
+  do not move and they exert no inertia force at all. Only the offset crank
+  throws do, which is why the modelled bodies are the crank arms rather than
+  whole shaft assemblies.
+
+### 9.3 Failure modes
+
+Each link is a solid round bar whose diameter is solved for — the smallest
+section satisfying all three modes over the whole revolution:
+
+| mode | criterion |
+|---|---|
+| static | peak fibre stress against `S_y / n_y`; uniaxial, so von Mises is `\|σ\|` |
+| fatigue | Goodman, `σ_a/S_e + σ_m/S_u ≤ 1/n_f`, with Marin-corrected `S_e = k_a k_b k_c k_d k_e · 0.5 S_u` |
+| buckling | Euler on the peak compressive load, `K = 1` for links, `2` for a crank throw |
+
+Fatigue is evaluated **per extreme fibre**, so that `σ_a` and `σ_m` are taken at
+a fixed material point rather than at whichever fibre happens to be worst at each
+instant. A compressive mean stress is not credited as beneficial — the Goodman
+line is truncated at `σ_m = 0` — which matters here because the connecting links
+swing between tension and compression every revolution.
+
+The required diameter comes from bisection, not a closed form: the fatigue size
+factor `k_b` itself depends on the diameter being solved for.
+
+**Internal loads.** For a member spanning two joints, the force and moment at a
+section a fraction `s` along it follow from the free body of `[0, s]`. Because a
+rigid body's acceleration varies *linearly* along any straight line through it,
+that load is linear in `s` and both integrals close in form:
+
+```
+F(s) = m [a₁ s + (a₂ − a₁) s²/2] − F₁
+M(s) = −m [(Δr × a₁)_z s²/2 + (Δr × Δa)_z s³/6] + s (Δr × F₁)_z
+```
+
+**One idealisation.** The trigonal link is a single rigid part, so as a frame it
+is three times statically indeterminate. It is treated as a pin-jointed
+triangle: each side takes an axial force from joint equilibrium (which *is*
+determinate), and bends only under its own distributed inertia as a simply
+supported beam. That captures the axial load exactly and under-estimates bending
+at the corners — stated here rather than hidden.
+
+Shafts are not sized. Their bearing span is not a design variable, so any
+section would be arbitrary; and being concentric with their axes they do not
+feed the inertia loop at all. The bearing *reactions* are computed and
+constrained.
+
+### 9.4 Does the loop converge?
+
+Scaling answers it. A bending-critical member needs `d ~ F^(1/3)`, so its mass
+goes as `m ~ d² ~ F^(2/3)`; the inertia force it then creates is `F ~ m a`.
+Composing, `m ~ (C a) m^(2/3)`. The loop gain is **sub-linear**, so a fixed point
+exists at
+
+```
+m = (C a)³
+```
+
+and plain Gauss-Seidel reaches it — but slowly, and with a mass that grows as the
+*cube* of the acceleration level, hence the **sixth power of engine speed**.
+That is why `MDAGaussSeidel` is the right MDA here (no coupled Jacobians needed,
+and the bisection has no useful derivative to give a Newton method anyway), and
+why speed — which never appears in the report — becomes one of the strongest
+drivers in the problem.
+
+### 9.5 What the dynamics changes
+
+Two results, both checked in `tests/test_dynamics.py`:
+
+**The mean torque does not move.** At constant speed the mechanism returns to its
+starting state every revolution, so its kinetic energy is unchanged and the
+inertia forces do no net work. Efficiency, being a mean-torque quantity, is
+therefore *untouched* by speed. Only the peaks change — and the peaks are what
+size the parts. With the gas load switched off, every reaction scales as exactly
+`Ω²`.
+
+**The quasi-static optimum is the wrong answer.** The report's design sits at
+`W = 0.981`, a hair from the singularity, because that is where the quasi-static
+lever arm is longest. But proximity to the singularity is also what amplifies
+velocities and accelerations: joint `A` sees 75× the crank pin's acceleration.
+Backing off costs nothing and saves almost everything:
+
+| swing rod | `W` | `η` | `H` [mm] | mass [kg] | peak bearing [N] |
+|---|---|---|---|---|---|
+| ×1.00 | 0.9811 | 28.20 % | 238.5 | 8.43 | 244 800 |
+| ×0.94 | 0.9670 | 27.79 % | 227.8 | 3.41 | 43 700 |
+| ×0.85 | 0.9519 | 28.26 % | 215.6 | 2.20 | 13 900 |
+| ×0.80 | 0.9475 | 28.62 % | 211.6 | 2.03 | 11 300 |
+
+Four times lighter, twenty times lower bearing load, *better* efficiency and a
+smaller envelope. The near-singular design was an artefact of leaving inertia
+out.
+
+### 9.6 The coupled formulation
+
+```
+l_b ≤ X ≤ u_b
+min  f(X)    = (−η, H, B, M)ᵀ
+s.t. c(X)    ≤ 0     the report's five, plus
+                     saturation_margin   loop ran away, no section is thick enough
+                     slenderness_margin  a "rod" thicker than a third of its length
+                     bearing_margin      peak reaction against its limit
+     c_eq(X) = 0
+```
+
+Structural mass cannot appear in the report's formulation at all — nothing in it
+determines a cross-section. It only becomes an objective once the parts are
+sized, and it is the objective the dynamics most affects.
+
+Under GEMSEO this is the **MDF** formulation: `ExlinkDiscipline` is feed-forward
+from the design variables, while `DynamicsDiscipline` and `StructureDiscipline`
+are strongly coupled through `diameters` one way and the internal load histories
+the other. MDF wraps them in an MDA so every point the optimizer evaluates is a
+converged one. `warm_start` matters more than it looks: successive design points
+are close together, so starting each MDA from the previous converged sections
+turns a 70-sweep solve into a handful.
