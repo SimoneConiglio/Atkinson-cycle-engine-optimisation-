@@ -309,11 +309,10 @@ def test_backing_off_the_singularity_buys_mass_for_nothing() -> None:
 def test_minimise_mass_runs_and_stays_feasible() -> None:
     """A short coupled optimization must not go backwards.
 
-    Kept deliberately modest: every evaluation runs an MDA to convergence, so a
-    budget large enough for a derivative-free search to make real progress over
-    eleven variables -- a few hundred evaluations -- is far too slow for a test.
-    What is checked here is that the MDF plumbing holds together and that the
-    design it returns is buildable.
+    Cheap now that the default solver has gradients: what took a derivative-free
+    search several hundred evaluations to fail at, SLSQP does in a couple of
+    dozen. What is checked here is that the MDF plumbing holds together and that
+    the design it returns is buildable.
     """
     from exlink.coupled import solve_for_design
     from exlink.scenarios import minimise_mass

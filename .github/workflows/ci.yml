@@ -21,6 +21,7 @@ jobs:
   test:
     name: test (python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +46,11 @@ jobs:
   slow:
     name: optimizer tests
     runs-on: ubuntu-latest
+    # These run real optimizers to convergence: every iteration of the coupled
+    # problem is a converged MDA plus a coupled Jacobian, so the job is minutes,
+    # not seconds. The limit is here so a hang fails fast rather than sitting for
+    # the default six hours -- it is not a performance target.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

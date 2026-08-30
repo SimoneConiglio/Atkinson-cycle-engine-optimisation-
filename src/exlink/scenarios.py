@@ -952,12 +952,25 @@ def build_coupled_scenario(
     return scenario
 
 
+DEFAULT_COUPLED_ALGORITHM = "SLSQP"
+"""Single-objective solver for the coupled problem.
+
+Gradient-based, and not by preference.  The feasible set is a sliver -- two
+equalities 0.1 wide inside an eleven-dimensional box with sides of tens of
+millimetres -- and a derivative-free method has no direction to move in: COBYLA
+returns its starting point unchanged after 120 evaluations and 313 s.  With the
+analytic Jacobians of :mod:`exlink.jacobian` and
+:mod:`exlink.dynamics_jacobian`, SLSQP takes the same problem from 1.04 kg to
+0.23 kg in 40 evaluations.
+"""
+
+
 def minimise_mass(
-    algorithm: str = "NLOPT_COBYLA",
+    algorithm: str = DEFAULT_COUPLED_ALGORITHM,
     bounds: Bounds | None = None,
     initial: Design | None = None,
     speed_rpm: float = DEFAULT_SPEED_RPM,
-    max_iter: int = 300,
+    max_iter: int = 60,
     relative: float = 0.25,
     min_efficiency: float = 0.25,
     **kwargs: Any,
@@ -968,10 +981,11 @@ def minimise_mass(
     efficiency becomes a constraint to hold, and the mass the dynamics creates
     becomes the thing to reduce.
 
-    Budget realistically.  Every evaluation runs an MDA to convergence, and a
-    derivative-free search over eleven variables needs a few hundred of them
-    before it moves: 250 evaluations take the published geometry from 1.03 kg to
-    0.24 kg at 1000 rpm, while 60 barely leave the starting point.
+    Budget realistically, and note that the budget depends entirely on whether
+    the solver has gradients.  With them (the default) a few dozen evaluations
+    suffice: 40 take the published geometry from 1.04 kg to 0.23 kg at 1000 rpm.
+    Without them a derivative-free search over eleven variables needs several
+    hundred, and on this feasible set may never move at all.
 
     Args:
         algorithm: A single-objective GEMSEO optimizer.
@@ -1058,10 +1072,10 @@ the geometry that makes the parts heavy.
 def sweep_efficiency_floor(
     floors: Iterable[float],
     speed_rpm: float = DEFAULT_SPEED_RPM,
-    algorithm: str = "NLOPT_COBYLA",
+    algorithm: str = DEFAULT_COUPLED_ALGORITHM,
     initial: Design | None = None,
     relative: float = 0.30,
-    max_iter: int = 200,
+    max_iter: int = 60,
     **kwargs: Any,
 ) -> list[Outcome]:
     """Trace the efficiency-versus-mass trade by epsilon-constraint.
