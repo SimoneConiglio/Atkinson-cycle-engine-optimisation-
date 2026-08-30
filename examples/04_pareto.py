@@ -4,7 +4,7 @@ The report tried both: moving limits on the envelope with a single-objective
 solver, and a multi-objective evolutionary algorithm. Moving limits are the
 robust route on this problem -- see the note in ``exlink.scenarios``.
 
-Takes about three minutes.
+Takes a few minutes: each step is a full augmented Lagrangian solve.
 
     python examples/04_pareto.py
 """
@@ -33,13 +33,19 @@ def main() -> None:
     # Walk an upper limit on H downwards, re-solving for maximum efficiency at
     # each step.  Each solve is an ordinary single-objective problem, warm-started
     # from the previous solution.
-    limits = [240.0, 232.0, 224.0, 216.0, 208.0]
+    #
+    # The budget below is not generous by accident: every step has to satisfy
+    # both equalities and all five inequalities exactly while pushed against a
+    # limit it did not previously meet, and a smaller one returns "no feasible
+    # point" rather than a trade-off.
+    limits = [236.0, 232.0, 228.0, 224.0]
     outcomes = sweep_moving_limits(
         limits,
         bounds=Bounds.around(REFINED_DESIGN, relative=0.35, absolute_angle=40.0),
         initial=REFINED_DESIGN,
         samples=360,
-        max_iter=40,
+        max_iter=120,
+        sub_algorithm_settings={"max_iter": 400},
     )
 
     print(f"  {'H limit':>9}{'eta [%]':>10}{'H [mm]':>10}{'B [mm]':>10}  feasible")

@@ -203,8 +203,30 @@ class Outcome:
         return format_analysis(self.analysis, title=f"{self.algorithm} result")
 
 
+INEQUALITY_TOLERANCE = 1.0e-4
+"""Slack allowed on the inequality constraints when judging feasibility.
+
+GEMSEO's own default (``ineq_tolerance``), and it matters here: an augmented
+Lagrangian drives the active constraints *onto* their bounds, so a converged
+design routinely lands a few parts in 1e5 outside one of them -- ``g``, in
+practice, which the optimizer pushes hard against 0.01 mm.  Demanding ``<= 0``
+exactly would label designs infeasible that every solver in the chain considers
+converged.
+"""
+
+EQUALITY_TOLERANCE = 0.05
+"""Half-width allowed on ``STE - 74`` [mm] and ``epsilon - 16``.
+
+Looser than GEMSEO's 0.01 default because both are physical dimensions: 0.05 mm
+on a 74 mm stroke is well inside what the linkage could be manufactured to.
+"""
+
+
 def is_feasible(
-    analysis: Analysis, targets: DesignTargets = DEFAULT_TARGETS, tolerance: float = 0.05
+    analysis: Analysis,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    tolerance: float = EQUALITY_TOLERANCE,
+    inequality_tolerance: float = INEQUALITY_TOLERANCE,
 ) -> bool:
     """Whether an analysed design satisfies every constraint.
 
@@ -212,12 +234,18 @@ def is_feasible(
         analysis: The analysis to check.
         targets: Constraint right-hand sides.
         tolerance: Half-width allowed on the two equality constraints.
+        inequality_tolerance: Slack allowed on the inequality constraints; see
+            :data:`INEQUALITY_TOLERANCE`.
+
+    Returns:
+        ``True`` if the design was analysable and meets every constraint within
+        those tolerances.
     """
     from .model import equality_constraints, inequality_constraints
 
     if not analysis.valid:
         return False
-    if np.any(inequality_constraints(analysis, targets) > 0.0):
+    if np.any(inequality_constraints(analysis, targets) > inequality_tolerance):
         return False
     return bool(np.all(np.abs(equality_constraints(analysis, targets)) <= tolerance))
 

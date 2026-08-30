@@ -11,7 +11,7 @@ Takes about two minutes.
 
 from __future__ import annotations
 
-from exlink import PUBLISHED_DESIGN, analyse
+from exlink import PUBLISHED_DESIGN, Design, analyse
 from exlink.cli import configure_logging
 from exlink.scenarios import format_analysis, refine
 
@@ -22,6 +22,7 @@ def main() -> None:
     print(f"start:  eta = {100 * start.metrics.efficiency:6.3f} %   feasible = False")
 
     design = PUBLISHED_DESIGN
+    best: Design | None = None
     for step, relative in enumerate((0.25, 0.10, 0.05), start=1):
         outcome = refine(
             design,
@@ -37,9 +38,22 @@ def main() -> None:
             f"H = {metrics.height:6.1f}   B = {metrics.width:6.1f}   "
             f"feasible = {outcome.feasible}"
         )
+        if outcome.feasible:
+            best = design
+
+    # An augmented Lagrangian drives the active constraints onto their bounds,
+    # so its final iterate often sits a whisker outside one of them -- here it
+    # is g, which the optimizer pushes hard against 0.01 mm. Keep the last pass
+    # that was actually feasible rather than the last pass. (The design shipped
+    # as exlink.reference.REFINED_DESIGN was produced the same way, but with a
+    # margin held on the active constraints so it stays feasible at any
+    # crank-angle resolution.)
+    if best is None:
+        print("\nno pass reached a feasible design; try a larger budget")
+        return
 
     print()
-    print(format_analysis(analyse(design, samples=1440), "augmented Lagrangian result"))
+    print(format_analysis(analyse(best, samples=1440), "augmented Lagrangian result"))
 
 
 if __name__ == "__main__":

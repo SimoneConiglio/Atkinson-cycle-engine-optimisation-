@@ -300,6 +300,19 @@ Two practical notes on the multi-objective stage, both measured:
   The population needs *time* to work into the thin feasible sheet, not more
   parallel guesses. Spend extra budget on `max_gen` first.
 
+The moving-limit sweep reaches the same trade-off without relaxing anything,
+because each step is a warm-started local solve: `H ≤ 236 → η = 28.11 %`,
+`H ≤ 232 → 28.23 %`, `H ≤ 228 → 27.74 %`, all feasible. It is not free either —
+each step must satisfy both equalities and all five inequalities while pushed
+against a limit it did not previously meet, which takes roughly 120 augmented
+Lagrangian outer iterations.
+
+A note on judging feasibility: an augmented Lagrangian converges *onto* the
+active bounds, so a converged design routinely lands a few parts in 1e5 outside
+one of them (`g`, in practice). `is_feasible` therefore allows GEMSEO's own
+`ineq_tolerance` of 1e-4, and 0.05 on the two equalities — 0.05 mm on a 74 mm
+stroke being well inside anything the linkage could be built to.
+
 GEMSEO's default convergence tests also stop NSGA-II after about five
 generations here — the objectives barely move while the population is still
 hunting for feasible designs — so `pareto_front` disables them and lets the

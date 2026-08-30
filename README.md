@@ -178,8 +178,20 @@ front = pareto_front(pop_size=80, max_gen=30)   # 16 designs, η 0.247 – 0.282
 final = refine(front.design)                    # feasible, η = 0.280
 ```
 
-On this problem `sweep_moving_limits` is the more reliable route, since every step is a
-warm-started local solve on the *unrelaxed* problem.
+`sweep_moving_limits` walks the same trade-off on the *unrelaxed* problem instead — every
+step a warm-started local solve, so `g`, `STE` and `ε` are met exactly at each point:
+
+```
+   H limit   eta [%]    H [mm]   feasible
+       236    28.11      236.0   True
+       232    28.23      232.0   True
+       228    27.74      228.0   True
+```
+
+It needs a real budget per step (the augmented Lagrangian, ~120 outer iterations): each
+step must satisfy both equalities and all five inequalities while pushed against a limit it
+did not previously meet, and a smaller budget returns "no feasible point" rather than a
+trade-off.
 
 ---
 

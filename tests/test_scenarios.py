@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
-from exlink import GLOBAL_BOUNDS, PUBLISHED_DESIGN, VARIABLE_NAMES, Bounds, analyse
+from exlink import (
+    DEFAULT_TARGETS,
+    GLOBAL_BOUNDS,
+    PUBLISHED_DESIGN,
+    VARIABLE_NAMES,
+    Bounds,
+    analyse,
+)
 from exlink.reference import REFINED_DESIGN
 from exlink.scenarios import (
     EQUALITY_OUTPUTS,
@@ -204,3 +213,30 @@ def test_nsga2_returns_a_usable_front() -> None:
     # A front, not a cluster: the objectives must actually trade off.
     heights = [m.height for m in metrics]
     assert max(heights) - min(heights) > 5.0
+
+
+def test_feasibility_tolerates_a_constraint_sitting_on_its_bound() -> None:
+    """An augmented Lagrangian converges *onto* the bounds, not inside them.
+
+    A design a few parts in 1e5 outside ``g`` is converged as far as every
+    solver in the chain is concerned, so :func:`is_feasible` allows GEMSEO's own
+    ``ineq_tolerance``. Ten times that slack is still a violation.
+    """
+    from exlink.scenarios import INEQUALITY_TOLERANCE
+
+    analysis = analyse(REFINED_DESIGN, samples=1440)
+    margin = analysis.metrics.tdc_gap - DEFAULT_TARGETS.max_tdc_gap
+    assert margin < 0.0, "the reference should sit strictly inside its bounds"
+
+    # Tighten the bound until the design lands just outside it, by exactly the
+    # tolerance, and check both sides of the decision.
+    on_bound = replace(
+        DEFAULT_TARGETS,
+        max_tdc_gap=analysis.metrics.tdc_gap - 0.5 * INEQUALITY_TOLERANCE,
+    )
+    outside = replace(
+        DEFAULT_TARGETS,
+        max_tdc_gap=analysis.metrics.tdc_gap - 10.0 * INEQUALITY_TOLERANCE,
+    )
+    assert is_feasible(analysis, targets=on_bound)
+    assert not is_feasible(analysis, targets=outside)
