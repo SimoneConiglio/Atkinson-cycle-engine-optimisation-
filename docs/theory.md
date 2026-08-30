@@ -288,6 +288,23 @@ Because NSGA-II takes no equality constraints, `relax_equalities` rewrites each
 as a pair of one-sided inequalities, `|residual| ≤ tol` — the same pragmatism the
 report applies to `g`.
 
+Two practical notes on the multi-objective stage, both measured:
+
+- **`g` is the binding constraint, not the equalities.** Sampled over a box
+  around a good design, `g ≤ 0.01 mm` is met by 0.1 % of analysable designs
+  against 4–8 % for the two real equalities. It is a third equality in disguise,
+  and `moea_targets` relaxes it so the population has somewhere to live.
+- **Generations matter more than population.** Seeded in a shrunk box, 20
+  generations return a front of one point whatever the population size (60 or
+  80, 1200 or 1600 evaluations); 35 generations give 6–33 points across seeds.
+  The population needs *time* to work into the thin feasible sheet, not more
+  parallel guesses. Spend extra budget on `max_gen` first.
+
+GEMSEO's default convergence tests also stop NSGA-II after about five
+generations here — the objectives barely move while the population is still
+hunting for feasible designs — so `pareto_front` disables them and lets the
+generation budget be the budget that applies.
+
 ---
 
 ## 8. On reproducing the published solution

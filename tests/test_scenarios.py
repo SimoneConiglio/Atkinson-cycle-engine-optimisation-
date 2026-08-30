@@ -185,18 +185,22 @@ def test_nsga2_returns_a_usable_front() -> None:
 
     from exlink.scenarios import local_pareto
 
+    # Generations matter more than population size on this problem: at 20
+    # generations the run still returns a single point whatever the population,
+    # because it has not yet worked its way into the thin feasible region.
+    # 35 generations gives fronts of 6-33 points across seeds.
     outcome = local_pareto(
         REFINED_DESIGN,
         relative=0.2,
         absolute_angle=20.0,
-        pop_size=60,
-        max_gen=20,
+        pop_size=80,
+        max_gen=35,
         samples=180,
         seed=3,
     )
-    assert len(outcome.front) > 1
+    assert len(outcome.front) >= 3
     metrics = [analyse(d, samples=180).metrics for d in outcome.front]
-    assert any(m.valid for m in metrics)
+    assert all(m.valid for m in metrics)
     # A front, not a cluster: the objectives must actually trade off.
-    heights = [m.height for m in metrics if m.valid]
-    assert max(heights) - min(heights) > 1.0
+    heights = [m.height for m in metrics]
+    assert max(heights) - min(heights) > 5.0

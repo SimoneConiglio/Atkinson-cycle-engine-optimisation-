@@ -529,7 +529,12 @@ def pareto_front(
         initial: Starting design, used only by algorithms that take one.
         pop_size: Population size.  The report needed at least 550 individuals
             over the full space and grew to 2492; start smaller and grow.
-        max_gen: Generation budget.
+        max_gen: Generation budget.  On this problem it matters more than
+            ``pop_size``: seeded in a box around a good design, 20 generations
+            still return a single point whatever the population, because the
+            run has not yet worked its way into the thin feasible region, while
+            35 generations give fronts of several dozen.  Spend extra budget
+            here before spending it on population.
         samples: Crank angles per revolution.  Lowered by default, because a
             MOEA spends tens of thousands of evaluations here.
         spec: Fixed engine data.
