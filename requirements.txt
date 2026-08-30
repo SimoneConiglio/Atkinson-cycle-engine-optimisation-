@@ -1,0 +1,8 @@
+# Runtime dependencies. For a reproducible install prefer:
+#     uv pip install -e .
+# or, with the optional multi-objective plugin:
+#     uv pip install -e ".[moea]"
+gemseo>=6.0,<7
+matplotlib>=3.7
+numpy>=1.24
+scipy>=1.10
