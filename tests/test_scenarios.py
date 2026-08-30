@@ -13,6 +13,7 @@ from exlink import (
     PUBLISHED_DESIGN,
     VARIABLE_NAMES,
     Bounds,
+    Design,
     analyse,
 )
 from exlink.reference import REFINED_DESIGN
@@ -358,3 +359,71 @@ def test_the_efficiency_floor_binds_the_mass_optimum() -> None:
     outcome = minimise_mass(speed_rpm=1000.0, max_iter=80, relative=0.30, min_efficiency=floor)
     efficiency = analyse(outcome.design, samples=360).metrics.efficiency
     assert efficiency >= floor - 5e-3
+
+
+@pytest.mark.slow
+def test_gradients_make_the_coupled_problem_tractable() -> None:
+    """The point of the MDA Jacobians.
+
+    With analytic derivatives through the coupling, SLSQP takes the published
+    geometry's sizing from about a kilogram to a quarter of one in a few dozen
+    evaluations. Without them the same problem is differenced through the whole
+    MDA -- eleven converged fixed points per gradient -- and does not finish.
+    """
+    from exlink.coupled import solve_for_design
+    from exlink.design import Bounds
+    from exlink.scenarios import build_coupled_scenario
+
+    start = solve_for_design(REFINED_DESIGN, speed_rpm=1000.0, samples=360, max_iterations=400)
+    scenario = build_coupled_scenario(
+        "total_mass",
+        bounds=Bounds.around(REFINED_DESIGN, relative=0.25),
+        initial=REFINED_DESIGN,
+        speed_rpm=1000.0,
+    )
+    scenario.add_constraint(
+        "efficiency",
+        constraint_type="ineq",
+        value=0.25,
+        positive=True,
+        constraint_name="efficiency_floor",
+    )
+    scenario.execute(algo_name="SLSQP", max_iter=25)
+    problem = scenario.formulation.optimization_problem
+    found = Design.from_array(problem.solution.x_opt)
+    sized = solve_for_design(found, speed_rpm=1000.0, samples=360, max_iterations=400)
+
+    assert sized.total_mass_kg < 0.5 * start.total_mass_kg
+    assert sized.feasible
+    # And it got there by leaving the singularity, which is where the mass was.
+    assert (
+        analyse(found, samples=360).metrics.compatibility
+        < analyse(REFINED_DESIGN, samples=360).metrics.compatibility
+    )
+
+
+def test_the_coupled_disciplines_report_analytic_jacobians() -> None:
+    """GEMSEO's own checker, on the dynamics discipline's local Jacobian."""
+    from exlink.disciplines import DynamicsDiscipline
+
+    discipline = DynamicsDiscipline(speed_rpm=1000.0)
+    discipline.execute(REFINED_DESIGN.to_mapping())
+    assert discipline.check_jacobian(
+        REFINED_DESIGN.to_mapping(),
+        threshold=1e-3,
+        step=1e-7,
+        input_names=["a", "c", "q_1", "diameters"],
+        output_names=["dynamic_mean_torque", "peak_bearing_load"],
+    )
+
+
+def test_the_coupled_reference_is_lighter_and_feasible() -> None:
+    """The design the coupled gradient search produced, checked as shipped."""
+    from exlink.reference import COUPLED_DESIGN, COUPLED_METRICS
+
+    metrics = analyse(COUPLED_DESIGN, samples=1440).metrics
+    assert is_feasible(analyse(COUPLED_DESIGN, samples=1440))
+    assert metrics.efficiency == pytest.approx(COUPLED_METRICS["efficiency"], abs=2e-3)
+    assert metrics.compatibility == pytest.approx(COUPLED_METRICS["compatibility"], abs=1e-3)
+    # Well clear of the singularity the quasi-static optimum sat against.
+    assert metrics.compatibility < analyse(REFINED_DESIGN, samples=1440).metrics.compatibility

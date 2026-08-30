@@ -287,14 +287,55 @@ the extra efficiency is bought partly with size — the mechanism grows to `H = 
 it does show is that the report's final step stopped three points short of the efficiency
 available to it, and that the method rather than the mechanism was the limit.
 
-**Not yet analytic:** the derivatives through the sizing/dynamics MDA. `η`, `H`, `B` and the
-clearance in the analysis discipline fall back to central differences (all smooth, none
-tight), and the coupled problem currently differences the whole MDA — 11 MDA solves per
-gradient, which measured out at 10–20 minutes for a short run. Local Jacobians for
-`DynamicsDiscipline` and `StructureDiscipline` would let GEMSEO assemble the coupled
-derivative properly; the pieces needed are the spectral operator (linear, so it applies
-directly to the kinematic derivative arrays), the 18×18 solve
-(`dx = A⁻¹(db − dA·x)`), and the sizing bisection (implicit function theorem).
+### Through the MDA, too
+
+`exlink.dynamics_jacobian` differentiates the coupling itself, so GEMSEO assembles the
+coupled derivative from each discipline's *local* Jacobian rather than differencing the whole
+fixed point. Three ideas carry it:
+
+- **The spectral operator is linear.** Accelerations are `Ω²·D²r`, so `da/dp = Ω²·D²(dr/dp)`
+  — the same operator applied to the kinematic derivative arrays. No new mathematics.
+- **The 18×18 solve** gives `dx/dp = A⁻¹(db/dp − dA/dp·x)`, reusing the factorisation the
+  forward solve already made. `A`'s entries are moment arms, so `dA/dp` follows from the
+  position derivatives.
+- **The sizing bisection is never differentiated.** The diameter is defined implicitly by
+  `U(d, N, M) = 1`, so the implicit function theorem gives `dd/dN = −(∂U/∂N)/(∂U/∂d)`.
+
+Verified piece by piece against converged central differences — mass properties and
+accelerations to round-off, the equilibrium solve to 5e-7, the internal loads to 4e-7, and
+the sizing by directional derivatives — plus GEMSEO's `check_jacobian` on the dynamics
+discipline.
+
+The same finite-step trap appears here and is pinned in `tests/test_dynamics_jacobian.py`:
+perturb the loads by 1e-4 and the crank angle attaining the fatigue extremum hops across a
+near-flat minimum, putting the difference quotient tens of percent out. The implicit function
+theorem doesn't care.
+
+**What this buys.** Minimising total moving mass at 1000 rpm, from the augmented-Lagrangian
+design, subject to every constraint and a 25 % efficiency floor:
+
+| | COBYLA | SLSQP, FD through the MDA | SLSQP, analytic |
+|---|---|---|---|
+| result | did not move | did not finish | **1.039 → 0.234 kg** |
+| cost | 120 evals, 313 s | timed out at 560 s | **40 evals, 148 s** |
+
+| | refined (quasi-static optimum) | coupled optimum |
+|---|---|---|
+| total moving mass | 1.039 kg | **0.234 kg** |
+| peak bearing load | 12 629 N | 7 504 N |
+| `H` | 238.5 mm | 205.7 mm |
+| `W` | 0.9811 | 0.9372 |
+| `η` | 28.20 % | 25.00 % |
+
+Four times lighter, a third off the bearing load, a smaller envelope, for three points of
+efficiency — and it got there by moving off the transmission-angle singularity, which is
+where the mass was going. Ships as `reference.COUPLED_DESIGN`, feasible at every crank-angle
+resolution from 360 to 2880 samples.
+
+**Still differenced:** `η`, `H`, `B` and the clearance in the analysis discipline. All are
+smooth, none is tight, and `η` would additionally need the crank angle of top dead centre
+differentiated, because the combustion pressure jump puts moving-boundary terms in its
+integral.
 
 ---
 
@@ -417,6 +458,7 @@ src/exlink/
   sizing.py        internal loads, then static / fatigue / buckling sizing
   coupled.py       the sizing <-> dynamics fixed point, and why it converges
   jacobian.py      exact d/dX of the analysis chain, by forward mode + envelope
+  dynamics_jacobian.py   exact derivatives through the coupling itself
 ```
 
 ## Tests

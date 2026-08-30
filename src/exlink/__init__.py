@@ -58,6 +58,7 @@ from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .metrics import Metrics
 from .model import Analysis, SolvedAnalysis, analyse
 from .reference import (
+    COUPLED_DESIGN,
     GRADIENT_DESIGN,
     PUBLISHED_DESIGN,
     PUBLISHED_METRICS,
@@ -66,6 +67,7 @@ from .reference import (
 from .sizing import MemberSizing
 
 __all__ = [
+    "COUPLED_DESIGN",
     "DEFAULT_MATERIAL",
     "DEFAULT_PENALTY",
     "DEFAULT_SAFETY",

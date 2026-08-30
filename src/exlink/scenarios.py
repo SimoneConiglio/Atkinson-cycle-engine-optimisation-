@@ -863,6 +863,15 @@ class BearingMarginDiscipline(Discipline):
         load = float(np.ravel(dict(input_data)["peak_bearing_load"])[0])
         return {"bearing_margin": np.array([load / self.limit - 1.0])}
 
+    def _compute_jacobian(
+        self,
+        input_names: Iterable[str] = (),
+        output_names: Iterable[str] = (),
+    ) -> None:
+        """A linear map, so its Jacobian is the reciprocal of the limit."""
+        self._init_jacobian(input_names, output_names)
+        self.jac["bearing_margin"]["peak_bearing_load"] = np.array([[1.0 / self.limit]])
+
 
 def build_coupled_scenario(
     objective: str | Sequence[str] = "total_mass",

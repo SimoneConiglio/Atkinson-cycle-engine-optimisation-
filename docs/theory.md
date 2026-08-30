@@ -522,3 +522,77 @@ the other. MDF wraps them in an MDA so every point the optimizer evaluates is a
 converged one. `warm_start` matters more than it looks: successive design points
 are close together, so starting each MDA from the previous converged sections
 turns a 70-sweep solve into a handful.
+
+
+---
+
+## 10. Derivatives
+
+The feasible set is a **sliver**. At the reference design the two equalities leave
+a band 0.1 mm wide on `STE` and 0.1 wide on `ε`, inside an eleven-dimensional box
+with sides of tens of millimetres, while `W` and `γ` sit within 0.4 % and 7 % of
+their bounds. A derivative-free method cannot work in that: COBYLA returns its
+starting point unchanged after 313 s, and loosening the bands does not help.
+
+Everything the report derives is closed form, so the derivatives are too.
+
+### 10.1 The two ideas
+
+**Forward-mode chaining.** Each intermediate carries `d/dX` as an
+`(n_angles, 11)` array, differentiated straight through the closed forms of §2.
+One pass produces all eleven components.
+
+**The envelope theorem.** Most metrics are extrema over the crank angle. For a
+maximum attained at `θ*`,
+
+```
+d/dX max_θ f(X, θ) = ∂f/∂X |_{θ*}
+```
+
+because the term through the moving maximiser carries `∂f/∂θ = 0`. No derivative
+of the *location* is needed.
+
+That second point is not a convenience — it removes a failure mode. Because these
+are maxima, the sample attaining them **switches** as the design moves, and a
+difference quotient taken across the switch is wrong: on `γ` at a 1e-4 mm step,
+25 % wrong. Both `tests/test_jacobian.py` and `tests/test_dynamics_jacobian.py`
+pin that behaviour deliberately.
+
+The extremum does not sit on a grid point, so the partial derivative is
+interpolated to the parabolically refined location with a three-point Lagrange
+quadratic — matching the order of the refinement that located it. Linear
+interpolation leaves `STE` a factor of fifty worse.
+
+### 10.2 Through the coupling
+
+`exlink.dynamics_jacobian` differentiates the MDA itself, so GEMSEO assembles the
+coupled derivative from local Jacobians instead of differencing the fixed point.
+
+| piece | route |
+|---|---|
+| accelerations | `D²` is linear, so `da/dp = Ω² D²(dr/dp)` |
+| mass properties | direct; `m = ρ(πd²/4)L`, centres of mass mass-weighted |
+| 18×18 solve | `dx/dp = A⁻¹(db/dp − dA/dp·x)`, reusing the factorisation |
+| internal loads | closed form; the trigonal truss via `dz = (MᵀM)⁻¹Mᵀ(dr − dM z)` |
+| sizing bisection | implicit function theorem on `U(d, N, M) = 1` |
+
+Verified against converged central differences: mass properties and accelerations
+to round-off, the equilibrium solve to 5e-7, the internal loads to 4e-7, the
+sizing by directional derivatives, and GEMSEO's own `check_jacobian` on both
+disciplines.
+
+### 10.3 What it changes
+
+| problem | derivative-free | with gradients |
+|---|---|---|
+| maximise `η` from the published table | — | **η = 30.77 %** (vs 27.76 % reported) |
+| minimise mass, coupled, 1000 rpm | COBYLA moved 0 in 313 s | **1.039 → 0.234 kg** in 148 s |
+
+The coupled optimum reaches a quarter of the mass by moving `W` from 0.981 to
+0.937 — off the singularity, which is exactly where the accelerations, and so the
+sections, were coming from. It also comes out *smaller* (`H` 238.5 → 205.7 mm),
+for three points of efficiency.
+
+Left differenced, deliberately: `η`, `H`, `B` and the clearance. All smooth, none
+tight, and `η` would additionally need `dθ_TDC/dX`, because the combustion
+pressure jump puts moving-boundary terms in its integral.

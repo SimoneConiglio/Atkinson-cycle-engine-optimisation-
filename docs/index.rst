@@ -51,6 +51,15 @@ static, fatigue and buckling failure, and the fixed point that couples them.
 .. automodule:: exlink.sizing
 .. automodule:: exlink.coupled
 
+Derivatives
+~~~~~~~~~~~
+
+Exact derivatives of the whole chain, which is what makes a gradient-based
+optimizer applicable to a feasible set this thin.
+
+.. automodule:: exlink.jacobian
+.. automodule:: exlink.dynamics_jacobian
+
 Optimization
 ~~~~~~~~~~~~
 

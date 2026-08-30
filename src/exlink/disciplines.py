@@ -47,6 +47,13 @@ from .dynamics import (
     rpm_to_rad_per_s,
 )
 from .dynamics import solve as solve_dynamics
+from .dynamics_jacobian import (
+    DIAMETER_SLICE,
+    N_PARAMETERS,
+    coupled_jacobian,
+    member_length_jacobian,
+    sizing_jacobian,
+)
 from .jacobian import kinematic_jacobian, metric_jacobian
 from .kinematics import DEFAULT_SAMPLES
 from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
@@ -412,6 +419,7 @@ class DynamicsDiscipline(Discipline):
             **PUBLISHED_DESIGN.to_mapping(),
             COUPLING_DIAMETERS: _initial_diameters(),
         }
+        self._state: tuple[Any, ...] | None = None
 
     def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
         data = dict(input_data)
@@ -450,6 +458,15 @@ class DynamicsDiscipline(Discipline):
             rpm_to_rad_per_s(self.speed_rpm),
             self.spec,
         )
+        # Cached so ``_compute_jacobian`` can differentiate the very point that
+        # was evaluated, without repeating the analysis.
+        self._state = (
+            design,
+            analysis,
+            dict(zip(MEMBER_NAMES, diameters, strict=True)),
+            properties,
+            loads,
+        )
         per_member = member_loads(loads, stations=self.stations)
         axial = np.stack([per_member[n][0] for n in MEMBER_NAMES])
         bending = np.stack([per_member[n][1] for n in MEMBER_NAMES])
@@ -463,6 +480,61 @@ class DynamicsDiscipline(Discipline):
             "analysable": np.ones(1),
             "piston_mass": np.array([1000.0 * piston]),
         }
+
+    def _compute_jacobian(
+        self,
+        input_names: Iterable[str] = (),
+        output_names: Iterable[str] = (),
+    ) -> None:
+        """Report the local Jacobian of the loads, exactly.
+
+        Differentiating this discipline is what makes the coupled problem
+        tractable.  Without it the whole MDA has to be differenced -- eleven
+        converged fixed points per gradient, some fifty sweeps each.  With it
+        GEMSEO assembles the coupled derivative from the two local Jacobians and
+        one small linear solve.
+
+        See :mod:`exlink.dynamics_jacobian` for the three ideas that carry it:
+        the spectral operator is linear, the 18x18 solve is differentiated
+        through its own factorisation, and the internal loads are closed form.
+        """
+        self._init_jacobian(input_names, output_names)
+        if self._state is None:
+            self.execute(dict(self.io.data))
+        assert self._state is not None
+        design, analysis, diameters, properties, loads = self._state
+
+        size = len(MEMBER_NAMES) * self.samples * self.stations
+        if not analysis.valid:
+            return
+
+        derivatives = coupled_jacobian(
+            design,
+            analysis,
+            diameters,
+            properties,
+            loads,
+            self.stations,
+            self.material,
+            self.spec,
+        )
+        flat_axial = derivatives.axial.reshape(size, N_PARAMETERS)
+        flat_bending = derivatives.bending.reshape(size, N_PARAMETERS)
+
+        rows = {
+            COUPLING_AXIAL: flat_axial,
+            COUPLING_BENDING: flat_bending,
+            "dynamic_mean_torque": derivatives.mean_torque[None, :],
+            "peak_bearing_load": derivatives.peak_bearing_load[None, :],
+        }
+        for output, block in rows.items():
+            if output not in self.jac:
+                continue
+            for index, variable in enumerate(VARIABLE_NAMES):
+                if variable in self.jac[output]:
+                    self.jac[output][variable] = block[:, index : index + 1]
+            if COUPLING_DIAMETERS in self.jac[output]:
+                self.jac[output][COUPLING_DIAMETERS] = block[:, DIAMETER_SLICE]
 
 
 class StructureDiscipline(Discipline):
@@ -520,6 +592,7 @@ class StructureDiscipline(Discipline):
             COUPLING_BENDING: np.zeros(shape).ravel(),
             "piston_mass": np.zeros(1),
         }
+        self._state: tuple[Any, ...] | None = None
 
     def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
         data = dict(input_data)
@@ -531,6 +604,7 @@ class StructureDiscipline(Discipline):
 
         sizing = size_from_arrays(axial, bending, lengths, self.material, self.safety)
         diameters = np.array([sizing[n].diameter for n in MEMBER_NAMES])
+        self._state = (design, axial, bending, lengths, diameters)
         masses = np.array([sizing[n].mass for n in MEMBER_NAMES])
         utilisation = max(
             max(s.static_utilisation, s.fatigue_utilisation, s.buckling_utilisation)
@@ -562,3 +636,97 @@ class StructureDiscipline(Discipline):
                 ]
             ),
         }
+
+    def _compute_jacobian(  # type: ignore[misc]
+        self,
+        input_names: Iterable[str] = (),
+        output_names: Iterable[str] = (),
+    ) -> None:
+        """Report the local Jacobian of the sizing, exactly.
+
+        The diameters are defined implicitly -- they are the sections that drive
+        the worst utilisation to one -- so the implicit function theorem supplies
+        their derivative and the bisection is never differentiated.  Everything
+        downstream (member masses, the totals, the two margins) follows by chain
+        rule from that.
+        """
+        self._init_jacobian(input_names, output_names)
+        if self._state is None:
+            self.execute(dict(self.io.data))
+        assert self._state is not None
+        design, axial, bending, lengths, diameters = self._state
+
+        sizing = sizing_jacobian(axial, bending, diameters, lengths, self.material, self.safety)
+        n_members = len(MEMBER_NAMES)
+        size = n_members * self.samples * self.stations
+        length_rows = member_length_jacobian(design)
+
+        # d(diameter)/d(loads): block diagonal, one member per row.
+        d_axial = np.zeros((n_members, size))
+        d_bending = np.zeros((n_members, size))
+        block = self.samples * self.stations
+        for member in range(n_members):
+            span = slice(member * block, (member + 1) * block)
+            d_axial[member, span] = sizing.d_axial[member].ravel()
+            d_bending[member, span] = sizing.d_bending[member].ravel()
+        # d(diameter)/dX, through the member lengths only.
+        d_design = sizing.d_length[:, None] * length_rows
+
+        area = np.pi * diameters**2 / 4.0
+        density = self.material.density
+        # m_k = rho (pi d_k^2 / 4) L_k, and d_k itself depends on the loads.
+        mass_from_diameter = density * np.pi * diameters / 2.0 * lengths
+        d_mass_axial = mass_from_diameter[:, None] * d_axial
+        d_mass_bending = mass_from_diameter[:, None] * d_bending
+        d_mass_design = (
+            mass_from_diameter[:, None] * d_design + density * area[:, None] * length_rows
+        )
+
+        slender = MEMBER_IS_SLENDER
+        ratio = np.where(slender, diameters / lengths, -np.inf)
+        critical = int(np.argmax(ratio))
+        d_slender_axial = d_axial[critical] / lengths[critical]
+        d_slender_bending = d_bending[critical] / lengths[critical]
+        d_slender_design = (
+            d_design[critical] / lengths[critical]
+            - diameters[critical] * length_rows[critical] / lengths[critical] ** 2
+        )
+        widest = int(np.argmax(diameters))
+
+        rows: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {
+            COUPLING_DIAMETERS: (d_axial, d_bending, d_design),
+            "member_mass": (d_mass_axial, d_mass_bending, d_mass_design),
+            "structural_mass": (
+                1000.0 * d_mass_axial.sum(axis=0)[None, :],
+                1000.0 * d_mass_bending.sum(axis=0)[None, :],
+                1000.0 * d_mass_design.sum(axis=0)[None, :],
+            ),
+            "total_mass": (
+                1000.0 * d_mass_axial.sum(axis=0)[None, :],
+                1000.0 * d_mass_bending.sum(axis=0)[None, :],
+                1000.0 * d_mass_design.sum(axis=0)[None, :],
+            ),
+            "saturation_margin": (
+                d_axial[widest][None, :],
+                d_bending[widest][None, :],
+                d_design[widest][None, :],
+            ),
+            "slenderness_margin": (
+                d_slender_axial[None, :],
+                d_slender_bending[None, :],
+                d_slender_design[None, :],
+            ),
+        }
+        for output, (by_axial, by_bending, by_design) in rows.items():
+            if output not in self.jac:
+                continue
+            if COUPLING_AXIAL in self.jac[output]:
+                self.jac[output][COUPLING_AXIAL] = by_axial
+            if COUPLING_BENDING in self.jac[output]:
+                self.jac[output][COUPLING_BENDING] = by_bending
+            for index, variable in enumerate(VARIABLE_NAMES):
+                if variable in self.jac[output]:
+                    self.jac[output][variable] = by_design[:, index : index + 1]
+        # The piston mass enters the total directly and nothing else.
+        if "total_mass" in self.jac and "piston_mass" in self.jac["total_mass"]:
+            self.jac["total_mass"]["piston_mass"] = np.ones((1, 1))

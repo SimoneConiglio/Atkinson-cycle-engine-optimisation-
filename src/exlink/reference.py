@@ -186,3 +186,61 @@ GRADIENT_METRICS: dict[str, float] = {
     "clearance": 103.92,
 }
 """Properties of :data:`GRADIENT_DESIGN`, at ``samples=2880``."""
+
+
+COUPLED_DESIGN = Design(
+    a=85.841929,
+    c=66.472210,
+    I=57.784469,
+    x_b=80.562685,
+    y_b=-73.481770,
+    x_1=-23.363749,
+    e=102.869097,
+    q_1=7.057353,
+    q_2=19.807655,
+    theta_f=86.385886,
+    theta_r=-33.363656,
+)
+"""The lightest design the *coupled* problem yields, at 1000 rpm.
+
+SLSQP on the MDF formulation, with exact Jacobians through the sizing/dynamics
+MDA (:mod:`exlink.dynamics_jacobian`), minimising total moving mass subject to
+every constraint and a floor of 25 % on efficiency.
+
+Against :data:`REFINED_DESIGN` at the same speed:
+
+==================  =========  ==========
+quantity            refined    coupled
+==================  =========  ==========
+total moving mass   1.039 kg   **0.234 kg**
+peak bearing load   12 629 N   7 504 N
+``H``               238.5 mm   205.7 mm
+``W``               0.9811     0.9372
+``eta``             28.20 %    25.00 %
+==================  =========  ==========
+
+Four times lighter, a third off the bearing load, and a smaller envelope, for
+three points of efficiency -- and the mechanism has moved well away from the
+transmission-angle singularity, which is where the mass was going.
+
+Feasible at every crank-angle resolution from 360 to 2880 samples.  The search
+held a small margin on the constraints SLSQP drives hardest (``g``, ``mra``,
+``gamma``), because a gradient method converges *onto* its active bounds and
+those metrics shift slightly with resolution.
+
+Reproduce it with::
+
+    exlink optimize-mass --rpm 1000 --gradients
+"""
+
+COUPLED_METRICS: dict[str, float] = {
+    "efficiency": 0.24933,
+    "compatibility": 0.93717,
+    "rod_angle": 9.701,
+    "tdc_gap": 0.00697,
+    "expansion_stroke": 73.970,
+    "compression_ratio": 15.970,
+    "total_mass_kg": 0.2343,
+    "peak_bearing_load": 7504.0,
+}
+"""Properties of :data:`COUPLED_DESIGN`, at ``samples=1440`` and 1000 rpm."""

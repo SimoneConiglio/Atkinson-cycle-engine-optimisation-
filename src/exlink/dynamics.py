@@ -204,6 +204,16 @@ class DynamicLoads:
     body_angular_acceleration: dict[str, FloatArray]
     """Angular acceleration of each body [rad/s^2]."""
 
+    gas_force: FloatArray
+    """The applied gas force on the piston crown [N], as solved with."""
+
+    matrix: FloatArray
+    """The assembled equilibrium matrix, ``(n_angles, 18, 18)``.
+
+    Kept so that :mod:`exlink.dynamics_jacobian` can differentiate the solve
+    without reassembling or re-factorising it.
+    """
+
     conditioning: float
     """Worst 2-norm condition number of the 18x18 equilibrium matrix.
 
@@ -477,6 +487,8 @@ def solve(
         liner_moment=solution[:, _I_LINER_MOMENT],
         gear_force=solution[:, _I_GEAR],
         torque=solution[:, _I_TORQUE],
+        gas_force=np.asarray(gas_force, dtype=float),
+        matrix=matrix,
         joint_acceleration=joint_acceleration,
         body_acceleration=body_acceleration,
         body_angular_acceleration=body_angular_acceleration,

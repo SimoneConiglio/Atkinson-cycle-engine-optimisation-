@@ -327,6 +327,79 @@ crank angle of top dead centre differentiated as well.
 """
 
 
+def gas_force_jacobian(
+    analysis: object,
+    jacobian: KinematicJacobian,
+    d_lam_tdc: FloatArray,
+    d_compression_stroke: FloatArray,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> FloatArray:
+    """``d P_gas / dX``, the gas force on the piston crown [N].
+
+    The gauge pressure depends on the design only through ``lambda``, its value
+    at top dead centre and the compression stroke; differentiating the two
+    adiabats gives the rest.  Intake and exhaust sit at plenum pressure, so both
+    the gauge force and its derivative vanish there.
+
+    Split out so that :mod:`exlink.dynamics_jacobian` can reuse it: the gas load
+    is the one applied force in the equilibrium system, so its derivative enters
+    the right-hand side of the 18x18 solve as well as the side-load ratio.
+
+    Args:
+        analysis: A valid :class:`~exlink.model.Analysis`.
+        jacobian: The kinematic derivatives.
+        d_lam_tdc: ``d lambda_TDC / dX``, shaped ``(11,)``.
+        d_compression_stroke: ``d STC / dX``, shaped ``(11,)``.
+        spec: Fixed engine data.
+
+    Returns:
+        ``(n_angles, 11)``.
+    """
+    from .cycle import Phase
+
+    solved = analysis.require_solved()  # type: ignore[attr-defined]
+    thermo = solved.thermodynamics
+    phases = thermo.phases
+    area = spec.piston_area
+    exponent = spec.heat_capacity_ratio
+
+    volume = thermo.volume
+    d_volume = area * (d_lam_tdc[None, :] - jacobian.lam)
+    v_1 = spec.dead_volume + area * phases.compression_stroke
+    d_v1 = area * d_compression_stroke
+
+    d_pressure = np.zeros_like(jacobian.lam)
+    is_compression = phases.labels == int(Phase.COMPRESSION)
+    if np.any(is_compression):
+        ratio = v_1 / volume[is_compression]
+        d_pressure[is_compression] = (
+            spec.p_intake
+            * exponent
+            * ratio[:, None] ** (exponent - 1.0)
+            * (
+                d_v1[None, :] / volume[is_compression][:, None]
+                - v_1 * d_volume[is_compression] / volume[is_compression][:, None] ** 2
+            )
+        )
+    is_expansion = phases.labels == int(Phase.EXPANSION)
+    if np.any(is_expansion):
+        d_p3 = (
+            spec.explosion_ratio
+            * spec.p_intake
+            * exponent
+            * thermo.compression_ratio ** (exponent - 1.0)
+            * (d_v1 / spec.dead_volume)
+        )
+        ratio = spec.dead_volume / volume[is_expansion]
+        d_pressure[is_expansion] = ratio[:, None] ** exponent * d_p3[None, :] + (
+            thermo.p_combustion
+            * exponent
+            * ratio[:, None] ** (exponent - 1.0)
+            * (-spec.dead_volume * d_volume[is_expansion] / volume[is_expansion][:, None] ** 2)
+        )
+    return area * d_pressure
+
+
 def metric_jacobian(
     design: Design,
     analysis: object,
@@ -382,51 +455,7 @@ def metric_jacobian(
     d_gap = gap_sign * (d_lam_at[top_1] - d_lam_at[top_2])
 
     # -- gamma: the piston side-load ratio ----------------------------------------
-    # The gauge pressure depends on the design only through lambda, its value at
-    # top dead centre, and the compression stroke; differentiating the two
-    # adiabats gives the rest.
-    gamma_exponent = spec.heat_capacity_ratio
-    volume = thermo.volume
-    d_volume = area * (d_lam_at[top][None, :] - jacobian.lam)
-    v_1 = spec.dead_volume + area * phases.compression_stroke
-    d_v1 = area * d_compression
-    d_epsilon = d_v1 / spec.dead_volume
-
-    from .cycle import Phase
-
-    labels = phases.labels
-    d_pressure = np.zeros_like(jacobian.lam)
-    is_compression = labels == int(Phase.COMPRESSION)
-    if np.any(is_compression):
-        ratio = v_1 / volume[is_compression]
-        d_pressure[is_compression] = (
-            spec.p_intake
-            * gamma_exponent
-            * ratio[:, None] ** (gamma_exponent - 1.0)
-            * (
-                d_v1[None, :] / volume[is_compression][:, None]
-                - v_1 * d_volume[is_compression] / volume[is_compression][:, None] ** 2
-            )
-        )
-    is_expansion = labels == int(Phase.EXPANSION)
-    if np.any(is_expansion):
-        epsilon = thermo.compression_ratio
-        d_p3 = (
-            spec.explosion_ratio
-            * spec.p_intake
-            * gamma_exponent
-            * epsilon ** (gamma_exponent - 1.0)
-            * d_epsilon
-        )
-        ratio = spec.dead_volume / volume[is_expansion]
-        d_pressure[is_expansion] = ratio[:, None] ** gamma_exponent * d_p3[None, :] + (
-            thermo.p_combustion
-            * gamma_exponent
-            * ratio[:, None] ** (gamma_exponent - 1.0)
-            * (-spec.dead_volume * d_volume[is_expansion] / volume[is_expansion][:, None] ** 2)
-        )
-
-    d_force = area * d_pressure
+    d_force = gas_force_jacobian(analysis, jacobian, d_lam_at[top], d_compression, spec)
     force = thermo.piston_force
     cot = np.cos(k.theta_e) / np.sin(k.theta_e)
     side = force * cot
