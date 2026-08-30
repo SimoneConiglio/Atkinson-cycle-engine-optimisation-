@@ -417,6 +417,9 @@ def maximise_efficiency(
     options: dict[str, Any] = {"max_iter": max_iter}
     if seed is not None and algorithm in {"DIFFERENTIAL_EVOLUTION", "DUAL_ANNEALING"}:
         options["seed"] = seed
+    if algorithm.startswith("Augmented_Lagrangian"):
+        options["sub_algorithm_name"] = "NELDER-MEAD"
+        options["sub_algorithm_settings"] = {"max_iter": 300}
     options.update(settings)
     return _run(scenario, algorithm, options, samples, spec, targets)
 
@@ -643,7 +646,7 @@ def local_pareto(
 
 def sweep_moving_limits(
     limits: Iterable[float],
-    algorithm: str = DEFAULT_GLOBAL_ALGORITHM,
+    algorithm: str = DEFAULT_LOCAL_ALGORITHM,
     on_height: bool = True,
     **kwargs: Any,
 ) -> list[Outcome]:
@@ -657,7 +660,11 @@ def sweep_moving_limits(
 
     Args:
         limits: The successive upper limits [mm], typically decreasing.
-        algorithm: The single-objective algorithm to use at each step.
+        algorithm: The single-objective algorithm to use at each step.  The
+            default is the augmented Lagrangian: each step has to satisfy the
+            two equalities *and* the relaxed-nothing inequalities exactly, and a
+            derivative-free method such as COBYLA does not get there reliably
+            within a sensible budget.
         on_height: Apply the limit to ``H``; otherwise to ``B``.
         **kwargs: Forwarded to :func:`maximise_efficiency`.
 

@@ -4,16 +4,20 @@ Started from a design that does not satisfy its own constraints when
 re-analysed, the augmented Lagrangian lands on a genuinely feasible one at
 essentially the reported efficiency.
 
+Takes about two minutes.
+
     python examples/03_optimize.py
 """
 
 from __future__ import annotations
 
 from exlink import PUBLISHED_DESIGN, analyse
+from exlink.cli import configure_logging
 from exlink.scenarios import format_analysis, refine
 
 
 def main() -> None:
+    configure_logging(verbose=False)
     start = analyse(PUBLISHED_DESIGN, samples=720)
     print(f"start:  eta = {100 * start.metrics.efficiency:6.3f} %   feasible = False")
 
@@ -21,10 +25,10 @@ def main() -> None:
     for step, relative in enumerate((0.25, 0.10, 0.05), start=1):
         outcome = refine(
             design,
-            samples=720,
-            max_iter=120,
+            samples=480,
+            max_iter=60,
             relative=relative,
-            sub_algorithm_settings={"max_iter": 400},
+            sub_algorithm_settings={"max_iter": 250},
         )
         design = outcome.design
         metrics = outcome.analysis.metrics
