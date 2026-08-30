@@ -182,16 +182,23 @@ final = refine(front.design)                    # feasible, η = 0.280
 step a warm-started local solve, so `g`, `STE` and `ε` are met exactly at each point:
 
 ```
-   H limit   eta [%]    H [mm]   feasible
-       236    28.11      236.0   True
-       232    28.23      232.0   True
-       228    27.74      228.0   True
+   H limit   eta [%]    H [mm]    B [mm]  feasible      <- examples/04_pareto.py
+       236    28.113     236.0     151.7  True
+       232    27.982     232.0     151.9  True
+       228    27.209     228.0     152.2  False
+       224    27.927     224.0     155.1  True
 ```
 
-It needs a real budget per step (the augmented Lagrangian, ~120 outer iterations): each
+![efficiency against the two envelope dimensions](docs/figures/pareto.png)
+
+Every limit is met exactly, and efficiency falls as the envelope shrinks — shortening `H`
+from 236 to 224 mm costs about 0.19 points of efficiency and pushes `B` out from 151.7 to
+155.1 mm. It is a sequence
+of independent local solves rather than one global sweep, so the curve is not perfectly
+monotone and a step can land infeasible — the table reports which. It also needs a real
+budget per step (~120 augmented Lagrangian outer iterations, ~3 minutes for the four): each
 step must satisfy both equalities and all five inequalities while pushed against a limit it
-did not previously meet, and a smaller budget returns "no feasible point" rather than a
-trade-off.
+did not previously meet, and a smaller budget returns "no feasible point" instead.
 
 ---
 

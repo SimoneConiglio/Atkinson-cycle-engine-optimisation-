@@ -301,11 +301,13 @@ Two practical notes on the multi-objective stage, both measured:
   parallel guesses. Spend extra budget on `max_gen` first.
 
 The moving-limit sweep reaches the same trade-off without relaxing anything,
-because each step is a warm-started local solve: `H ≤ 236 → η = 28.11 %`,
-`H ≤ 232 → 28.23 %`, `H ≤ 228 → 27.74 %`, all feasible. It is not free either —
-each step must satisfy both equalities and all five inequalities while pushed
-against a limit it did not previously meet, which takes roughly 120 augmented
-Lagrangian outer iterations.
+because each step is a warm-started local solve on the full problem:
+`H ≤ 236 → η = 28.11 %`, `232 → 27.98 %`, `228 → 27.21 %`, `224 → 27.93 %`,
+each meeting its limit exactly. Being a sequence of independent local solves,
+the curve is not perfectly monotone and individual steps can come back
+infeasible. It is not free either — each step must satisfy both equalities and
+all five inequalities while pushed against a limit it did not previously meet,
+which takes roughly 120 augmented Lagrangian outer iterations.
 
 A note on judging feasibility: an augmented Lagrangian converges *onto* the
 active bounds, so a converged design routinely lands a few parts in 1e5 outside
