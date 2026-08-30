@@ -23,6 +23,7 @@ Two disciplines are provided:
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from typing import Any, ClassVar
 
 import numpy as np
@@ -46,6 +47,7 @@ from .dynamics import (
     rpm_to_rad_per_s,
 )
 from .dynamics import solve as solve_dynamics
+from .jacobian import kinematic_jacobian, metric_jacobian
 from .kinematics import DEFAULT_SAMPLES
 from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .model import (
@@ -139,6 +141,81 @@ class ExlinkDiscipline(Discipline):
         design = Design.from_mapping(dict(input_data))
         analysis = self.analyse_design(design)
         return to_output_data(analysis, self.targets)
+
+    def _compute_jacobian(
+        self,
+        input_names: Iterable[str] = (),
+        output_names: Iterable[str] = (),
+    ) -> None:
+        """Differentiate the analysis with respect to the design vector.
+
+        The tight constraints -- the two equalities and ``W``, ``mra``, ``g``,
+        ``gamma`` -- are differentiated exactly, by chaining through the closed
+        forms and applying the envelope theorem at each extremum over the crank
+        angle.  That matters more than it sounds: those metrics are *maxima*
+        over the revolution, so the sample attaining them switches as the design
+        moves and a difference quotient taken across the switch is simply wrong.
+        Measured on ``gamma`` at the reference design, a step of 1e-4 mm gives a
+        gradient 25 % off, because the argmax of the side load moves one sample.
+
+        The remaining outputs -- efficiency, the two envelope dimensions and the
+        clearance -- are filled by central differences.  None is tight, all are
+        smooth in the design, and efficiency in particular would need the crank
+        angle of top dead centre differentiated too, because the combustion
+        pressure jump puts moving-boundary terms in its integral.
+        """
+        self._init_jacobian(input_names, output_names)
+        design = Design.from_mapping(dict(self.io.data))
+        analysis = self.analyse_design(design)
+
+        exact: dict[str, np.ndarray] = {}
+        if analysis.valid:
+            derivatives = kinematic_jacobian(design, analysis.kinematics, self.spec)
+            exact = metric_jacobian(design, analysis, derivatives, self.spec)
+
+        wanted = set(output_names) or set(self.jac)
+        approximate = [name for name in wanted if name not in exact]
+        numerical = self._difference_outputs(design, approximate) if approximate else {}
+
+        for output in self.jac:
+            row = exact.get(output)
+            if row is None:
+                row = numerical.get(output)
+            if row is None:
+                row = np.zeros(len(VARIABLE_NAMES))
+            for index, variable in enumerate(VARIABLE_NAMES):
+                if variable in self.jac[output]:
+                    self.jac[output][variable] = np.array([[row[index]]])
+
+    def _difference_outputs(
+        self, design: Design, outputs: Sequence[str], step: float = 1.0e-6
+    ) -> dict[str, np.ndarray]:
+        """Central differences for the outputs left to numerical treatment.
+
+        Args:
+            design: The point to differentiate at.
+            outputs: Output names needing a gradient.
+            step: Relative step; scaled by each variable's magnitude.
+
+        Returns:
+            ``{output name: gradient}``, each shaped ``(11,)``.
+        """
+        base = design.to_array()
+        gradients = {name: np.zeros(len(VARIABLE_NAMES)) for name in outputs}
+        for index in range(len(VARIABLE_NAMES)):
+            offset = step * max(abs(base[index]), 1.0)
+            forward, backward = base.copy(), base.copy()
+            forward[index] += offset
+            backward[index] -= offset
+            plus = to_output_data(self.analyse_design(Design.from_array(forward)), self.targets)
+            minus = to_output_data(
+                self.analyse_design(Design.from_array(backward)), self.targets
+            )
+            for name in outputs:
+                gradients[name][index] = (float(plus[name][0]) - float(minus[name][0])) / (
+                    2.0 * offset
+                )
+        return gradients
 
 
 def to_output_data(

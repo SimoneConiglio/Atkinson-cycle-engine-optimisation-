@@ -541,3 +541,101 @@ def plot_mass_vs_speed(speeds: Sequence[float], results: Sequence[Any]) -> Figur
         ax.legend(loc="best", framealpha=0.9)
         figure.tight_layout()
     return figure
+
+
+def plot_efficiency_mass(
+    designs: Sequence[Design],
+    results: Sequence[Any],
+    labels: Sequence[str] | None = None,
+    reference: tuple[Design, Any] | None = None,
+    **kwargs: Any,
+) -> Figure:
+    """Efficiency against structural mass -- the trade the report could not see.
+
+    Nothing in the quasi-static formulation determines a cross-section, so mass
+    is not an objective it can express. Once the parts are sized it becomes the
+    one the dynamics most affects, and it pulls against efficiency through the
+    transmission angle: the geometry with the longest lever arm sits nearest the
+    singularity, where the accelerations -- and so the sections -- are worst.
+
+    Args:
+        designs: The designs on the trade-off curve.
+        results: Their coupled results, in the same order.
+        labels: Optional annotation for each point.
+        reference: ``(design, coupled result)`` to mark as the starting point.
+        **kwargs: Forwarded to :func:`exlink.model.analyse`.
+
+    Returns:
+        The figure.
+    """
+    analyses = [analyse(d, **kwargs) for d in designs]
+    efficiency = np.array([100 * a.metrics.efficiency for a in analyses])
+    mass = np.array([r.total_mass_kg for r in results])
+    compatibility = np.array([a.metrics.compatibility for a in analyses])
+
+    with plt.style.context(STYLE):
+        figure, axes = plt.subplots(1, 2, figsize=(11.0, 4.6))
+        scatter = axes[0].scatter(
+            mass,
+            efficiency,
+            c=compatibility,
+            cmap="plasma",
+            s=70,
+            edgecolor="white",
+            linewidth=0.6,
+            zorder=3,
+        )
+        order = np.argsort(mass)
+        axes[0].plot(mass[order], efficiency[order], "-", lw=1.2, color="#7f8c8d", zorder=2)
+        figure.colorbar(scatter, ax=axes[0], label=r"$W$ (1 = singular)")
+        axes[0].set_xlabel("total moving mass [kg]")
+        axes[0].set_ylabel(r"efficiency $\eta$ [%]")
+        axes[0].set_title("the trade sizing creates")
+
+        axes[1].scatter(
+            compatibility,
+            mass,
+            c=efficiency,
+            cmap="viridis",
+            s=70,
+            edgecolor="white",
+            linewidth=0.6,
+            zorder=3,
+        )
+        axes[1].set_xlabel(r"transmission-angle margin $W$")
+        axes[1].set_ylabel("total moving mass [kg]")
+        axes[1].set_yscale("log")
+        axes[1].set_title("and where it comes from")
+
+        if reference is not None:
+            ref_design, ref_result = reference
+            ref_analysis = analyse(ref_design, **kwargs)
+            axes[0].plot(
+                ref_result.total_mass_kg,
+                100 * ref_analysis.metrics.efficiency,
+                "*",
+                ms=18,
+                color="#c0392b",
+                mec="white",
+                zorder=4,
+                label="quasi-static optimum",
+            )
+            axes[1].plot(
+                ref_analysis.metrics.compatibility,
+                ref_result.total_mass_kg,
+                "*",
+                ms=18,
+                color="#c0392b",
+                mec="white",
+                zorder=4,
+                label="quasi-static optimum",
+            )
+            axes[0].legend(loc="best", framealpha=0.9)
+
+        if labels is not None:
+            for x, y, text in zip(mass, efficiency, labels, strict=True):
+                axes[0].annotate(
+                    text, (x, y), textcoords="offset points", xytext=(7, 5), fontsize=8
+                )
+        figure.tight_layout()
+    return figure

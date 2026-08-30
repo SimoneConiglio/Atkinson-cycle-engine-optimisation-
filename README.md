@@ -247,6 +247,57 @@ right direction and zero on contact, but not expected to match digit for digit.
 
 ---
 
+## Gradients
+
+The feasible set here is a **sliver**. At the reference design the two equality
+constraints leave a band 0.1 mm wide on `STE` and 0.1 wide on `ε`, inside an 11-dimensional
+box with sides of tens of millimetres, while `W` and `γ` sit within 0.4 % and 7 % of their
+bounds. A derivative-free method cannot work in that — COBYLA returns its starting point
+unchanged after 313 s and 120 evaluations, whatever the budget.
+
+Everything the report derives is closed form, so the derivatives are too. `exlink.jacobian`
+propagates them forward through the same chain the kinematics evaluates, and gets the
+extremum-based metrics from the **envelope theorem**: for `max_θ f(X, θ)` attained at `θ*`,
+the derivative is `∂f/∂X` evaluated there, because the term through the moving maximiser
+carries `∂f/∂θ = 0`.
+
+That matters more than "faster". These metrics are maxima over the crank angle, so the
+sample attaining them *switches* as the design moves, and a difference quotient taken across
+the switch is simply wrong — on `γ` at a 1e-4 mm step, 25 % wrong. GEMSEO's own
+`check_jacobian` passes on all of them; `tests/test_jacobian.py` pins both the agreement and
+that failure mode.
+
+| | COBYLA | SLSQP + finite differences | SLSQP + exact gradients |
+|---|---|---|---|
+| moved from start | 0 mm | 32 mm | 38 mm |
+| time | 313 s | 15 s | **4 s** |
+
+Run from the published design, the gradient-based search reaches **η = 30.77 %**, feasible
+at every resolution from 720 samples up, against the report's 27.76 % and the 27.87 % of the
+augmented-Lagrangian reproduction:
+
+| | η | `H` | `W` | `g` | feasible |
+|---|---|---|---|---|---|
+| report, 2015 | 27.76 % | 256.7 mm | 0.9817 | 0.0069 | — |
+| augmented Lagrangian (`REFINED_DESIGN`) | 27.87 % | 238.5 mm | 0.9811 | 0.0060 | yes |
+| SLSQP + exact gradients (`GRADIENT_DESIGN`) | **30.77 %** | 319.8 mm | 0.9850 | 0.0095 | yes |
+
+Read that comparison carefully: nothing limits the envelope in this single-objective form, so
+the extra efficiency is bought partly with size — the mechanism grows to `H = 320 mm`. What
+it does show is that the report's final step stopped three points short of the efficiency
+available to it, and that the method rather than the mechanism was the limit.
+
+**Not yet analytic:** the derivatives through the sizing/dynamics MDA. `η`, `H`, `B` and the
+clearance in the analysis discipline fall back to central differences (all smooth, none
+tight), and the coupled problem currently differences the whole MDA — 11 MDA solves per
+gradient, which measured out at 10–20 minutes for a short run. Local Jacobians for
+`DynamicsDiscipline` and `StructureDiscipline` would let GEMSEO assemble the coupled
+derivative properly; the pieces needed are the spectral operator (linear, so it applies
+directly to the kinematic derivative arrays), the 18×18 solve
+(`dx = A⁻¹(db − dA·x)`), and the sizing bisection (implicit function theorem).
+
+---
+
 ## Sizing the parts, and the coupling it creates
 
 The report stops before this on purpose — *"to have the masses of the pieces we have to know
@@ -365,6 +416,7 @@ src/exlink/
   dynamics.py      inertia in the load path: the 18x18 equilibrium solve
   sizing.py        internal loads, then static / fatigue / buckling sizing
   coupled.py       the sizing <-> dynamics fixed point, and why it converges
+  jacobian.py      exact d/dX of the analysis chain, by forward mode + envelope
 ```
 
 ## Tests

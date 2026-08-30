@@ -57,7 +57,12 @@ from .loads import Loads
 from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .metrics import Metrics
 from .model import Analysis, SolvedAnalysis, analyse
-from .reference import PUBLISHED_DESIGN, PUBLISHED_METRICS
+from .reference import (
+    GRADIENT_DESIGN,
+    PUBLISHED_DESIGN,
+    PUBLISHED_METRICS,
+    REFINED_DESIGN,
+)
 from .sizing import MemberSizing
 
 __all__ = [
@@ -68,9 +73,11 @@ __all__ = [
     "DEFAULT_SPEED_RPM",
     "DEFAULT_TARGETS",
     "GLOBAL_BOUNDS",
+    "GRADIENT_DESIGN",
     "MEMBER_NAMES",
     "PUBLISHED_DESIGN",
     "PUBLISHED_METRICS",
+    "REFINED_DESIGN",
     "VARIABLE_DESCRIPTIONS",
     "VARIABLE_NAMES",
     "Analysis",

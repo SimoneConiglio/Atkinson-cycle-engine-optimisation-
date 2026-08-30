@@ -1033,3 +1033,159 @@ def format_coupled(result: Any, title: str = "coupled sizing") -> str:
     lines.append(f"  mean torque          {result.loads.mean_torque:8.1f} N.mm")
     lines.append(f"  worst matrix cond.   {result.loads.conditioning:8.3g}")
     return "\n".join(lines)
+
+
+EFFICIENCY_MASS_OBJECTIVES: tuple[str, str] = ("neg_efficiency", "total_mass")
+"""``(-eta, M)``: the trade that only exists once the parts are sized.
+
+The four-way front over :data:`COUPLED_OBJECTIVE_NAMES` is available, but ``H``,
+``B`` and ``M`` are strongly correlated -- a bigger mechanism is a heavier one --
+so most of it is redundant. Efficiency against mass is the trade with real
+tension in it, because the geometry that maximises the quasi-static lever arm is
+the geometry that makes the parts heavy.
+"""
+
+
+def sweep_efficiency_floor(
+    floors: Iterable[float],
+    speed_rpm: float = DEFAULT_SPEED_RPM,
+    algorithm: str = "NLOPT_COBYLA",
+    initial: Design | None = None,
+    relative: float = 0.30,
+    max_iter: int = 200,
+    **kwargs: Any,
+) -> list[Outcome]:
+    """Trace the efficiency-versus-mass trade by epsilon-constraint.
+
+    Minimise mass subject to ``eta >= floor``, for a ladder of floors, warm
+    starting each solve from the last.  This is the practical way to get the
+    coupled front: every step is an ordinary single-objective problem on the
+    *unrelaxed* constraints, and a handful of local solves replaces the tens of
+    thousands of MDA-backed evaluations a population method would need.
+
+    Args:
+        floors: Efficiency floors to impose, typically decreasing so that each
+            solve starts from a feasible point found by the last.
+        speed_rpm: Crankshaft speed [rev/min].
+        algorithm: The single-objective algorithm used at each step.
+        initial: Starting design; defaults to the refined reference.
+        relative: Half-width of the design box, as a fraction of ``|X_0|``.
+        max_iter: Evaluation budget per step.
+        **kwargs: Forwarded to :func:`minimise_mass`.
+
+    Returns:
+        One outcome per floor, in the order given.
+    """
+    from .reference import REFINED_DESIGN
+
+    previous = REFINED_DESIGN if initial is None else initial
+    outcomes: list[Outcome] = []
+    for floor in floors:
+        outcome = minimise_mass(
+            algorithm=algorithm,
+            initial=previous,
+            speed_rpm=speed_rpm,
+            max_iter=max_iter,
+            relative=relative,
+            min_efficiency=floor,
+            **kwargs,
+        )
+        outcomes.append(outcome)
+        if outcome.analysis.valid:
+            previous = outcome.design
+        LOGGER.info(
+            "efficiency floor %.3f -> eta = %.4f",
+            floor,
+            outcome.analysis.metrics.efficiency,
+        )
+    return outcomes
+
+
+def coupled_pareto(
+    objective: Sequence[str] = EFFICIENCY_MASS_OBJECTIVES,
+    algorithm: str = DEFAULT_MOEA,
+    bounds: Bounds | None = None,
+    initial: Design | None = None,
+    speed_rpm: float = DEFAULT_SPEED_RPM,
+    pop_size: int = 40,
+    max_gen: int = 20,
+    relative: float = 0.25,
+    seed: int = 1,
+    **kwargs: Any,
+) -> Outcome:
+    """Approximate a Pareto front of the *coupled* problem with a MOEA.
+
+    Budget with care.  Every individual of every generation runs an MDA to
+    convergence, so the cost is ``pop_size * max_gen`` MDAs -- the defaults here
+    are an order of magnitude smaller than the standalone
+    :func:`pareto_front` for that reason, and are a starting point rather than a
+    converged front.  :func:`sweep_efficiency_floor` reaches the same trade for
+    a small fraction of the work and is the better tool unless a genuinely
+    non-convex front is suspected.
+
+    Args:
+        objective: Output names to trade off.
+        algorithm: A multi-objective algorithm.
+        bounds: The design box; defaults to a window around ``initial``.
+        initial: Starting design; defaults to the refined reference.
+        speed_rpm: Crankshaft speed [rev/min].
+        pop_size: Population size.
+        max_gen: Generation budget.
+        relative: Half-width of the default box.
+        seed: Random seed.
+        **kwargs: Forwarded to :func:`build_coupled_scenario`.
+
+    Returns:
+        The outcome, with :attr:`Outcome.front` populated.
+    """
+    from .reference import REFINED_DESIGN
+
+    start = REFINED_DESIGN if initial is None else initial
+    box = Bounds.around(start, relative=relative) if bounds is None else bounds
+    scenario = build_coupled_scenario(
+        list(objective),
+        bounds=box,
+        initial=start,
+        speed_rpm=speed_rpm,
+        targets=moea_targets(),
+        **kwargs,
+    )
+    options: dict[str, Any] = _supported_settings(
+        algorithm,
+        {
+            "ftol_rel": 0.0,
+            "ftol_abs": 0.0,
+            "xtol_rel": 0.0,
+            "xtol_abs": 0.0,
+            "hv_tol_rel": 0.0,
+            "hv_tol_abs": 0.0,
+            "stop_crit_n_hv": max_gen + 1,
+            "pop_size": pop_size,
+            "max_gen": max_gen,
+            "seed": seed,
+        },
+    )
+    options["max_iter"] = pop_size * (max_gen + 1)
+    scenario.execute(algo_name=algorithm, **options)
+
+    front = _extract_front(scenario)
+    if not front:
+        LOGGER.warning(
+            "%s found no feasible design in %d evaluations",
+            algorithm,
+            len(scenario.formulation.optimization_problem.database),
+        )
+    analyses = [analyse(d, samples=COUPLED_SAMPLES) for d in front]
+    if analyses:
+        best = int(np.argmax([a.metrics.efficiency for a in analyses]))
+        design, analysis = front[best], analyses[best]
+    else:  # pragma: no cover - only if the algorithm returns nothing
+        design = _best_design(scenario)
+        analysis = analyse(design, samples=COUPLED_SAMPLES)
+    return Outcome(
+        design=design,
+        analysis=analysis,
+        algorithm=algorithm,
+        scenario=scenario,
+        front=front,
+    )

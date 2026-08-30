@@ -322,3 +322,39 @@ def test_minimise_mass_runs_and_stays_feasible() -> None:
     found = solve_for_design(outcome.design, speed_rpm=1000.0, samples=360, max_iterations=400)
     assert found.feasible
     assert found.total_mass_kg <= start.total_mass_kg * (1.0 + 1e-9)
+
+
+def test_the_efficiency_mass_objectives_are_both_minimised() -> None:
+    """Mass enters as an objective, and efficiency through its negation."""
+    from exlink.scenarios import EFFICIENCY_MASS_OBJECTIVES, build_coupled_scenario
+
+    problem = build_coupled_scenario(
+        list(EFFICIENCY_MASS_OBJECTIVES), speed_rpm=1000.0
+    ).formulation.optimization_problem
+    assert problem.objective.output_names == ["neg_efficiency", "total_mass"]
+    assert not problem.is_mono_objective
+
+
+def test_the_four_way_coupled_front_is_available() -> None:
+    from exlink.scenarios import COUPLED_OBJECTIVE_NAMES, build_coupled_scenario
+
+    problem = build_coupled_scenario(
+        list(COUPLED_OBJECTIVE_NAMES), speed_rpm=1000.0
+    ).formulation.optimization_problem
+    assert problem.objective.output_names == list(COUPLED_OBJECTIVE_NAMES)
+
+
+@pytest.mark.slow
+def test_the_efficiency_floor_binds_the_mass_optimum() -> None:
+    """Mass and efficiency genuinely pull against each other.
+
+    If they did not, the efficiency floor would be slack at the optimum and
+    minimising mass would cost nothing. It is not slack: the optimizer takes the
+    efficiency it is allowed to lose.
+    """
+    from exlink.scenarios import minimise_mass
+
+    floor = 0.26
+    outcome = minimise_mass(speed_rpm=1000.0, max_iter=80, relative=0.30, min_efficiency=floor)
+    efficiency = analyse(outcome.design, samples=360).metrics.efficiency
+    assert efficiency >= floor - 5e-3
