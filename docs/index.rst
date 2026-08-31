@@ -1,8 +1,9 @@
 exlink
 ======
 
-Multi-objective optimization of an EX-link Atkinson-cycle engine mechanism,
-a GEMSEO multidisciplinary optimization of an extended-expansion engine linkage.
+Multidisciplinary design of an EX-link Atkinson-cycle engine mechanism for a
+Shell Eco-marathon car, optimised for the only thing that competition scores:
+distance on a given quantity of fuel.
 
 .. toctree::
    :maxdepth: 2
@@ -24,6 +25,12 @@ Start here
    from exlink import solve_for_design
    sized = solve_for_design(PUBLISHED_DESIGN, speed_rpm=1000.0)
    print(sized.total_mass_kg, sized.feasible)
+
+   # carry it all the way to kilometres per litre
+   from exlink import COUPLED_DESIGN, evaluate
+   outcome = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
+   print(outcome.km_per_litre, outcome.engine_mass_kg)
+   print(outcome.budget.kilograms())
 
 API
 ---
@@ -59,6 +66,30 @@ optimizer applicable to a feasible set this thin.
 
 .. automodule:: exlink.jacobian
 .. automodule:: exlink.dynamics_jacobian
+
+The vehicle-level problem
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What turns three competing objectives into one: friction makes the constraint
+set cost something, the mass budget converts the envelope and the torque ripple
+into kilograms, and the vehicle converts kilograms and efficiency into range.
+
+.. automodule:: exlink.friction
+.. automodule:: exlink.gears
+.. automodule:: exlink.manufacturing
+.. automodule:: exlink.mass_budget
+.. automodule:: exlink.vehicle
+.. automodule:: exlink.performance
+
+Study of the result
+~~~~~~~~~~~~~~~~~~~
+
+Whether the optimum survives manufacturing tolerance, how strongly coupled the
+problem actually is, and whether the finding generalises past one linkage.
+
+.. automodule:: exlink.robustness
+.. automodule:: exlink.formulations
+.. automodule:: exlink.slidercrank
 
 Optimization
 ~~~~~~~~~~~~

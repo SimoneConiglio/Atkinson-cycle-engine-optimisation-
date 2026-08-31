@@ -1,16 +1,33 @@
 # EX-link Atkinson-cycle engine optimization
 
-Multidisciplinary sizing of an **extended-expansion (Atkinson) linkage** for a
-single-cylinder engine: eleven geometric design variables, competing objectives in
-efficiency, envelope and structural mass, and a strongly coupled structure/dynamics
-analysis solved as an MDA.
+Multidisciplinary design of an **extended-expansion (Atkinson) linkage** for a Shell
+Eco-marathon engine, optimised for the only thing the competition scores: **how far the car
+gets on a given quantity of fuel**.
 
-The physics is NumPy — closed-form kinematics, an idealised Atkinson cycle, a full
-d'Alembert load analysis and static/fatigue/buckling sizing — with exact analytic
-derivatives throughout. The optimization is driven by
+Eleven geometric design variables, one discrete gear module, a strongly coupled
+structure/dynamics analysis solved as an MDA, and a chain that carries all of it through to
+kilometres per litre — so that efficiency, envelope size, torque ripple and structural mass
+are priced against each other by physics rather than by weights.
+
+The physics is NumPy: closed-form kinematics, an idealised Atkinson cycle, a full d'Alembert
+load analysis, static/fatigue/buckling sizing, Coulomb friction, a whole-engine mass budget
+and a burn-and-coast vehicle model — with exact analytic derivatives through the parts where
+finite differences are not merely inaccurate but wrong. The optimization is driven by
 **[GEMSEO](https://gemseo.readthedocs.io)**, so the same problem can be handed to SLSQP,
 differential evolution, an augmented Lagrangian or NSGA-II without rewriting anything. The
 mechanism is animated with **matplotlib**.
+
+Three findings, each with a test pinning it:
+
+- **The quasi-static optimum is the worst place to be.** Maximising efficiency without
+  inertia drives the linkage to its transmission-angle singularity, which is exactly where
+  the accelerations, the bearing loads and hence the structure are worst. Backing off costs
+  nothing and halves the engine.
+- **`g ≤ 0.01 mm` cannot be manufactured.** The constraint is tighter than the tolerance of
+  the parts that produce it — process capability 0.11, and no ISO grade fixes it.
+- **The Atkinson linkage's advantage is firing frequency, not extended expansion.** Against a
+  slider-crank sized by identical code it wins 24 %; remove the one-revolution cycle and the
+  advantage falls to 2.8 %.
 
 ---
 
@@ -464,6 +481,281 @@ converges at all, is in [docs/theory.md](docs/theory.md) §9.
 
 ---
 
+## Range: the objective the problem was always about
+
+Everything above stops at the engine. But the engine is for a Shell Eco-marathon car, and
+that competition scores exactly one thing — **distance on a given quantity of fuel** — so the
+three-objective formulation was never the real problem. It could only ever produce a Pareto
+front, because nothing in it says what a millimetre of height is worth in points of
+efficiency.
+
+Range prices all of them, and the prices are not adjustable:
+
+```
+eta_mech  --.
+             +--> brake efficiency --.
+cycle work -'                         +--> fuel per metre --> RANGE
+                                     /
+H, B  --> crankcase --.             /
+torque ripple --> flywheel --> engine mass --> rolling resistance
+```
+
+Two pieces had to be built before that chain would close.
+
+**A real mechanical efficiency.** The package's `η` is *not* an efficiency: with no friction
+in the model, the virtual-work identity makes the torque's work exactly equal the gas force's
+work at every crank angle. It is a kinematic quality measure — how much *mean* torque a
+piston motion converts into — and nothing is lost in it. `friction.py` supplies the losses
+that are really there, from quantities the dynamic solve already produces: seven journals
+under known reactions turning through known relative angles, the ring pack and skirt sliding
+against the liner reaction the side-load constraint already bounds, and the gear mesh. This
+is what makes the constraint set *mean* something: a design that leans on the liner now burns
+its fuel on the liner.
+
+**A mass budget worth optimising.** The coupled sizing loop returns the mass of the seven
+sized members: about 0.15 kg. No engine weighs 0.15 kg, and optimising that number optimises
+a tail while a twelve-kilogram dog goes unmodelled.
+
+### The mass budget
+
+Eight contributions, each sized from something the analysis already knows. At the coupled
+reference design, 1000 rpm:
+
+| item | mass | share | set by |
+|---|---|---|---|
+| flywheel | 9.54 kg | 78 % | the cyclic torque fluctuation the linkage produces |
+| crankcase | 0.90 kg | 7 % | **the envelope `H × B`**, at a stiffness-driven wall |
+| shafts | 0.65 kg | 5 % | combined bending and torsion at the journals |
+| bearings | 0.48 kg | 4 % | journal diameter, via catalogue proportions |
+| cylinder + head | 0.26 kg | 2 % | bore and peak pressure |
+| gears | 0.15 kg | 1 % | peak tooth load, and the chosen module |
+| linkage | 0.15 kg | 1 % | the sizing fixed point |
+| piston | 0.04 kg | < 1 % | peak gas pressure |
+| **total** | **12.17 kg** | | |
+
+Two of these change the *shape* of the problem rather than its scale.
+
+**The crankcase makes `H` and `B` physical.** A box has to enclose the mechanism and its walls
+scale with the envelope. The two envelope objectives convert to kilograms at a rate the
+physics fixes, and kilograms convert to range through rolling resistance. That is what
+collapses three objectives into one.
+
+**The flywheel makes torque smoothness physical.** A single-cylinder engine needs enough
+rotating inertia to carry it through compression, and the requirement follows from the
+*fluctuation* of the turning-moment diagram. A linkage with a flatter torque curve is
+lighter — a design driver no geometric constraint expresses, pushing against a long lever arm.
+It is also, at these speeds, three quarters of the engine.
+
+Sizing it correctly took two corrections. Feeding the *total* torque into the flywheel
+calculation double-counts energy the mechanism's own masses already store, overstating it
+fivefold at low speed; it uses the gas turning-moment diagram instead. And carrying the main
+bearing reaction through a plate spanning the whole crankcase asked for a 27 mm wall — the
+load goes into a local boss, and the wall is set by castability and stiffness.
+
+### How the car is driven
+
+Not at constant speed. Every serious team drives **burn and coast**: run the engine hard from
+`v_lo` to `v_hi`, declutch, coast back down, repeat. This is where the accelerations and
+decelerations enter, and the naive expectation about them is wrong. Over one closed
+burn-and-coast cycle the car starts and ends at the same speed, so the kinetic energy nets to
+zero and
+
+> `W_burn = ∫ F_res(v) dx` over the **whole** burn *and* coast distance.
+
+Accelerating hard costs **nothing** in resistance work. What burn-and-coast buys is that the
+engine spends its running time at high load; what it costs is aerodynamic, since drag goes as
+`v²` and swinging around a mean burns more than cruising at it. Both are in the model, and
+there is a test pinning the energy balance.
+
+The minimum-average-speed rule is active at every optimum where the engine has power to
+spare, which collapses the two-dimensional strategy search to one dimension: for each `v_lo`,
+the rule pins `v_hi` exactly. That is not only faster — a grid search would make the objective
+a step function of the design variables, and the gradient-based optimizer downstream would be
+differentiating quantisation noise.
+
+### Does the model land in the right place?
+
+Nothing here is calibrated to a target, so the agreements are checks rather than fits:
+
+| quantity | model | expected |
+|---|---|---|
+| indicated thermal efficiency | 47.7 % | 40–55 % for an idealised Atkinson cycle |
+| p–V loop area vs torque integral | agree to 2 % | identical, by virtual work |
+| IMEP | 2.7 bar | low, and correctly so for `k = 1.7` |
+| FMEP | 1.2 bar | 0.5–1.5 bar for a small single |
+| range | 2100–3400 km/L | 2000–3500 for Prototype-class gasoline |
+
+### The discrete variable hiding in the inter-axle distance
+
+The 2:1 gear pair appears in the geometric problem only as two primitive radii, both
+continuous functions of `I`. That is a fiction. A gear has an integer number of teeth cut with
+a standard-module hob, so
+
+> `r = mz/2` and `z₁ = 2z₂` ⟹ **`I = 1.5 · m · z₂`**
+
+`I` lives on a **lattice**, not an interval. Asking for `I = 56.55 mm` gets you 56.40 (m=0.8,
+z=47) or 56.25 (m=1.25, z=30), and nothing between. Undercutting sets the floor at `z ≥ 17`,
+so `I ≥ 25.5m`.
+
+This matters because `I` is one of the variables the equalities `STE = 74` and `ε = 16` are
+satisfied *with*. Snapping it to the lattice breaks both, and the remaining continuous
+variables have to repair them — the classic *choose the integers, repair the continuum*
+structure.
+
+Getting this wrong is instructive, and it cost a debugging session worth recording. Left free,
+the module choice makes the objective a step function of `I`: the lightest workable module
+changes at a threshold and the range jumps 40 km/L across it. A central difference straddling
+that threshold returns a gradient of **3.7 × 10⁵** against a true gradient of order 10³. SLSQP,
+handed a quadratic subproblem built from two constraint gradients that are both quantisation
+noise, rejected it as *"inequality constraints incompatible"* and stopped at the starting
+point having evaluated nothing. Pinning the pair — which also removes `I` from the design
+space, leaving ten continuous variables — is both the fix and the correct algorithm.
+
+### Manufacturability
+
+`manufacturing.py` holds the R20 preferred bar diameters, the ISO 54 module series, and
+minimum castable and machinable wall thicknesses. Rounding is applied *after* the fixed point
+converges, never inside it: a step function inside a contraction turns it into a limit cycle
+between two stock sizes. Rounding is always **up**, so it can never turn a certified section
+unsafe, and `stock_premium` reports what buildability cost.
+
+---
+
+## Does it survive manufacturing?
+
+The central finding is about *conditioning* — the mechanism sits near a singularity — and a
+design chosen for nominal performance in a badly conditioned region is exactly what a
+tolerance study exists to catch. Presenting a deterministic optimum without one would be
+negligent.
+
+Tolerances are ISO 286 IT grades, not invented numbers: `i = 0.45·D^(1/3) + 0.001·D` µm, with
+IT8 at 25i for a machined member. Errors propagate two ways — **first order from the exact
+Jacobians**, so a full assessment costs one extra Jacobian evaluation, and **Monte Carlo** to
+check the linearisation, which is precisely what should be distrusted near a singularity.
+
+```
+  constraint               nominal   sigma_1st    sigma_MC     Cpk   violated
+  expansion_stroke        -0.04992     0.03645     0.02011    0.83      11.0%
+  compression_ratio       -0.04998    0.009347    0.005162    3.23       0.0%
+  rod_angle                 -1.321    0.005555    0.005448   80.83       0.0%
+  compatibility          -0.003854   4.029e-05    4.19e-05   30.66       0.0%
+  tdc_gap                -0.004323     0.02173     0.01306    0.11      65.5%
+  clearance                 -47.65     0.03584     0.03221  493.12       0.0%
+  side_load              -0.001414   4.277e-05   4.098e-05   11.50       0.0%
+```
+
+**`g ≤ 0.01 mm` cannot be held.** The dimensions producing the top-dead-centre gap are held to
+±0.011–0.031 mm at IT8, and combine to give `g` a standard deviation of 0.013 mm — larger than
+the constraint band itself. Process capability is **0.11** against an industrial target of
+1.33, and two thirds of nominally conforming builds violate it.
+
+Scanning the IT ladder settles what to do about it. Holding `g` would need a tolerance unit
+multiple of **1.25i**, below the tightest grade in the table. *No machining grade fixes it.*
+This is a defect in the specification, not in any design that meets it, and the remedy is a
+shim at assembly or a relaxed bound — not a better optimizer. Every other constraint is
+comfortable.
+
+First order overestimates σ by up to 80 % here, so it is **conservative**, not optimistic. Worth
+stating: the opposite would make first-order robust design unusable in this region.
+
+---
+
+## How coupled is it, really?
+
+"Strongly coupled" is an adjective. Gauss–Seidel converges linearly at a rate that *is* the
+coupling strength, and the residual history already records it, so the claim can be a number:
+
+```
+      rpm       rho   sweeps   per decade   verdict
+        0    0.0000        2          inf   weak
+      250    0.0359        6          0.7   weak
+      500    0.1307        9          1.1   moderate
+      750    0.2558       12          1.7   moderate
+     1000    0.6513       28          5.4   strong
+     1250    0.6716       38          5.8   strong
+     1500    0.6819       42          6.0   strong
+```
+
+At rest `ρ = 0` **exactly**: with no inertia there is no path from mass to load, so the
+quasi-static problem is recovered and there is nothing to iterate. That is the sharpest check
+that the measure reflects the physics rather than the solver. The gain grows with `ω²`, and by
+1500 rpm each discipline rewrites two thirds of the other's input on every sweep.
+
+So the answer to "does this problem need an MDA?" is *it depends on the operating point*, and
+the dependence is steep. `build_coupled_scenario` also takes a `formulation_name`, so MDF and
+IDF can be run on the identical problem and compared.
+
+---
+
+## Is the linkage worth it?
+
+The geometric formulation could not pose this question: it has no way to price a member. With
+range as the objective it is a straight comparison against the mechanism the EX-link
+replaces — a conventional slider-crank at the same bore, same clearance volume, same
+compression ratio.
+
+The comparison is only meaningful if both are treated identically, so the slider-crank goes
+through the *same code* wherever the code is not topology-specific: `size_from_arrays` takes
+its member list as a parameter precisely so the parity is real rather than asserted. Same
+material, same yield/fatigue/buckling checks, same friction coefficients, same crankcase,
+bearing, shaft and flywheel models, same vehicle. What differs is only what must — the
+kinematics, the equilibrium system, and the cycle.
+
+Independently validated: the Otto cycle reproduces `1 − ε^(1−γ)` to four decimals, and the
+torque integral matches the p–V loop to 3 × 10⁻⁵.
+
+| | slider-crank (Otto) | EX-link (Atkinson) |
+|---|---|---|
+| members / journals | 2 / 3 | 7 / 7 |
+| indicated efficiency | 0.457 | 0.477 |
+| mechanical efficiency | 0.740 | 0.853 |
+| brake efficiency | 0.338 | 0.407 |
+| engine mass | 19.3 kg @ 2000 rpm | 12.2 kg @ 1000 rpm |
+| **range** | **2690 km/L** | **3338 km/L** |
+
+The EX-link wins by 24 %. But decomposing it, only about a fifth of that is extended
+expansion — indicated efficiency 0.477 against 0.457. Most of it is *mechanical* efficiency,
+0.85 against 0.74, and the EX-link has **seven** journals to the slider-crank's three.
+
+That inversion needed explaining rather than celebrating. The cause is firing frequency: in
+this model the EX-link completes four strokes in one crankshaft revolution (see [The design
+problem](#the-design-problem)), so per unit of work it accumulates half the journal rotation
+and half the piston sliding of a four-stroke. That assumption was too load-bearing to leave
+untested, so `firing_frequency_sensitivity` re-runs the comparison with it removed:
+
+| | range | advantage |
+|---|---|---|
+| slider-crank | 2690 km/L | — |
+| EX-link, as modelled | 3338 km/L | **+24.1 %** |
+| EX-link, if it were a four-stroke | 2765 km/L | **+2.8 %** |
+
+**The advantage is firing frequency, not extended expansion.** Reported the other way round it
+would have been wrong.
+
+### The generalisation
+
+The second mechanism also settles whether the singularity finding is a quirk of one topology.
+It is not, and the contrast is sharper than expected. Speed *reduces* the slider-crank's peak
+main-bearing load:
+
+| speed | peak main-bearing load | linkage mass |
+|---|---|---|
+| 0 rpm | 4735 N | 48.4 g |
+| 2000 rpm | 4296 N | 45.1 g |
+| 4000 rpm | 2985 N | 44.1 g |
+
+That is correct, not a bug. The peak gas force lands near top dead centre, where the
+reciprocating masses are decelerating and their inertia pulls the other way — the classic
+**inertia relief** of the gas load, and the reason high-speed engines do not need
+proportionally bigger main bearings.
+
+The near-singular EX-link does the exact opposite: it has no feasible structure at all above
+1000 rpm. Same physics, opposite sign, and **conditioning decides which**. Inertia relieves a
+well-conditioned linkage and amplifies an ill-conditioned one. That is the central claim of
+this study, now stated on two mechanisms instead of one.
+
+---
+
 ## Layout
 
 ```
@@ -488,6 +780,16 @@ src/exlink/
   coupled.py       the sizing <-> dynamics fixed point, and why it converges
   jacobian.py      exact d/dX of the analysis chain, by forward mode + envelope
   dynamics_jacobian.py   exact derivatives through the coupling itself
+
+  friction.py      journal, ring and mesh losses -> real mechanical efficiency
+  gears.py         the 2:1 pair, and the lattice the module imposes on I
+  manufacturing.py preferred stock sizes, IT grades, minimum wall thicknesses
+  mass_budget.py   the whole engine: crankcase from H x B, flywheel from ripple
+  vehicle.py       burn-and-coast road load  ->  kilometres per litre
+  performance.py   the full chain, from 11 dimensions to km/L
+  robustness.py    ISO 286 tolerance, propagated first-order and by sampling
+  formulations.py  coupling strength from the MDA residuals; MDF vs IDF
+  slidercrank.py   the second mechanism, on identical terms
 ```
 
 ## Tests
@@ -497,6 +799,12 @@ pytest -m "not slow"    # fast: physics, grammars, figures
 pytest                  # everything, optimizers included
 tox                     # across Python 3.10 – 3.12
 ```
+
+Every claim above is pinned by a test, including the ones that would be embarrassing to get
+wrong: that inertia does no net work over a cycle, that burn-and-coast conserves energy, that
+the Otto cycle reproduces its closed-form efficiency, that `ρ = 0` at rest, that stock
+rounding never shrinks a member, and that the range advantage collapses when the firing
+frequency assumption is removed.
 
 ## Provenance
 

@@ -259,17 +259,25 @@ def is_feasible(
 
 
 def build_design_space(
-    bounds: Bounds = GLOBAL_BOUNDS, initial: Design | None = None
+    bounds: Bounds = GLOBAL_BOUNDS,
+    initial: Design | None = None,
+    fixed: Sequence[str] = (),
 ) -> DesignSpace:
     """Build the GEMSEO design space for the eleven variables.
 
     Args:
         bounds: The box ``l_b <= X <= u_b``.
         initial: Starting point; defaults to the centre of the box.
+        fixed: Variables to leave *out* of the design space, because an outer
+            loop has already chosen them.  The disciplines then read them from
+            their default input data, which
+            :func:`build_range_scenario` sets to the chosen value.  This is how
+            the discrete gear variables pin ``I``: once a module and a tooth
+            count are chosen, ``I = 1.5 m z`` is not free.
 
     Returns:
         A design space with one scalar variable per entry of
-        :data:`exlink.design.VARIABLE_NAMES`.
+        :data:`exlink.design.VARIABLE_NAMES` that is not in ``fixed``.
     """
     if initial is None:
         start = 0.5 * (bounds.lower + bounds.upper)
@@ -278,6 +286,8 @@ def build_design_space(
 
     space = DesignSpace()
     for index, name in enumerate(VARIABLE_NAMES):
+        if name in fixed:
+            continue
         space.add_variable(
             name,
             lower_bound=float(bounds.lower[index]),
@@ -1265,7 +1275,7 @@ def build_range_scenario(
     mda_name: str = DEFAULT_MDA,
     mda_settings: dict[str, Any] | None = None,
 ) -> BaseScenario:
-    """Assemble the range problem: four disciplines, one objective, MDF.
+    """Assemble the range problem: five disciplines, one objective, MDF.
 
     The discipline graph is the argument of the whole study:
 
@@ -1284,6 +1294,25 @@ def build_range_scenario(
     consumes its converged coupling variable, so every point the optimizer
     evaluates is a range computed on a self-consistent structure.
 
+    The gear pair is held fixed
+    ------------------------------
+    The module and tooth count are **always** pinned here, never left to the
+    automatic choice inside :func:`exlink.gears.size_pair`.  This is not a
+    convenience, and getting it wrong is instructive.
+
+    Letting the module float makes the objective a step function of ``I``: the
+    lightest workable module changes at a threshold, and the range jumps 40
+    km/L across it.  A central difference straddling such a threshold returns a
+    gradient of order 1e5 against a true gradient of order 1e3, and SLSQP --
+    handed a quadratic subproblem built from two constraint gradients that are
+    both quantisation noise -- rejects it as *"inequality constraints
+    incompatible"* and stops at the starting point without evaluating anything.
+
+    Pinning the pair is also simply the correct treatment.  With a 2:1 ratio,
+    choosing ``(m, z)`` fixes ``I = 1.5 m z``, so ``I`` leaves the design space
+    entirely: the continuous problem has ten variables, not eleven, and the
+    discrete choice is enumerated outside it by :func:`maximise_range`.
+
     Args:
         bounds: The design box.
         initial: Starting design.
@@ -1291,8 +1320,9 @@ def build_range_scenario(
             :func:`maximise_range`, which sweeps it.
         samples: Crank angles per revolution.
         vehicle: The car; a default Prototype-class entry if omitted.
-        module: Gear module [mm]; the lightest workable standard one if omitted.
-        teeth: Teeth on the small gear; derived from ``I`` if omitted.
+        module: Gear module [mm].  Derived from ``initial`` if omitted, then
+            held fixed for the whole run.
+        teeth: Teeth on the small gear; derived likewise.
         spec: Fixed engine data.
         targets: Constraint right-hand sides.
         material: The material.
@@ -1303,9 +1333,20 @@ def build_range_scenario(
         mda_settings: Overrides for :data:`DEFAULT_MDA_SETTINGS`.
 
     Returns:
-        A scenario ready to execute.
+        A scenario ready to execute, over ten continuous variables.
     """
-    disciplines = [
+    from .gears import lattice_inter_axle, size_pair, tooth_count
+
+    start = PUBLISHED_DESIGN if initial is None else initial
+    if module is None:
+        module = size_pair(start.I, 1000.0).module
+    if teeth is None:
+        teeth = tooth_count(start.I, module)
+    # Choosing the pair pins the centre distance, so the design starts there.
+    inter_axle = lattice_inter_axle(module, teeth)
+    start = start.replace(I=inter_axle)
+
+    disciplines: list[Discipline] = [
         ExlinkDiscipline(samples=samples, spec=spec, targets=targets),
         DynamicsDiscipline(
             speed_rpm=speed_rpm,
@@ -1327,13 +1368,22 @@ def build_range_scenario(
             spec=spec,
         ),
     ]
+    # ``I`` is not a design variable any more, so every discipline has to be
+    # told its pinned value; they would otherwise fall back to the reference.
+    for discipline in disciplines:
+        if "I" in discipline.input_grammar:
+            discipline.default_input_data = {
+                **discipline.default_input_data,
+                "I": np.array([inter_axle]),
+            }
+
     settings = dict(DEFAULT_MDA_SETTINGS)
     settings.update(mda_settings or {})
 
     scenario = create_scenario(
         disciplines,
         "neg_range",
-        build_design_space(bounds, initial),
+        build_design_space(bounds, start, fixed=("I",)),
         formulation_name="MDF",
         main_mda_name=mda_name,
         main_mda_settings=settings,
@@ -1357,19 +1407,33 @@ def maximise_range(
     algorithm: str = DEFAULT_COUPLED_ALGORITHM,
     bounds: Bounds | None = None,
     initial: Design | None = None,
-    speeds: Sequence[float] = (800.0, 1000.0, 1250.0, 1500.0),
+    speeds: Sequence[float] = (800.0, 1000.0, 1250.0),
+    candidates: int = 3,
     max_iter: int = 40,
-    relative: float = 0.25,
+    relative: float = 0.30,
     **kwargs: Any,
-) -> tuple[Design, float, dict[float, float]]:
-    """Maximise kilometres per litre, sweeping the operating speed.
+) -> tuple[Design, float, dict[tuple[float, float, int], float]]:
+    """Maximise kilometres per litre over a mixed discrete/continuous problem.
 
-    Speed is treated as an outer variable rather than a twelfth design
-    variable, because it enters the disciplines as a construction parameter --
-    the dynamics discipline is built *at* a speed.  A sweep is also the honest
-    treatment: the trade it governs is sharp and non-convex (flywheel mass
-    falls as ``1 / omega^2`` while structural mass climbs with ``omega^2``),
-    and seeing the curve is worth more than seeing a single converged number.
+    Two variables are enumerated outside the gradient-based solve, for two
+    different reasons.
+
+    **The gear pair, because it is genuinely discrete.**  A module comes off the
+    ISO 54 list and a tooth count is an integer, and together they pin
+    ``I = 1.5 m z``.  There is no meaningful derivative with respect to either,
+    and pretending otherwise is what breaks the optimizer -- see
+    :func:`build_range_scenario`.  Each candidate pair defines its own
+    ten-variable continuous problem, and the equality constraints ``STE = 74``
+    and ``epsilon = 16`` then have to be re-satisfied by the remaining
+    variables, since ``I`` was one of the variables that used to satisfy them.
+    That "choose the integers, repair the continuum" structure is the whole
+    mixed-integer content of the problem.
+
+    **The speed, because it enters as a construction parameter.**  The dynamics
+    discipline is built *at* a speed.  A sweep is also the honest treatment: the
+    trade it governs is sharp and non-convex -- flywheel mass falls as
+    ``1 / omega^2`` while structural mass climbs with ``omega^2`` -- and seeing
+    the curve is worth more than seeing one converged number.
 
     Args:
         algorithm: A single-objective GEMSEO optimizer.  Gradient-based by
@@ -1377,33 +1441,46 @@ def maximise_range(
         bounds: The design box; defaults to a window around ``initial``.
         initial: Starting design; defaults to the coupled reference.
         speeds: Crankshaft speeds to optimize at [rev/min].
-        max_iter: Evaluation budget per speed.
+        candidates: Gear pairs to try, nearest first on the ``I`` lattice.
+        max_iter: Evaluation budget per (speed, gear pair).
         relative: Half-width of the default box, as a fraction of ``|X_0|``.
         **kwargs: Forwarded to :func:`build_range_scenario`.
 
     Returns:
-        ``(best_design, best_km_per_litre, {speed: km_per_litre})``.  Speeds at
-        which the optimizer found nothing feasible map to zero.
+        ``(best_design, best_km_per_litre, history)``, where the history maps
+        ``(speed, module, teeth)`` to the range reached.  Combinations where
+        nothing feasible was found map to zero.
     """
+    from .gears import lattice_neighbours
     from .performance import evaluate
     from .reference import COUPLED_DESIGN
 
     start = COUPLED_DESIGN if initial is None else initial
     box = Bounds.around(start, relative=relative) if bounds is None else bounds
+    pairs = lattice_neighbours(start.I)[:candidates]
 
-    history: dict[float, float] = {}
+    history: dict[tuple[float, float, int], float] = {}
     best_design, best_value = start, 0.0
     for speed in speeds:
-        scenario = build_range_scenario(bounds=box, initial=start, speed_rpm=speed, **kwargs)
-        try:
-            scenario.execute(algo_name=algorithm, max_iter=max_iter)
-        except Exception:
-            history[speed] = 0.0
-            continue
-        candidate = _best_design(scenario, objective="neg_range")
-        outcome = evaluate(candidate, speed_rpm=speed)
-        value = outcome.km_per_litre if outcome.feasible else 0.0
-        history[speed] = value
-        if value > best_value:
-            best_design, best_value = candidate, value
+        for module, teeth, _inter_axle in pairs:
+            key = (float(speed), float(module), int(teeth))
+            scenario = build_range_scenario(
+                bounds=box,
+                initial=start,
+                speed_rpm=speed,
+                module=module,
+                teeth=teeth,
+                **kwargs,
+            )
+            try:
+                scenario.execute(algo_name=algorithm, max_iter=max_iter)
+            except Exception:  # a failed combination is data, not an error
+                history[key] = 0.0
+                continue
+            candidate = _best_design(scenario, objective="neg_range")
+            outcome = evaluate(candidate, speed_rpm=speed, module=module, teeth=teeth)
+            value = outcome.km_per_litre if outcome.feasible else 0.0
+            history[key] = value
+            if value > best_value:
+                best_design, best_value = candidate, value
     return best_design, best_value, history
