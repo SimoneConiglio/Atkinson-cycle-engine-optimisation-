@@ -51,11 +51,15 @@ from .design import (
     Design,
 )
 from .dynamics import DEFAULT_SPEED_RPM, MEMBER_NAMES, DynamicLoads, MassProperties
+from .friction import FrictionLosses
+from .gears import GearPair, lattice_neighbours, size_pair
 from .kinematics import Kinematics
 from .loads import Loads
+from .mass_budget import MassBudget
 from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .metrics import Metrics
 from .model import Analysis, SolvedAnalysis, analyse
+from .performance import Performance, evaluate, speed_sweep
 from .reference import (
     COUPLED_DESIGN,
     GRADIENT_DESIGN,
@@ -64,6 +68,7 @@ from .reference import (
     REFINED_DESIGN,
 )
 from .sizing import MemberSizing
+from .vehicle import RangeResult, Vehicle
 
 __all__ = [
     "COUPLED_DESIGN",
@@ -88,22 +93,32 @@ __all__ = [
     "DesignTargets",
     "DynamicLoads",
     "EngineSpec",
+    "FrictionLosses",
+    "GearPair",
     "Kinematics",
     "Loads",
+    "MassBudget",
     "MassProperties",
     "Material",
     "MemberSizing",
     "Metrics",
     "PenaltyValues",
+    "Performance",
     "Phase",
     "PhaseError",
     "Phases",
+    "RangeResult",
     "SafetyFactors",
     "SolvedAnalysis",
     "Thermodynamics",
+    "Vehicle",
     "analyse",
+    "evaluate",
+    "lattice_neighbours",
+    "size_pair",
     "solve_coupled",
     "solve_for_design",
+    "speed_sweep",
 ]
 
 __version__ = "1.0.0"
