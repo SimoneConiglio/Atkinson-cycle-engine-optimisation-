@@ -177,6 +177,7 @@ def flywheel_requirement(
     torque: np.ndarray,
     speed: float,
     fluctuation: float = SPEED_FLUCTUATION,
+    span: float = 2.0 * math.pi,
 ) -> tuple[float, float]:
     """Rotating inertia needed to hold the cyclic speed fluctuation.
 
@@ -192,6 +193,10 @@ def flywheel_requirement(
         torque: Output torque at uniformly spaced crank angles [N.mm].
         speed: Mean crankshaft speed ``omega`` [rad/s].
         fluctuation: Allowed ``delta``.
+        span: Crank angle the samples cover [rad].  ``2 pi`` for a cycle that
+            completes in one crankshaft revolution, ``4 pi`` for a
+            conventional four-stroke, whose flywheel has to carry it through
+            two revolutions on one firing and is correspondingly larger.
 
     Returns:
         ``(required_inertia, energy_swing)`` in tonne mm^2 and N.mm.  The
@@ -199,7 +204,7 @@ def flywheel_requirement(
     """
     values = np.asarray(torque, dtype=float)
     n = values.size
-    step = 2.0 * np.pi / n
+    step = span / n
     excess = values - float(np.mean(values))
     accumulated = np.cumsum(excess) * step
     swing = float(np.max(accumulated) - np.min(accumulated))

@@ -51,6 +51,12 @@ from .design import (
     Design,
 )
 from .dynamics import DEFAULT_SPEED_RPM, MEMBER_NAMES, DynamicLoads, MassProperties
+from .formulations import (
+    CouplingStrength,
+    compare_formulations,
+    coupling_curve,
+    coupling_strength,
+)
 from .friction import FrictionLosses
 from .gears import GearPair, lattice_neighbours, size_pair
 from .kinematics import Kinematics
@@ -67,7 +73,9 @@ from .reference import (
     PUBLISHED_METRICS,
     REFINED_DESIGN,
 )
+from .robustness import ToleranceReport, tolerance_report
 from .sizing import MemberSizing
+from .slidercrank import SliderCrank, evaluate_slidercrank
 from .vehicle import RangeResult, Vehicle
 
 __all__ = [
@@ -89,6 +97,7 @@ __all__ = [
     "Analysis",
     "Bounds",
     "CoupledResult",
+    "CouplingStrength",
     "Design",
     "DesignTargets",
     "DynamicLoads",
@@ -109,16 +118,23 @@ __all__ = [
     "Phases",
     "RangeResult",
     "SafetyFactors",
+    "SliderCrank",
     "SolvedAnalysis",
     "Thermodynamics",
+    "ToleranceReport",
     "Vehicle",
     "analyse",
+    "compare_formulations",
+    "coupling_curve",
+    "coupling_strength",
     "evaluate",
+    "evaluate_slidercrank",
     "lattice_neighbours",
     "size_pair",
     "solve_coupled",
     "solve_for_design",
     "speed_sweep",
+    "tolerance_report",
 ]
 
 __version__ = "1.0.0"

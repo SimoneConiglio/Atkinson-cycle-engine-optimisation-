@@ -60,6 +60,7 @@ from .disciplines import (
     COUPLED_SAMPLES,
     DynamicsDiscipline,
     ExlinkDiscipline,
+    RangeDiscipline,
     StructureDiscipline,
 )
 from .dynamics import DEFAULT_SPEED_RPM
@@ -888,8 +889,9 @@ def build_coupled_scenario(
     max_width: float = float("inf"),
     mda_name: str = DEFAULT_MDA,
     mda_settings: dict[str, Any] | None = None,
+    formulation_name: str = "MDF",
 ) -> BaseScenario:
-    """Assemble the coupled scenario, under the MDF formulation.
+    """Assemble the coupled scenario, under a chosen formulation.
 
     Three disciplines take part.  :class:`~exlink.disciplines.ExlinkDiscipline`
     supplies the geometric objectives and constraints and is feed-forward
@@ -918,6 +920,12 @@ def build_coupled_scenario(
         max_width: Moving upper limit on ``B`` [mm].
         mda_name: Inner MDA.
         mda_settings: Overrides for :data:`DEFAULT_MDA_SETTINGS`.
+        formulation_name: ``"MDF"`` (the default: converge the MDA at every
+            optimizer iteration, so every point evaluated is a real engine) or
+            ``"IDF"`` (hand the diameters to the optimizer as design variables
+            with consistency constraints, so no inner iteration runs but the
+            design space grows by seven variables and seven equalities).  See
+            :mod:`exlink.formulations` for a measured comparison.
 
     Returns:
         A scenario ready to execute.
@@ -937,13 +945,18 @@ def build_coupled_scenario(
     settings = dict(DEFAULT_MDA_SETTINGS)
     settings.update(mda_settings or {})
 
+    # Only MDF takes an inner MDA; IDF replaces it with consistency constraints.
+    formulation_settings: dict[str, Any] = (
+        {"main_mda_name": mda_name, "main_mda_settings": settings}
+        if formulation_name == "MDF"
+        else {}
+    )
     scenario = create_scenario(
         disciplines,
         objective,
         build_design_space(bounds, initial),
-        formulation_name="MDF",
-        main_mda_name=mda_name,
-        main_mda_settings=settings,
+        formulation_name=formulation_name,
+        **formulation_settings,
     )
     _attach_constraints(scenario, relax_equalities, equality_tolerance, max_height, max_width)
     for name in COUPLED_INEQUALITY_OUTPUTS:
@@ -1211,3 +1224,186 @@ def coupled_pareto(
         scenario=scenario,
         front=front,
     )
+
+
+# =================================================================================
+# The vehicle-level problem
+#
+# Every formulation above stops at the engine.  This one carries through to what
+# the competition scores, and in doing so it turns a multi-objective problem into
+# a single-objective one -- not by picking weights, but because the physics fixes
+# the exchange rates.
+# =================================================================================
+
+RANGE_INEQUALITY_OUTPUTS: tuple[str, ...] = ("runs_margin", "gear_margin")
+"""Constraints that exist only once the vehicle is in the problem.
+
+``runs_margin``
+    Positive when the engine produces net work: friction must not exceed the
+    indicated work.  A near-singular linkage at speed can fail this outright,
+    and nothing in the geometric problem would have noticed.
+``gear_margin``
+    Positive when the gear pair is inside its face-width limit, i.e. the mesh
+    can be kept aligned across the tooth face.
+"""
+
+
+def build_range_scenario(
+    bounds: Bounds = GLOBAL_BOUNDS,
+    initial: Design | None = None,
+    speed_rpm: float = DEFAULT_SPEED_RPM,
+    samples: int = COUPLED_SAMPLES,
+    vehicle: Any = None,
+    module: float | None = None,
+    teeth: int | None = None,
+    spec: EngineSpec = DEFAULT_SPEC,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    material: Material = DEFAULT_MATERIAL,
+    safety: SafetyFactors = DEFAULT_SAFETY,
+    relax_equalities: bool = True,
+    equality_tolerance: dict[str, float] | None = None,
+    mda_name: str = DEFAULT_MDA,
+    mda_settings: dict[str, Any] | None = None,
+) -> BaseScenario:
+    """Assemble the range problem: four disciplines, one objective, MDF.
+
+    The discipline graph is the argument of the whole study:
+
+    .. code-block:: text
+
+        ExlinkDiscipline      feed-forward: geometry -> eta, H, B, constraints
+             |
+             |   +--------------------------------------+
+             |   |  DynamicsDiscipline <==> Structure    |  <- MDA (strong)
+             |   +--------------------------------------+
+             |                     | diameters
+             v                     v
+                 RangeDiscipline  -->  neg_range
+
+    :class:`~exlink.disciplines.RangeDiscipline` sits downstream of the MDA and
+    consumes its converged coupling variable, so every point the optimizer
+    evaluates is a range computed on a self-consistent structure.
+
+    Args:
+        bounds: The design box.
+        initial: Starting design.
+        speed_rpm: Crankshaft speed [rev/min].  Held fixed; see
+            :func:`maximise_range`, which sweeps it.
+        samples: Crank angles per revolution.
+        vehicle: The car; a default Prototype-class entry if omitted.
+        module: Gear module [mm]; the lightest workable standard one if omitted.
+        teeth: Teeth on the small gear; derived from ``I`` if omitted.
+        spec: Fixed engine data.
+        targets: Constraint right-hand sides.
+        material: The material.
+        safety: The design factors.
+        relax_equalities: Express the two equalities as pairs of inequalities.
+        equality_tolerance: Overrides for the relaxed half-widths.
+        mda_name: Inner MDA.
+        mda_settings: Overrides for :data:`DEFAULT_MDA_SETTINGS`.
+
+    Returns:
+        A scenario ready to execute.
+    """
+    disciplines = [
+        ExlinkDiscipline(samples=samples, spec=spec, targets=targets),
+        DynamicsDiscipline(
+            speed_rpm=speed_rpm,
+            samples=samples,
+            material=material,
+            safety=safety,
+            spec=spec,
+        ),
+        StructureDiscipline(samples=samples, material=material, safety=safety, spec=spec),
+        BearingMarginDiscipline(limit=targets.max_bearing_load),
+        RangeDiscipline(
+            speed_rpm=speed_rpm,
+            samples=samples,
+            vehicle=vehicle,
+            module=module,
+            teeth=teeth,
+            material=material,
+            safety=safety,
+            spec=spec,
+        ),
+    ]
+    settings = dict(DEFAULT_MDA_SETTINGS)
+    settings.update(mda_settings or {})
+
+    scenario = create_scenario(
+        disciplines,
+        "neg_range",
+        build_design_space(bounds, initial),
+        formulation_name="MDF",
+        main_mda_name=mda_name,
+        main_mda_settings=settings,
+    )
+    _attach_constraints(
+        scenario, relax_equalities, equality_tolerance, float("inf"), float("inf")
+    )
+    # Two opposite sign conventions meet here, so they are attached separately.
+    # The coupled margins are violations: positive means saturated, too stubby,
+    # or over the bearing limit, so they are bounded above by zero.  The range
+    # margins are margins: positive means the engine runs and the gears fit, so
+    # they are bounded below by zero.
+    for name in COUPLED_INEQUALITY_OUTPUTS:
+        scenario.add_constraint(name, constraint_type="ineq")
+    for name in RANGE_INEQUALITY_OUTPUTS:
+        scenario.add_constraint(name, constraint_type="ineq", positive=True)
+    return scenario
+
+
+def maximise_range(
+    algorithm: str = DEFAULT_COUPLED_ALGORITHM,
+    bounds: Bounds | None = None,
+    initial: Design | None = None,
+    speeds: Sequence[float] = (800.0, 1000.0, 1250.0, 1500.0),
+    max_iter: int = 40,
+    relative: float = 0.25,
+    **kwargs: Any,
+) -> tuple[Design, float, dict[float, float]]:
+    """Maximise kilometres per litre, sweeping the operating speed.
+
+    Speed is treated as an outer variable rather than a twelfth design
+    variable, because it enters the disciplines as a construction parameter --
+    the dynamics discipline is built *at* a speed.  A sweep is also the honest
+    treatment: the trade it governs is sharp and non-convex (flywheel mass
+    falls as ``1 / omega^2`` while structural mass climbs with ``omega^2``),
+    and seeing the curve is worth more than seeing a single converged number.
+
+    Args:
+        algorithm: A single-objective GEMSEO optimizer.  Gradient-based by
+            default; see :data:`DEFAULT_COUPLED_ALGORITHM` for why.
+        bounds: The design box; defaults to a window around ``initial``.
+        initial: Starting design; defaults to the coupled reference.
+        speeds: Crankshaft speeds to optimize at [rev/min].
+        max_iter: Evaluation budget per speed.
+        relative: Half-width of the default box, as a fraction of ``|X_0|``.
+        **kwargs: Forwarded to :func:`build_range_scenario`.
+
+    Returns:
+        ``(best_design, best_km_per_litre, {speed: km_per_litre})``.  Speeds at
+        which the optimizer found nothing feasible map to zero.
+    """
+    from .performance import evaluate
+    from .reference import COUPLED_DESIGN
+
+    start = COUPLED_DESIGN if initial is None else initial
+    box = Bounds.around(start, relative=relative) if bounds is None else bounds
+
+    history: dict[float, float] = {}
+    best_design, best_value = start, 0.0
+    for speed in speeds:
+        scenario = build_range_scenario(bounds=box, initial=start, speed_rpm=speed, **kwargs)
+        try:
+            scenario.execute(algo_name=algorithm, max_iter=max_iter)
+        except Exception:
+            history[speed] = 0.0
+            continue
+        candidate = _best_design(scenario, objective="neg_range")
+        outcome = evaluate(candidate, speed_rpm=speed)
+        value = outcome.km_per_litre if outcome.feasible else 0.0
+        history[speed] = value
+        if value > best_value:
+            best_design, best_value = candidate, value
+    return best_design, best_value, history

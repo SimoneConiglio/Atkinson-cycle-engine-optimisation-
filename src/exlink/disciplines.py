@@ -53,8 +53,11 @@ from .dynamics_jacobian import (
     member_length_jacobian,
     sizing_jacobian,
 )
+from .friction import losses as friction_losses
+from .gears import MAX_WIDTH_FACTOR
 from .jacobian import kinematic_jacobian, metric_jacobian
 from .kinematics import DEFAULT_SAMPLES
+from .mass_budget import SPEED_FLUCTUATION, assemble
 from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
 from .model import (
     EQUALITY_NAMES,
@@ -74,6 +77,7 @@ from .sizing import (
     piston_mass,
     size_from_arrays,
 )
+from .vehicle import Vehicle, best_strategy, brake_efficiency, heat_release
 
 #: Outputs produced by :class:`ExlinkDiscipline`, in a stable order.
 OUTPUT_NAMES: tuple[str, ...] = (
@@ -327,6 +331,35 @@ class PenalisedExlinkDiscipline(ExlinkDiscipline):
 # internal loads to choose those sections.  Neither can run first, so an MDA has
 # to resolve them -- see :func:`exlink.scenarios.build_coupled_scenario`.
 # =============================================================================
+
+RANGE_OUTPUTS: tuple[str, ...] = (
+    "km_per_litre",
+    "neg_range",
+    "engine_mass",
+    "flywheel_mass",
+    "crankcase_mass",
+    "brake_efficiency",
+    "mechanical_efficiency",
+    "brake_power",
+    "runs_margin",
+    "gear_margin",
+)
+"""Everything :class:`RangeDiscipline` reports, in a stable order."""
+
+#: What the range chain returns for a design the kinematics cannot close.
+RANGE_PENALTY: dict[str, float] = {
+    "km_per_litre": 0.0,
+    "neg_range": 0.0,
+    "engine_mass": 1000.0,
+    "flywheel_mass": 1000.0,
+    "crankcase_mass": 1000.0,
+    "brake_efficiency": 0.0,
+    "mechanical_efficiency": 0.0,
+    "brake_power": 0.0,
+    "runs_margin": -1.0,
+    "gear_margin": -1.0,
+}
+
 
 COUPLING_AXIAL = "member_axial"
 """Internal axial force of every member, flattened [N]."""
@@ -729,3 +762,212 @@ class StructureDiscipline(Discipline):
         # The piston mass enters the total directly and nothing else.
         if "total_mass" in self.jac and "piston_mass" in self.jac["total_mass"]:
             self.jac["total_mass"]["piston_mass"] = np.ones((1, 1))
+
+
+# ---------------------------------------------------------------------------------
+# The vehicle-level objective
+#
+# Everything above answers "what does this mechanism do?".  This discipline
+# answers "what is that worth?", which is the question the competition asks.
+#
+# It sits *downstream* of the MDA rather than inside it.  That is not a
+# convenience: given converged section diameters, the load history is a direct
+# function of the design, so the range chain is genuinely feed-forward and
+# putting it inside the fixed point would add iterations that change nothing.
+# It consumes ``diameters`` -- the MDA's converged coupling variable -- so every
+# point the optimizer sees is a range computed on a self-consistent structure.
+# ---------------------------------------------------------------------------------
+
+
+class RangeDiscipline(Discipline):
+    """Kilometres per litre, from the design and its converged sections.
+
+    Chains friction, the engine mass budget and the burn-and-coast vehicle
+    model.  The objective is exposed as ``neg_range`` so that a minimiser can
+    take it directly, alongside the quantities a reader needs to interpret it.
+
+    Derivatives are finite differences, and deliberately so.  The chain here
+    contains a bisection on the active average-speed constraint, a maximum over
+    the crank revolution, and a choice among discrete gear modules; the first
+    two are differentiable almost everywhere but tedious to differentiate
+    exactly, and the third is not differentiable at all.  What makes finite
+    differences *safe* here -- and they are not safe on the geometric metrics,
+    where :mod:`exlink.jacobian` exists precisely because they are not -- is
+    that this discipline is cheap: one load solve, no fixed point, about 0.3 s.
+    A full gradient costs eighteen of those, against a single MDA at 2.1 s.
+
+    Args:
+        speed_rpm: Crankshaft speed [rev/min].
+        samples: Crank angles per revolution.
+        vehicle: The car; a default Prototype-class entry if omitted.
+        module: Gear module [mm]; the lightest workable standard one if omitted.
+        teeth: Teeth on the small gear; derived from ``I`` if omitted.
+        fluctuation: Allowed cyclic speed fluctuation, for the flywheel.
+        material: The material.
+        safety: The design factors.
+        spec: Fixed engine data.
+        step: Relative finite-difference step.
+        name: Discipline name.
+    """
+
+    auto_detect_grammar_files: ClassVar[bool] = False
+
+    def __init__(
+        self,
+        speed_rpm: float = DEFAULT_SPEED_RPM,
+        samples: int = COUPLED_SAMPLES,
+        vehicle: Vehicle | None = None,
+        module: float | None = None,
+        teeth: int | None = None,
+        fluctuation: float = SPEED_FLUCTUATION,
+        material: Material = DEFAULT_MATERIAL,
+        safety: SafetyFactors = DEFAULT_SAFETY,
+        spec: EngineSpec = DEFAULT_SPEC,
+        step: float = 1.0e-6,
+        name: str = "",
+    ) -> None:
+        super().__init__(name=name)
+        self.speed_rpm = speed_rpm
+        self.samples = samples
+        self.vehicle = vehicle if vehicle is not None else Vehicle()
+        self.module = module
+        self.teeth = teeth
+        self.fluctuation = fluctuation
+        self.material = material
+        self.safety = safety
+        self.spec = spec
+        self.step = step
+
+        self.input_grammar.update_from_names([*VARIABLE_NAMES, COUPLING_DIAMETERS])
+        self.output_grammar.update_from_names(list(RANGE_OUTPUTS))
+        self.default_input_data = {
+            **PUBLISHED_DESIGN.to_mapping(),
+            COUPLING_DIAMETERS: _initial_diameters(),
+        }
+
+    def _evaluate(self, design: Design, diameters: np.ndarray) -> dict[str, float]:
+        """The whole range chain, as plain floats.
+
+        A design the kinematics cannot close returns the penalty row rather
+        than raising, so that the optimizer can walk through infeasible ground
+        the same way it does everywhere else in this package.
+        """
+        analysis = analyse(design, samples=self.samples, spec=self.spec)
+        if not analysis.valid:
+            return dict(RANGE_PENALTY)
+
+        solved = analysis.require_solved()
+        sections = {
+            name: float(value)
+            for name, value in zip(MEMBER_NAMES, np.asarray(diameters).ravel(), strict=True)
+        }
+        _crown, piston = piston_mass(
+            solved.thermodynamics, self.material, self.safety, self.spec
+        )
+        properties = mass_properties(
+            solved.kinematics, sections, self.material.density, piston, self.spec
+        )
+        loads = solve_dynamics(
+            solved.kinematics,
+            solved.thermodynamics.piston_force,
+            properties,
+            rpm_to_rad_per_s(self.speed_rpm),
+            self.spec,
+        )
+
+        loss = friction_losses(loads, sections)
+        metrics = analysis.metrics
+        thermo = solved.thermodynamics
+        quantity = heat_release(
+            self.spec.dead_volume,
+            thermo.p_compression_end,
+            thermo.p_combustion,
+            self.spec.heat_capacity_ratio,
+        )
+        budget = assemble(
+            loads,
+            sections,
+            properties.member_mass,
+            piston,
+            metrics.height,
+            metrics.width,
+            metrics.expansion_stroke + metrics.compression_stroke,
+            float(np.max(thermo.gauge_pressure)),
+            module=self.module,
+            teeth=self.teeth,
+            fluctuation=self.fluctuation,
+            spec=self.spec,
+            material=self.material,
+            safety=self.safety,
+        )
+        efficiency = brake_efficiency(loss.brake_work, quantity)
+        power = loss.brake_work / 1000.0 * (self.speed_rpm / 60.0)
+        outcome = best_strategy(self.vehicle, budget.total_kg, power, efficiency)
+
+        pair = budget.gears
+        return {
+            "km_per_litre": outcome.km_per_litre,
+            "neg_range": -outcome.km_per_litre,
+            "engine_mass": budget.total_kg,
+            "flywheel_mass": 1000.0 * budget.items.get("flywheel", 0.0),
+            "crankcase_mass": 1000.0 * budget.items.get("crankcase", 0.0),
+            "brake_efficiency": efficiency,
+            "mechanical_efficiency": loss.mechanical_efficiency,
+            "brake_power": power,
+            # Constraint form: positive means the engine produces net work.
+            "runs_margin": loss.brake_work / max(loss.indicated_work, 1.0),
+            # Positive means the gear pair is within its face-width limit.
+            "gear_margin": (MAX_WIDTH_FACTOR - pair.width_factor if pair is not None else -1.0),
+        }
+
+    def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
+        data = dict(input_data)
+        design = Design.from_mapping(data)
+        diameters = np.asarray(data[COUPLING_DIAMETERS], dtype=float).ravel()
+        values = self._evaluate(design, diameters)
+        return {name: np.array([values[name]]) for name in RANGE_OUTPUTS}
+
+    def _compute_jacobian(
+        self,
+        input_names: Sequence[str] = (),
+        output_names: Sequence[str] = (),
+    ) -> None:
+        """Finite-difference Jacobian of the range chain.
+
+        Central differences on a relative step.  Eighteen inputs, two chain
+        evaluations each; the chain has no fixed point in it, so the whole
+        gradient costs less than one MDA.
+        """
+        self._init_jacobian(input_names, output_names)
+        data = dict(self.io.data)
+        design = Design.from_mapping(data)
+        base_vector = design.to_array()
+        diameters = np.asarray(data[COUPLING_DIAMETERS], dtype=float).ravel()
+
+        def perturbed(index: int, delta: float) -> dict[str, float]:
+            if index < len(VARIABLE_NAMES):
+                vector = base_vector.copy()
+                vector[index] += delta
+                return self._evaluate(Design.from_array(vector), diameters)
+            sections = diameters.copy()
+            sections[index - len(VARIABLE_NAMES)] += delta
+            return self._evaluate(design, sections)
+
+        columns = [*base_vector, *diameters]
+        gradients: dict[str, list[float]] = {name: [] for name in RANGE_OUTPUTS}
+        for index, value in enumerate(columns):
+            delta = self.step * max(abs(float(value)), 1.0)
+            forward = perturbed(index, delta)
+            backward = perturbed(index, -delta)
+            for name in RANGE_OUTPUTS:
+                gradients[name].append((forward[name] - backward[name]) / (2.0 * delta))
+
+        for output in RANGE_OUTPUTS:
+            if output not in self.jac:
+                continue
+            row = gradients[output]
+            for index, variable in enumerate(VARIABLE_NAMES):
+                if variable in self.jac[output]:
+                    self.jac[output][variable] = np.array([[row[index]]])
+            if COUPLING_DIAMETERS in self.jac[output]:
+                self.jac[output][COUPLING_DIAMETERS] = np.array([row[len(VARIABLE_NAMES) :]])

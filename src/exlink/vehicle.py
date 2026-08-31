@@ -309,21 +309,142 @@ def burn_and_coast(
     )
 
 
+def _average_speed(
+    vehicle: Vehicle,
+    engine_mass_kg: float,
+    brake_power: float,
+    efficiency: float,
+    speed_low: float,
+    speed_high: float,
+) -> float:
+    """Average speed of a burn-and-coast cycle, or ``-inf`` if it cannot run."""
+    result = burn_and_coast(
+        vehicle, engine_mass_kg, brake_power, efficiency, speed_low, speed_high
+    )
+    if result.average_speed <= 0.0:
+        return -math.inf
+    return result.average_speed
+
+
+def top_speed(
+    vehicle: Vehicle,
+    engine_mass_kg: float,
+    brake_power: float,
+    ceiling: float = 40.0,
+) -> float:
+    """The speed at which traction and road load balance [m/s].
+
+    A burn phase cannot be asked to reach beyond this, and the burn-and-coast
+    window is therefore bounded by it rather than by an arbitrary constant.
+
+    Args:
+        vehicle: The car.
+        engine_mass_kg: Engine mass [kg].
+        brake_power: Brake power [W].
+        ceiling: Upper bracket for the search [m/s].
+
+    Returns:
+        The balance speed, or 0 when the engine cannot move the car at all.
+    """
+    total = vehicle.mass(engine_mass_kg)
+    wheel_power = brake_power * vehicle.transmission_efficiency
+    if wheel_power <= 0.0:
+        return 0.0
+
+    def surplus(speed: float) -> float:
+        return wheel_power / speed - float(vehicle.resistance(speed, total))
+
+    low, high = 1.0e-3, ceiling
+    if surplus(low) <= 0.0:
+        return 0.0
+    if surplus(high) > 0.0:
+        return high
+    for _ in range(80):
+        middle = 0.5 * (low + high)
+        if surplus(middle) > 0.0:
+            low = middle
+        else:
+            high = middle
+    return low
+
+
+def _high_speed_for_rule(
+    vehicle: Vehicle,
+    engine_mass_kg: float,
+    brake_power: float,
+    efficiency: float,
+    speed_low: float,
+    ceiling: float,
+    tolerance: float = 1.0e-6,
+) -> float | None:
+    """The ``v_high`` at which the average-speed rule is exactly met.
+
+    Average speed rises monotonically with ``v_high`` at fixed ``v_low`` -- a
+    wider window spends more of the cycle fast -- so a bisection is both valid
+    and robust.  Solving the rule *exactly* rather than searching a grid is
+    what keeps the objective smooth enough to differentiate.
+
+    Returns:
+        The bracketing speed, or ``None`` if the rule cannot be met at this
+        ``v_low`` with this engine.
+    """
+    target = vehicle.minimum_average_speed
+    low, high = speed_low * (1.0 + 1.0e-6), ceiling
+    if (
+        _average_speed(vehicle, engine_mass_kg, brake_power, efficiency, speed_low, high)
+        < target
+    ):
+        return None
+    if (
+        _average_speed(vehicle, engine_mass_kg, brake_power, efficiency, speed_low, low)
+        >= target
+    ):
+        return low
+    for _ in range(60):
+        middle = 0.5 * (low + high)
+        if high - low < tolerance:
+            break
+        value = _average_speed(
+            vehicle, engine_mass_kg, brake_power, efficiency, speed_low, middle
+        )
+        if value >= target:
+            high = middle
+        else:
+            low = middle
+    return high
+
+
 def best_strategy(
     vehicle: Vehicle,
     engine_mass_kg: float,
     brake_power: float,
     efficiency: float,
-    window: tuple[float, float] = (4.0, 16.0),
+    window: tuple[float, float] = (2.0, 25.0),
     steps: int = 24,
 ) -> RangeResult:
-    """Search the burn-and-coast window for the best range.
+    """Choose the burn-and-coast window that maximises range.
 
-    A coarse grid over ``(v_low, v_high)``, refined once around the winner.
-    The surface is smooth and single-peaked in practice -- aerodynamic drag
-    pushes the window down, the minimum-average-speed rule pushes it up -- so a
-    grid is both adequate and robust, and it never fails the way a gradient
-    method would at the feasibility boundary.
+    The structure of this sub-problem is worth stating, because it makes the
+    search both fast and smooth.
+
+    Range always improves as the whole speed window comes down: rolling
+    resistance is speed-independent and aerodynamic drag is not, so the
+    cheapest way to cover a metre is to cover it slowly.  What stops the
+    optimizer driving the window to zero is the competition's
+    **minimum average speed**, and that constraint is therefore active at
+    every optimum where the engine has power to spare.
+
+    So the two-dimensional search collapses to one dimension.  For each
+    ``v_low``, the rule pins ``v_high`` exactly -- average speed is monotone in
+    ``v_high``, so a bisection finds it -- and what remains is a scalar
+    minimisation over ``v_low``, trading a narrow window at a higher mean speed
+    against a wide one swinging around a lower mean.
+
+    Solving the active constraint rather than sampling a grid matters for more
+    than speed.  A grid makes the objective a step function of the design
+    variables, and a step function has no useful finite difference; the
+    gradient-based optimizer downstream would be differentiating quantisation
+    noise.  Here the objective is smooth.
 
     Args:
         vehicle: The car.
@@ -331,61 +452,67 @@ def best_strategy(
         brake_power: Brake power [W].
         efficiency: Brake thermal efficiency [-].
         window: Speeds to search between [m/s].
-        steps: Grid points per axis.
+        steps: Scalar-search resolution over ``v_low``.
 
     Returns:
-        The best feasible result, or the least-bad infeasible one.
+        The best feasible result, or the least-bad infeasible one -- never an
+        exception, so that an optimizer can walk through infeasible ground.
     """
     low_bound, high_bound = window
-    best: RangeResult | None = None
-    fallback: RangeResult | None = None
-
-    def consider(v_low: float, v_high: float) -> None:
-        nonlocal best, fallback
-        result = burn_and_coast(vehicle, engine_mass_kg, brake_power, efficiency, v_low, v_high)
-        if result.feasible:
-            if best is None or result.km_per_litre > best.km_per_litre:
-                best = result
-        elif fallback is None or result.km_per_litre > fallback.km_per_litre:
-            fallback = result
-
-    grid = np.linspace(low_bound, high_bound, steps)
-    for i, v_low in enumerate(grid[:-1]):
-        for v_high in grid[i + 1 :]:
-            consider(float(v_low), float(v_high))
-
-    if best is not None:
-        span = (high_bound - low_bound) / (steps - 1)
-        anchor_low, anchor_high = None, None
-        # Recover the winning window by re-deriving it from the stored result:
-        # the average speed and burn fraction identify it uniquely enough for a
-        # local refinement, so simply re-scan a neighbourhood of the best pair.
-        for i, v_low in enumerate(grid[:-1]):
-            for v_high in grid[i + 1 :]:
-                candidate = burn_and_coast(
-                    vehicle,
-                    engine_mass_kg,
-                    brake_power,
-                    efficiency,
-                    float(v_low),
-                    float(v_high),
-                )
-                if candidate.feasible and math.isclose(
-                    candidate.km_per_litre, best.km_per_litre, rel_tol=1e-12
-                ):
-                    anchor_low, anchor_high = float(v_low), float(v_high)
-        if anchor_low is not None and anchor_high is not None:
-            fine_low = np.linspace(max(anchor_low - span, 0.5), anchor_low + span, 7)
-            fine_high = np.linspace(anchor_high - span, anchor_high + span, 7)
-            for v_low in fine_low:
-                for v_high in fine_high:
-                    if v_high > v_low:
-                        consider(float(v_low), float(v_high))
-        return best
-    return (
-        fallback
-        if fallback is not None
-        else burn_and_coast(
-            vehicle, engine_mass_kg, brake_power, efficiency, low_bound, high_bound
-        )
+    # A burn cannot outrun the balance speed, so that -- not the nominal window
+    # -- is what bounds v_high.  A margin keeps the acceleration away from zero,
+    # where the burn distance integral diverges.
+    reachable = min(high_bound, 0.98 * top_speed(vehicle, engine_mass_kg, brake_power))
+    infeasible = burn_and_coast(
+        vehicle,
+        engine_mass_kg,
+        brake_power,
+        efficiency,
+        low_bound,
+        max(reachable, low_bound + 0.1),
     )
+    if reachable <= low_bound:
+        return infeasible
+
+    def evaluate_low(v_low: float) -> RangeResult | None:
+        v_high = _high_speed_for_rule(
+            vehicle, engine_mass_kg, brake_power, efficiency, v_low, reachable
+        )
+        if v_high is None:
+            return None
+        result = burn_and_coast(vehicle, engine_mass_kg, brake_power, efficiency, v_low, v_high)
+        return result if result.feasible else None
+
+    ceiling = min(reachable, vehicle.minimum_average_speed / 3.6)
+    candidates = np.linspace(low_bound, ceiling * 0.995, steps)
+    best: RangeResult | None = None
+    best_low = 0.0
+    for v_low in candidates:
+        result = evaluate_low(float(v_low))
+        if result is not None and (best is None or result.km_per_litre > best.km_per_litre):
+            best, best_low = result, float(v_low)
+
+    if best is None:
+        return infeasible
+
+    # Golden-section refinement around the winner, on the same smooth objective.
+    span = (ceiling * 0.995 - low_bound) / (steps - 1)
+    left, right = max(best_low - span, low_bound), min(best_low + span, ceiling * 0.995)
+    phi = 0.5 * (math.sqrt(5.0) - 1.0)
+    for _ in range(40):
+        if right - left < 1.0e-6:
+            break
+        a = right - phi * (right - left)
+        b = left + phi * (right - left)
+        value_a = evaluate_low(a)
+        value_b = evaluate_low(b)
+        score_a = value_a.km_per_litre if value_a else -math.inf
+        score_b = value_b.km_per_litre if value_b else -math.inf
+        for value in (value_a, value_b):
+            if value is not None and value.km_per_litre > best.km_per_litre:
+                best = value
+        if score_a > score_b:
+            right = b
+        else:
+            left = a
+    return best

@@ -41,6 +41,7 @@ fatigue size factor ``k_b`` itself depends on the diameter being solved for.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -354,12 +355,18 @@ def size_from_arrays(
     lengths: FloatArray,
     material: Material = DEFAULT_MATERIAL,
     safety: SafetyFactors = DEFAULT_SAFETY,
+    fixity: FloatArray | None = None,
+    names: Sequence[str] | None = None,
 ) -> dict[str, MemberSizing]:
     """Solve for the smallest safe diameter, from raw internal-load arrays.
 
     Split out from :func:`size_members` so that the GEMSEO structural
     discipline can be driven by the coupling variables directly, without having
-    to reconstruct a :class:`~exlink.dynamics.DynamicLoads`.
+    to reconstruct a :class:`~exlink.dynamics.DynamicLoads` -- and so that
+    :mod:`exlink.slidercrank` can size a *different* mechanism through exactly
+    the same yield, fatigue and buckling checks.  Comparing two mechanisms is
+    only meaningful if the structural model is literally the same code, so the
+    member list is a parameter rather than a constant.
 
     Args:
         axial: ``(n_members, n_angles, n_stations)`` [N], tension positive.
@@ -367,14 +374,18 @@ def size_from_arrays(
         lengths: Member lengths ``(n_members,)`` [mm].
         material: The material.
         safety: The design factors.
+        fixity: Euler end-fixity factor per member; the EX-link's if omitted.
+        names: Member names; the EX-link's if omitted.
 
     Returns:
         ``{member name: MemberSizing}``.
     """
-    fixity = MEMBER_FIXITY
+    fixity = MEMBER_FIXITY if fixity is None else np.asarray(fixity, dtype=float)
+    labels = tuple(MEMBER_NAMES) if names is None else tuple(names)
+    count = len(labels)
 
-    low = np.full(len(MEMBERS), MIN_DIAMETER)
-    high = np.full(len(MEMBERS), MAX_DIAMETER)
+    low = np.full(count, MIN_DIAMETER)
+    high = np.full(count, MAX_DIAMETER)
     for _ in range(BISECTION_STEPS):
         middle = 0.5 * (low + high)
         static, fatigue, buckling = _utilisations(
@@ -397,19 +408,19 @@ def size_from_arrays(
     mass = material.density * area * lengths
 
     modes = np.stack([static, fatigue, buckling])
-    names = ("static", "fatigue", "buckling")
+    mode_names = ("static", "fatigue", "buckling")
     return {
-        member.name: MemberSizing(
-            name=member.name,
+        label: MemberSizing(
+            name=label,
             diameter=float(diameter[i]),
             static_utilisation=float(static[i]),
             fatigue_utilisation=float(fatigue[i]),
             buckling_utilisation=float(buckling[i]),
             peak_stress=float(peak[i]),
             mass=float(mass[i]),
-            critical_mode=names[int(np.argmax(modes[:, i]))],
+            critical_mode=mode_names[int(np.argmax(modes[:, i]))],
         )
-        for i, member in enumerate(MEMBERS)
+        for i, label in enumerate(labels)
     }
 
 
@@ -467,7 +478,34 @@ def piston_mass(
     Returns:
         ``(crown_thickness_mm, mass_tonne)``.
     """
-    peak_pressure = float(np.max(thermodynamics.gauge_pressure))
+    return piston_mass_from_pressure(
+        float(np.max(thermodynamics.gauge_pressure)), material, safety, spec, skirt_thickness
+    )
+
+
+def piston_mass_from_pressure(
+    peak_pressure: float,
+    material: Material = DEFAULT_MATERIAL,
+    safety: SafetyFactors = DEFAULT_SAFETY,
+    spec: EngineSpec = DEFAULT_SPEC,
+    skirt_thickness: float = 2.5,
+) -> tuple[float, float]:
+    """Size the piston from a peak gauge pressure alone.
+
+    The cycle-model-agnostic half of :func:`piston_mass`, so that an Otto
+    slider-crank and an Atkinson linkage get identically-sized pistons for the
+    same peak pressure.
+
+    Args:
+        peak_pressure: Peak in-cylinder gauge pressure [MPa].
+        material: The material.
+        safety: The design factors.
+        spec: Fixed engine data.
+        skirt_thickness: Wall thickness of the skirt [mm].
+
+    Returns:
+        ``(crown_thickness_mm, mass_tonne)``.
+    """
     allowable = material.yield_strength / safety.static
     radius = 0.5 * spec.bore
     crown = radius * np.sqrt(3.0 * peak_pressure / (4.0 * allowable))
