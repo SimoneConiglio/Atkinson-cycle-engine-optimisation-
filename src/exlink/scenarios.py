@@ -385,6 +385,52 @@ def build_scenario(
     return scenario
 
 
+def _best_feasible_vector(problem: Any, objective: str) -> np.ndarray | None:
+    """The database entry with the best objective among those satisfying every constraint.
+
+    A gradient solver can, and on this problem does, terminate marginally
+    outside a constraint: SLSQP's own "solution" is then the least-infeasible
+    point it saw, not a feasible one.  Reporting that as the result publishes a
+    design that misses its brief -- here by 41 % on the top-dead-centre gap --
+    while the run very likely visited perfectly good feasible points on the way.
+
+    So the database is scanned directly.  Every constraint is recorded there
+    under the name it was attached with, and GEMSEO's convention is uniform:
+    a constraint is satisfied when its recorded value is non-positive,
+    whichever sign convention it was declared under.
+
+    Args:
+        problem: The scenario's optimization problem.
+        objective: The objective that was minimised.
+
+    Returns:
+        The best feasible design vector, or ``None`` if the run never found
+        one.
+    """
+    try:
+        values = problem.database.get_function_history(objective)
+    except (KeyError, ValueError):
+        return None
+    if values is None or len(values) == 0:
+        return None
+
+    feasible = np.ones(len(values), dtype=bool)
+    for constraint in problem.constraints:
+        try:
+            history = problem.database.get_function_history(constraint.name)
+        except (KeyError, ValueError):
+            continue
+        if history is None or len(history) != len(values):
+            return None
+        margin = np.atleast_2d(np.asarray(history, dtype=float).reshape(len(values), -1))
+        feasible &= np.all(margin <= INEQUALITY_TOLERANCE, axis=1)
+
+    if not np.any(feasible):
+        return None
+    scores = np.where(feasible, np.asarray(values, dtype=float).ravel(), np.inf)
+    return np.asarray(problem.database.get_x_vect(int(np.argmin(scores)) + 1))
+
+
 def _best_design(
     scenario: BaseScenario,
     objective: str = "neg_efficiency",
@@ -410,13 +456,14 @@ def _best_design(
     Returns:
         The best design found.
     """
-    del objective
     problem = scenario.formulation.optimization_problem
-    solution = problem.solution
-    if solution is not None and solution.x_opt is not None:
-        vector = solution.x_opt
-    else:
-        vector = problem.database.get_x_vect(-1)
+    vector = _best_feasible_vector(problem, objective)
+    if vector is None:
+        solution = problem.solution
+        if solution is not None and solution.x_opt is not None:
+            vector = solution.x_opt
+        else:
+            vector = problem.database.get_x_vect(-1)
 
     names = list(problem.design_space.variable_names)
     if len(names) == len(VARIABLE_NAMES):
@@ -1491,13 +1538,27 @@ def maximise_range(
         ``(speed, module, teeth)`` to the range reached.  Combinations where
         nothing feasible was found map to zero.
     """
-    from .gears import lattice_inter_axle, lattice_neighbours
+    import math
+
+    from .constants import DEFAULT_SPEC
+    from .coupled import solve_for_design
+    from .gears import buildable_neighbours, lattice_inter_axle
     from .performance import evaluate
     from .reference import COUPLED_DESIGN
 
     start = COUPLED_DESIGN if initial is None else initial
     box = Bounds.around(start, relative=relative) if bounds is None else bounds
-    pairs = lattice_neighbours(start.I)[:candidates]
+
+    # Enumerate the lattice by what can carry the load, not by what is nearest.
+    # The nearest centre distances are reached with the smallest modules, and a
+    # small module needs a wide face -- so ranking by distance alone routinely
+    # offers only unbuildable pairs.
+    reference = solve_for_design(start, speed_rpm=speeds[0])
+    tangential = float(np.max(np.abs(reference.loads.gear_force))) * math.cos(
+        DEFAULT_SPEC.pressure_angle
+    )
+    ranked = buildable_neighbours(start.I, tangential, shaft_bore=12.0, count=candidates + 1)
+    pairs = [(module, teeth, value) for module, teeth, value, _pair in ranked[:candidates]]
 
     history: dict[tuple[float, float, int], float] = {}
     best_design, best_value = start, 0.0
@@ -1525,3 +1586,87 @@ def maximise_range(
             if value > best_value:
                 best_design, best_value = candidate, value
     return best_design, best_value, history
+
+
+def project_onto_equalities(
+    design: Design,
+    samples: int = COUPLED_SAMPLES,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+    iterations: int = 8,
+    tolerance: float = 1.0e-9,
+    fixed: Sequence[str] = ("I",),
+) -> Design:
+    """Restore ``STE = 74`` and ``epsilon = 16`` by the smallest design change.
+
+    A gradient solver stops within *its* convergence tolerance of the
+    constraints it was given, not exactly on them.  On this problem SLSQP
+    routinely finishes a few parts in ten thousand outside the relaxed equality
+    band -- physically irrelevant, since the tolerance study puts the machining
+    standard deviation of the stroke two orders of magnitude higher, but enough
+    for a strict feasibility check to reject the design.
+
+    Rather than loosen the check, the design is projected back onto the
+    equality manifold.  With the exact Jacobian rows for both equalities from
+    :mod:`exlink.jacobian`, the minimum-norm Newton step is
+
+    .. math:: \\Delta X = -J^{+} r
+
+    which is the smallest change in the design that restores the equalities, so
+    everything else about the design -- and hence its range -- moves as little
+    as it can.  Two or three iterations converge to machine precision.
+
+    Args:
+        design: A design near, but not on, the equality manifold.
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+        iterations: Newton step limit.  The residual is measured at
+            ``samples``, so a caller that later checks feasibility at a
+            different crank-angle resolution should project at that resolution:
+            ``STE`` and ``g`` both shift slightly with it.
+        tolerance: Residual norm to stop at.
+        fixed: Variables the step may not touch.  ``I`` by default, because it
+            is pinned to the gear lattice: a projection free to move it would
+            hand back a mechanism whose gears cannot be cut, which is exactly
+            what the pinning exists to prevent.
+
+    Returns:
+        The projected design, or the input unchanged if it cannot be analysed
+        or the Jacobian is singular there.
+
+    Warning:
+        Restoring the equalities can *break* the top-dead-centre gap.  The
+        minimum-norm step on this problem is a few hundredths of a millimetre,
+        and that is enough to move ``g`` from 0.001 mm to 0.020 mm -- twice its
+        bound.  This is not a defect in the projection; it is the same
+        hypersensitivity that :mod:`exlink.robustness` measures against
+        machining tolerance, seen once more.  Always re-check the inequalities
+        afterwards rather than assuming a projected design is feasible.
+    """
+    from .jacobian import kinematic_jacobian, metric_jacobian
+    from .model import analyse, equality_constraints
+
+    current = design
+    for _ in range(iterations):
+        analysis = analyse(current, samples=samples, spec=spec)
+        if not analysis.valid:
+            return design
+        residual = equality_constraints(analysis, targets)
+        if float(np.linalg.norm(residual)) <= tolerance:
+            return current
+
+        kinematic = kinematic_jacobian(current, analysis.require_solved().kinematics, spec)
+        rows = metric_jacobian(current, analysis, kinematic, spec)
+        jacobian = np.stack([rows["expansion_stroke"], rows["compression_ratio"]])
+        # Zeroing a column removes that variable from the step: the minimum-norm
+        # solution is then taken over the remaining ones only.
+        for index, name in enumerate(VARIABLE_NAMES):
+            if name in fixed:
+                jacobian[:, index] = 0.0
+        try:
+            step = -np.linalg.pinv(jacobian) @ residual
+        except np.linalg.LinAlgError:  # pragma: no cover - defensive
+            return design
+        current = Design.from_array(current.to_array() + step)
+    return current

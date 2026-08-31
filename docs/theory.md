@@ -781,6 +781,29 @@ lattice moves the design off both, and the remaining continuous variables must
 repair them. That is the mixed-integer structure of the problem: choose the
 integers, repair the continuum.
 
+The repair is substantial, not cosmetic. Moving $I$ onto the nearest buildable
+lattice point — 0.18 mm — takes the top-dead-centre gap from 0.003 mm to
+0.058 mm, five times its bound, and the expansion stroke 0.087 mm off target.
+Since $\partial g/\partial I \approx 0.27$, the gap responds to a perturbation of
+the geometry roughly thirty times faster than the perturbation itself.
+
+That number is worth putting beside §14.1. The tolerance study finds
+$\sigma_g \approx 0.013$ mm from IT8 machining tolerances, against a 0.01 mm
+band; the lattice snap finds a 0.048 mm excursion from a 0.18 mm move. These are
+the same fact reached by independent routes: $g$ is hypersensitive to the
+geometry that produces it, and no geometric choice — optimised, toleranced or
+gear-constrained — can hold it. It has to be an adjustment at assembly.
+
+Enumerating the lattice needs care of its own. Ranking candidates by distance
+from the requested $I$ is the obvious choice and the wrong one: the nearest
+lattice points are reached with the smallest modules, and a small module needs a
+wide face to carry a given tooth load, so ranking by distance offers the
+structurally worst candidates first. At the near-singular design of §8 — which
+puts 9 kN through the mesh, six times what the backed-off one does — *every*
+point on the immediate lattice exceeds the face-width limit, and reaching a
+buildable pair means moving the centre distance itself by 13 %. Candidates are
+therefore ranked by whether they can carry the load, then by distance.
+
 The practical consequence is that the discrete choice must be **enumerated
 outside** the continuous solve, never left floating inside it. Left free, the
 module choice makes the objective a step function of $I$: the lightest workable

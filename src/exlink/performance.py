@@ -132,8 +132,29 @@ class Performance:
         return brake_efficiency(self.friction.brake_work, self.heat_release)
 
     @property
+    def geometrically_feasible(self) -> bool:
+        """Whether the design meets the geometric constraint set.
+
+        Kept separate from :attr:`feasible` because the two ask different
+        questions and conflating them is how a violating design gets reported
+        as a result: an engine can run perfectly well, and go a long way, while
+        sitting outside the specification it was supposed to meet.
+        """
+        from .scenarios import is_feasible
+
+        return is_feasible(self.analysis)
+
+    @property
     def feasible(self) -> bool:
-        """Whether every discipline returned a usable design."""
+        """Whether this is a design that both works *and* meets its brief.
+
+        Every discipline has to return something usable -- the kinematics
+        closes, the sizing settles, the engine produces net work, the gears
+        fit, the car meets the speed rule -- **and** the geometric constraints
+        have to hold.  Leaving that last clause out reports designs that run
+        but miss the stroke, the compression ratio, the top-dead-centre gap or
+        the side-load limit, which is not a result.
+        """
         return (
             self.analysis.valid
             and self.coupled is not None
@@ -142,6 +163,7 @@ class Performance:
             and self.friction.runs
             and self.range.feasible
             and (self.budget.gears is None or self.budget.gears.feasible)
+            and self.geometrically_feasible
         )
 
     def reason(self) -> str:
@@ -156,6 +178,8 @@ class Performance:
             return "gear pair outside its face-width or tooth-count limits"
         if not self.range.feasible:
             return f"vehicle: {self.range.reason}"
+        if not self.geometrically_feasible:
+            return "outside the geometric constraint set"
         return ""
 
 

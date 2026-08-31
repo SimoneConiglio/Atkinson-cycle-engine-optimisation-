@@ -118,3 +118,89 @@ def test_automatic_module_choice_is_feasible_and_light() -> None:
     assert chosen.module < STANDARD_MODULES[-1]
     forced = size_pair(56.5, 600.0, module=float(STANDARD_MODULES[-1]))
     assert chosen.mass <= forced.mass
+
+
+# -- enumerating the lattice by what can actually be built ---------------------
+
+
+def test_nearest_lattice_points_are_the_worst_gears() -> None:
+    """Distance from the requested centre distance is the wrong ranking.
+
+    The nearest lattice points are reached with the *smallest* modules, and a
+    small module needs a wide face to carry a given tooth load.  So ranking by
+    distance alone systematically offers the structurally worst candidates
+    first, and at a high tooth load offers only unbuildable ones.
+    """
+    from exlink.gears import buildable_neighbours, lattice_neighbours
+
+    load = 9000.0
+    nearest = lattice_neighbours(56.5, count=2)[:3]
+    assert all(
+        not size_pair(value, load, module=module, teeth=teeth).feasible
+        for module, teeth, value in nearest
+    )
+
+    ranked = buildable_neighbours(56.5, load, count=3)
+    assert ranked[0][3].feasible
+
+
+def test_buildable_neighbours_puts_feasible_pairs_first() -> None:
+    from exlink.gears import buildable_neighbours
+
+    ranked = buildable_neighbours(56.5, 3000.0, count=3)
+    flags = [pair.feasible for _m, _z, _v, pair in ranked]
+    assert flags == sorted(flags, reverse=True)
+
+
+def test_buildable_neighbours_never_returns_nothing() -> None:
+    """A caller must always have something to start from.
+
+    When no pair can carry the load, the candidates still come back --
+    least-overloaded first -- so the caller can begin at the best available and
+    report that none was buildable, rather than crashing on an empty list.
+    """
+    from exlink.gears import buildable_neighbours
+
+    ranked = buildable_neighbours(56.5, 500_000.0, count=2)
+    assert ranked
+    assert not any(pair.feasible for _m, _z, _v, pair in ranked)
+    factors = [pair.width_factor for _m, _z, _v, pair in ranked]
+    assert factors == sorted(factors)
+
+
+def test_a_near_singular_design_cannot_be_geared_at_its_own_centre_distance() -> None:
+    """Another way the singularity makes itself felt.
+
+    The near-singular reference design puts 9 kN through the gear mesh, six
+    times what the backed-off one does.  No module on its own inter-axle
+    lattice can carry that within the face-width limit: reaching a buildable
+    pair means moving the centre distance itself by 13 %.  The geometric
+    problem, where the gears are two continuous radii, cannot see this at all.
+    """
+    import math
+
+    import numpy as np
+
+    from exlink.constants import DEFAULT_SPEC
+    from exlink.coupled import solve_for_design
+    from exlink.gears import buildable_neighbours, lattice_neighbours
+    from exlink.reference import COUPLED_DESIGN, REFINED_DESIGN
+
+    def tooth_load(design: object) -> float:
+        result = solve_for_design(design, speed_rpm=1000.0)
+        return float(np.max(np.abs(result.loads.gear_force))) * math.cos(
+            DEFAULT_SPEC.pressure_angle
+        )
+
+    near = tooth_load(REFINED_DESIGN)
+    backed_off = tooth_load(COUPLED_DESIGN)
+    assert near > 4.0 * backed_off
+
+    # Nothing on the immediate lattice can carry it.
+    for module, teeth, value in lattice_neighbours(REFINED_DESIGN.I, count=2)[:6]:
+        assert not size_pair(value, near, module=module, teeth=teeth).feasible
+
+    # A buildable pair exists, but only well away from the requested distance.
+    best = buildable_neighbours(REFINED_DESIGN.I, near, count=3)[0]
+    assert best[3].feasible
+    assert abs(best[2] - REFINED_DESIGN.I) / REFINED_DESIGN.I > 0.05

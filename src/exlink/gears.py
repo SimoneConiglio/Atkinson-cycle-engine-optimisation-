@@ -364,3 +364,60 @@ def size_pair(
         float(STANDARD_MODULES[-1]),
         teeth or tooth_count(inter_axle, float(STANDARD_MODULES[-1])),
     )
+
+
+def buildable_neighbours(
+    inter_axle: float,
+    tangential_force: float,
+    shaft_bore: float = 12.0,
+    count: int = 3,
+    material: Material = DEFAULT_MATERIAL,
+    safety: SafetyFactors = DEFAULT_SAFETY,
+) -> list[tuple[float, int, float, GearPair]]:
+    """Lattice points that can actually carry the tooth load, nearest first.
+
+    :func:`lattice_neighbours` ranks purely by distance from the requested
+    centre distance, and that is the wrong order to optimise in.  The nearest
+    lattice points are reached with the *smallest* modules, and a small module
+    needs a wide face to carry a given tooth load -- so the geometrically
+    closest candidates are routinely the structurally worst, and can be
+    unbuildable outright.
+
+    Ranking instead by whether the pair is within its face-width limit, then by
+    distance, is what an enumeration over the discrete variable should do.
+
+    Args:
+        inter_axle: The continuous ``I`` an optimizer asked for [mm].
+        tangential_force: Peak tangential tooth load ``F_t`` [N].
+        shaft_bore: Shaft diameter the gears are bored for [mm].
+        count: Tooth counts to keep on each side, per module.
+        material: Gear material.
+        safety: Design factors.
+
+    Returns:
+        ``[(module, teeth, inter_axle, pair), ...]``, feasible pairs first and
+        each group ordered by distance from the request.  The list is never
+        empty: when nothing is feasible the infeasible candidates are still
+        returned, least-overloaded first, so a caller can start from the best
+        available and report that none was buildable.
+    """
+    candidates = []
+    for module, teeth, value in lattice_neighbours(inter_axle, count=count):
+        pair = size_pair(
+            value,
+            tangential_force,
+            module=module,
+            teeth=teeth,
+            shaft_bore=shaft_bore,
+            material=material,
+            safety=safety,
+        )
+        candidates.append((module, teeth, value, pair))
+    candidates.sort(
+        key=lambda item: (
+            not item[3].feasible,
+            item[3].width_factor if not item[3].feasible else 0.0,
+            abs(item[2] - float(inter_axle)),
+        )
+    )
+    return candidates

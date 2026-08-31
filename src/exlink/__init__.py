@@ -71,6 +71,7 @@ from .reference import (
     GRADIENT_DESIGN,
     PUBLISHED_DESIGN,
     PUBLISHED_METRICS,
+    RANGE_DESIGN,
     REFINED_DESIGN,
 )
 from .robustness import ToleranceReport, tolerance_report
@@ -91,6 +92,7 @@ __all__ = [
     "MEMBER_NAMES",
     "PUBLISHED_DESIGN",
     "PUBLISHED_METRICS",
+    "RANGE_DESIGN",
     "REFINED_DESIGN",
     "VARIABLE_DESCRIPTIONS",
     "VARIABLE_NAMES",

@@ -250,3 +250,71 @@ COUPLED_METRICS: dict[str, float] = {
     "peak_bearing_load": 7504.0,
 }
 """Properties of :data:`COUPLED_DESIGN`, at ``samples=1440`` and 1000 rpm."""
+
+
+RANGE_DESIGN = Design(
+    a=76.0262,
+    c=71.0370,
+    I=57.6000,
+    x_b=72.9272,
+    y_b=-74.1048,
+    x_1=-31.5411,
+    e=127.6415,
+    q_1=8.2337,
+    q_2=22.6621,
+    theta_f=87.4537,
+    theta_r=-45.2847,
+)
+"""The best design the vehicle-level problem produced, and what it does not achieve.
+
+SLSQP on ``neg_range`` with the gear pair pinned to ``m = 0.8``, ``z = 48``
+(hence ``I = 57.6``) at 1000 rpm, started from :data:`COUPLED_DESIGN`.  It
+reaches **3388 km/L** against 3338, on an engine of 12.47 kg, and it satisfies
+every inequality constraint including the top-dead-centre gap, at
+``g = 0.0009 mm``.
+
+It is nonetheless **not** reported as feasible, and the reason is worth stating
+rather than smoothing over.
+
+What it misses, and by how much
+--------------------------------
+The two equalities are relaxed to ``|STE - 74| <= 0.05`` and
+``|epsilon - 16| <= 0.05`` for the coupled problem.  This design finishes at
+``0.0501`` and ``0.0501`` -- outside the band by 1.5e-4 mm and 6.1e-5, which is
+SLSQP stopping within its own convergence tolerance of the constraint it was
+given.  For scale, :mod:`exlink.robustness` puts the machining standard
+deviation of ``STE`` at 0.020 mm, some 130 times larger.  No real part would
+distinguish this design from one exactly on the band.
+
+Why it is not simply projected back
+-------------------------------------
+Because doing so breaks something else.
+:func:`exlink.scenarios.project_onto_equalities` restores both equalities to
+machine precision with a minimum-norm step of a few hundredths of a
+millimetre -- and that step moves ``g`` from 0.0009 mm to 0.0201 mm, twice its
+bound.
+
+That is the same hypersensitivity three other measurements find:
+
+============================================  ===========================
+perturbation                                  effect on ``g``
+============================================  ===========================
+IT8 machining tolerance on the members        ``sigma = 0.013 mm``
+snapping ``I`` 0.18 mm onto the gear lattice  ``0.003 -> 0.058 mm``
+minimum-norm equality projection              ``0.0009 -> 0.0201 mm``
+============================================  ===========================
+
+against a bound of 0.01 mm.  The honest reading is that the specification is
+over-constrained: the equality manifold and the region ``g <= 0.01`` intersect
+in a sliver too thin for any of machining, gear selection or a converged
+optimizer to land inside reliably.
+
+What to do about it
+--------------------
+Treat ``g`` as an assembly adjustment -- a shim on the piston-rod length -- or
+as a quantity to minimise, rather than as a hard geometric constraint.  Under
+that reading this design is the result, at 3388 km/L.  Under the specification
+as written, the best *strictly* feasible design remains
+:data:`COUPLED_DESIGN` at 3338 km/L, and the 1.5 % difference is the price of a
+constraint that cannot be held.
+"""

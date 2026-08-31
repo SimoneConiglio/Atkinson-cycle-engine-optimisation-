@@ -602,7 +602,30 @@ satisfied *with*. Snapping it to the lattice breaks both, and the remaining cont
 variables have to repair them — the classic *choose the integers, repair the continuum*
 structure.
 
-Getting this wrong is instructive, and it cost a debugging session worth recording. Left free,
+And the repair is not a formality. Moving `I` onto the nearest buildable lattice point — a
+shift of **0.18 mm** — blows the top-dead-centre gap from 0.003 mm to 0.058 mm, five times its
+bound, and knocks the expansion stroke 0.087 mm off target. The remaining ten variables then
+have a real optimization problem to solve just to get back to feasibility.
+
+Which constraint does the repair struggle with? `g`, every time. That is the same constraint
+the [tolerance study](#does-it-survive-manufacturing) shows cannot be manufactured, and the
+two results are the same fact reached independently: `∂g/∂I ≈ 0.27` mm per mm, so `g` responds
+to *any* perturbation of the geometry — a machining tolerance, a gear lattice — far faster than
+its 0.01 mm band allows. It is not a constraint that geometry can hold.
+
+There is a second trap in the enumeration itself. Ranking candidate lattice points by
+*distance* from the requested `I` is the obvious thing and the wrong thing: the nearest points
+are reached with the **smallest** modules, and a small module needs a wide face to carry a
+given tooth load. At the near-singular design — which puts 9 kN through the mesh, six times
+what the backed-off one does — every point on the immediate lattice is unbuildable, and
+reaching a workable pair means moving the centre distance by 13 %. `buildable_neighbours`
+ranks by what can carry the load first and distance second.
+
+That is one more way the singularity makes itself felt, and the geometric problem, where the
+gears are two continuous radii, cannot see it at all.
+
+Getting the module itself wrong is instructive, and it cost a debugging session worth
+recording. Left free,
 the module choice makes the objective a step function of `I`: the lightest workable module
 changes at a threshold and the range jumps 40 km/L across it. A central difference straddling
 that threshold returns a gradient of **3.7 × 10⁵** against a true gradient of order 10³. SLSQP,
@@ -618,6 +641,49 @@ minimum castable and machinable wall thicknesses. Rounding is applied *after* th
 converges, never inside it: a step function inside a contraction turns it into a limit cycle
 between two stock sizes. Rounding is always **up**, so it can never turn a certified section
 unsafe, and `stock_premium` reports what buildability cost.
+
+### What the optimization actually produced
+
+SLSQP on `neg_range`, gear pair pinned, 1000 rpm, started from the coupled reference:
+
+| | range | engine mass | `g` | strictly feasible |
+|---|---|---|---|---|
+| start (`COUPLED_DESIGN`) | 3338 km/L | 12.17 kg | 0.0067 mm | **yes** |
+| best found (`RANGE_DESIGN`) | 3388 km/L | 12.47 kg | 0.0009 mm | no — see below |
+
+The 1.5 % gain is modest, and the reason it is not simply banked is worth stating rather than
+smoothing over.
+
+`RANGE_DESIGN` satisfies every inequality, including the gap, at `g = 0.0009 mm`. It misses
+the two *relaxed equalities* by 1.5 × 10⁻⁴ mm and 6.1 × 10⁻⁵ — SLSQP stopping within its own
+convergence tolerance of the constraint it was handed. For scale, the tolerance study puts
+the machining standard deviation of `STE` at 0.020 mm, **130 times larger**; no real part
+would tell the two apart.
+
+The obvious fix is to project it back onto the equality manifold, which
+`project_onto_equalities` does exactly, by the minimum-norm Newton step from the analytic
+Jacobians. That step is a few hundredths of a millimetre — and it moves `g` from 0.0009 to
+0.0201 mm, twice its bound.
+
+So the same wall appears from a fourth direction:
+
+| perturbation | effect on `g` (bound: 0.01 mm) |
+|---|---|
+| IT8 machining tolerance on the members | `σ = 0.013 mm` |
+| snapping `I` 0.18 mm onto the gear lattice | `0.003 → 0.058 mm` |
+| minimum-norm equality projection | `0.0009 → 0.0201 mm` |
+| tightest ISO grade that would hold it | 1.25i — off the ladder |
+
+The honest reading is that **the specification is over-constrained**. The equality manifold
+and the region `g ≤ 0.01` intersect in a sliver too thin for machining, gear selection or a
+converged optimizer to land inside reliably. Treat `g` as an assembly adjustment — a shim on
+the piston-rod length — or as a quantity to minimise, and `RANGE_DESIGN` is the answer at
+3388 km/L. Under the specification as written, the best strictly feasible design is the one
+we started from, and the 1.5 % is the price of a constraint that cannot be held.
+
+That is not a result the optimizer could have delivered. It came out of the tolerance study,
+and it is the single most useful thing in this repository for anyone who would actually build
+the engine.
 
 ---
 

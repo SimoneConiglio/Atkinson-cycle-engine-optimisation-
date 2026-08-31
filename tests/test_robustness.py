@@ -148,3 +148,29 @@ def test_an_unanalysable_design_is_refused_rather_than_scored() -> None:
     broken = REFINED_DESIGN.replace(a=0.4 * REFINED_DESIGN.a)
     with pytest.raises(ValueError, match="does not close"):
         tolerance_report(broken, samples=5, crank_samples=CRANK)
+
+
+def test_the_gap_is_hypersensitive_to_the_geometry_that_produces_it() -> None:
+    """The same finding as the tolerance study, reached independently.
+
+    §14.1 shows the top-dead-centre gap has a standard deviation from IT8
+    machining tolerances larger than its own 0.01 mm band.  This checks the
+    other route: ``g`` is so sensitive to the inter-axle distance that snapping
+    ``I`` onto the gear lattice -- a move of under a fifth of a millimetre --
+    pushes the gap several times past its bound.
+
+    Two independent perturbations, the same conclusion: no geometric choice can
+    hold this constraint, and it has to be taken up at assembly.
+    """
+    from exlink.model import analyse
+    from exlink.reference import COUPLED_DESIGN
+
+    nominal = analyse(COUPLED_DESIGN, samples=720)
+    assert nominal.metrics.tdc_gap < 0.01
+
+    shifted = analyse(COUPLED_DESIGN.replace(I=COUPLED_DESIGN.I - 0.18), samples=720)
+    assert shifted.valid
+    assert shifted.metrics.tdc_gap > 3.0 * 0.01
+
+    sensitivity = (shifted.metrics.tdc_gap - nominal.metrics.tdc_gap) / 0.18
+    assert sensitivity > 0.1

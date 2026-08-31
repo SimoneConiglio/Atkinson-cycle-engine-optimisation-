@@ -260,3 +260,63 @@ def test_the_optimizer_moves_away_from_the_singularity() -> None:
     assert after.feasible
     assert after.km_per_litre > 1.2 * before.km_per_litre
     assert after.metrics.compatibility < before.metrics.compatibility
+
+
+def test_projection_restores_the_equalities_exactly() -> None:
+    """A solver stops within its own tolerance of a constraint, not on it.
+
+    SLSQP finishes a couple of parts in ten thousand outside the relaxed
+    equality band here.  The minimum-norm Newton step, built from the exact
+    Jacobian rows, puts the design back on the manifold to machine precision
+    while changing everything else as little as possible.
+    """
+    from exlink.model import analyse, equality_constraints
+    from exlink.scenarios import project_onto_equalities
+
+    off = COUPLED_DESIGN.replace(e=COUPLED_DESIGN.e * 1.004)
+    before = equality_constraints(analyse(off, samples=720))
+    assert np.max(np.abs(before)) > 1.0e-3
+
+    projected = project_onto_equalities(off, samples=720)
+    after = equality_constraints(analyse(projected, samples=720))
+    assert np.max(np.abs(after)) < 1.0e-9
+
+
+def test_projection_holds_the_gear_lattice() -> None:
+    """A projection free to move ``I`` hands back ungearable geometry."""
+    from exlink.scenarios import project_onto_equalities
+
+    off = COUPLED_DESIGN.replace(I=57.6, e=COUPLED_DESIGN.e * 1.004)
+    projected = project_onto_equalities(off, samples=720)
+    assert pytest.approx(57.6, abs=1.0e-12) == projected.I
+
+
+def test_restoring_the_equalities_can_break_the_gap() -> None:
+    """The hypersensitivity of ``g``, seen from a fourth direction.
+
+    A minimum-norm step of a few hundredths of a millimetre -- the smallest
+    change that restores ``STE`` and ``epsilon`` -- is enough to move the
+    top-dead-centre gap past its own bound.  Together with the tolerance study
+    and the gear-lattice snap, this says the same thing three ways: ``g``
+    responds to any perturbation of the geometry far faster than its 0.01 mm
+    band allows, and no geometric choice can hold it.
+
+    The practical consequence is that a projected design must have its
+    inequalities re-checked, never assumed.
+    """
+    from exlink.model import analyse
+    from exlink.scenarios import project_onto_equalities
+
+    # A design sitting on the relaxed equality band with the gap satisfied.
+    on_band = COUPLED_DESIGN.replace(e=COUPLED_DESIGN.e * 1.0007)
+    start = analyse(on_band, samples=720)
+    assert start.valid
+
+    projected = project_onto_equalities(on_band, samples=720)
+    landed = analyse(projected, samples=720)
+    assert landed.valid
+    step = float(np.linalg.norm(projected.to_array() - on_band.to_array()))
+    gap_change = abs(landed.metrics.tdc_gap - start.metrics.tdc_gap)
+    # A sub-tenth-millimetre step moves the gap by a comparable amount, on a
+    # quantity whose entire budget is 0.01 mm.
+    assert gap_change / max(step, 1.0e-12) > 0.05
