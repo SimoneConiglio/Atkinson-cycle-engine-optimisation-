@@ -11,10 +11,10 @@ from exlink.scenarios import format_analysis
 
 
 def main() -> None:
-    print(format_analysis(analyse(PUBLISHED_DESIGN, samples=1440), "2015 published table"))
+    print(format_analysis(analyse(PUBLISHED_DESIGN, samples=1440), "historical baseline"))
     print()
     print(
-        "Re-analysed as printed, the published table does not satisfy its own\n"
+        "Re-analysed as printed, the baseline does not satisfy its own\n"
         "constraints -- most tellingly g, the quantity the optimizer drove to\n"
         "zero. See docs/theory.md section 8.\n"
     )
@@ -23,8 +23,8 @@ def main() -> None:
     print(format_analysis(refined, "refined by this framework"))
     print()
 
-    print("against the properties the report reports:")
-    print(f"  {'quantity':<22}{'here':>12}{'report':>12}")
+    print("against the properties recorded for the historical baseline:")
+    print(f"  {'quantity':<22}{'here':>12}{'baseline':>12}")
     for name, reported in PUBLISHED_METRICS.items():
         if name == "torque_pressure_ratio":
             continue  # reported as a percentage with no stated normalisation

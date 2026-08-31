@@ -24,7 +24,7 @@ def test_the_published_design_analyses(published_analysis) -> None:
 
 
 def test_an_incompatible_design_is_penalised_not_raised() -> None:
-    """The report's rule: ``eta = 0``, ``H = B = 1000``, never an exception."""
+    """The penalty rule: ``eta = 0``, ``H = B = 1000``, never an exception."""
     analysis = analyse(PUBLISHED_DESIGN.replace(a=25.0, c=25.0), samples=180)
     assert not analysis.valid
     assert analysis.metrics.efficiency == 0.0
@@ -37,7 +37,7 @@ def test_an_otto_motion_is_penalised() -> None:
     """A linkage that closes fine but lifts the piston only once per revolution.
 
     Shrinking the eccentric crank collapses the second top dead centre, leaving
-    a plain Otto motion -- the exact failure the report describes. The linkage
+    a plain Otto motion -- the exact well-posedness failure. The linkage
     is still assemblable, so only the phase count catches it.
     """
     analysis = analyse(REFINED_DESIGN.replace(q_2=2.0), samples=360)

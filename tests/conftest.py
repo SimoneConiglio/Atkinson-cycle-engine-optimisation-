@@ -14,7 +14,7 @@ from exlink.reference import REFINED_DESIGN
 
 @pytest.fixture(scope="session")
 def published() -> Design:
-    """The design vector tabulated in the 2015 report."""
+    """The historical baseline design vector."""
     return PUBLISHED_DESIGN
 
 

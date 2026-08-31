@@ -1,7 +1,7 @@
 """Matplotlib animation of the mechanism turning through a cycle.
 
-The report argues its case with static sketches; an animation shows in a couple
-of seconds what those sketches take a chapter to explain -- that the piston
+An animation shows in a couple of seconds what static sketches take a chapter to
+explain -- that the piston
 reaches top dead centre *twice* per crankshaft revolution, and that the two
 bottom dead centres differ, which is the whole point of the Atkinson linkage.
 

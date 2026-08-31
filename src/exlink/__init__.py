@@ -1,8 +1,7 @@
 """Optimization of the EX-link Atkinson-cycle engine mechanism.
 
-A Python reconstruction of a 2015 student project (Universite de Technologie de
-Compiegne, TN12 / mechanical optimization), which sized an extended-expansion
-linkage for the Shell Eco-marathon: eleven design variables, three competing
+A multidisciplinary optimization of an extended-expansion (Atkinson) linkage
+for a Shell Eco-marathon single-cylinder engine: eleven design variables, three competing
 objectives (mechanical efficiency, and the two envelope dimensions), and a set
 of constraints most of which exist to make the problem *well posed* rather than
 to express a specification.
@@ -12,8 +11,8 @@ driven by `GEMSEO <https://gemseo.readthedocs.io>`_, so the same problem can be
 handed to a gradient-based solver, a differential-evolution search, an augmented
 Lagrangian, or NSGA-II without rewriting anything.
 
-The report stops before sizing the parts, because their masses are not known
-until they have a shape.  :mod:`exlink.dynamics`, :mod:`exlink.sizing` and
+The geometric problem above stops before sizing the parts, because their masses
+are not known until they have a shape.  :mod:`exlink.dynamics`, :mod:`exlink.sizing` and
 :mod:`exlink.coupled` carry out that next iteration, which closes a loop:
 sections set the masses, the masses set the inertia loads, and the loads set the
 sections.  That coupling has to be solved, and GEMSEO solves it with an MDA.

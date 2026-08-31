@@ -20,9 +20,8 @@ twice per crankshaft revolution while the two bottom dead centres differ: the
 short one sets the compression stroke, the long one the expansion stroke.  So
 before any pressure can be assigned, ``lambda(theta_1)`` must be shown to have
 exactly four monotone phases -- two maxima and two distinct minima.  That test
-is :func:`find_phases`, and it is the numerical heart of the report's
-well-posedness argument: designs that fail it are penalised rather than
-analysed.
+is :func:`find_phases`, and it is the numerical heart of the well-posedness
+argument: designs that fail it are penalised rather than analysed.
 """
 
 from __future__ import annotations
@@ -106,8 +105,8 @@ def find_phases(lam: FloatArray) -> Phases:
         PhaseError: If the motion does not consist of exactly four monotone
             phases with two maxima and two minima -- i.e. the design does not
             realise an Atkinson cycle at all (a plain Otto motion with a single
-            up-and-down per revolution fails here, as do the "stair-stepped"
-            motions shown in the report).
+            up-and-down per revolution fails here, as do "stair-stepped"
+            motions with spurious intermediate reversals).
     """
     n = lam.size
     slope = np.sign(np.diff(np.concatenate([lam, lam[:1]])))

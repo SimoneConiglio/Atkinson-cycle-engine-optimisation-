@@ -1,12 +1,12 @@
 """The 11-dimensional design vector ``X`` of the EX-link mechanism.
 
-The report parametrises the linkage by
+The linkage is parametrised by
 
 .. math:: X = (a, c, I, x_b, y_b, x_1, e, q_1, q_2, \\theta_f, \\theta_r)^T
 
 Rather than describing the trigonal link by its three sides ``b``, ``c``, ``d``
 -- which must satisfy the triangle inequality and leave the sign of
-``theta_b`` undetermined -- the report places ``E`` in the frame carried by
+``theta_b`` undetermined -- ``E`` is placed in the frame carried by
 ``c = AD``.  ``x_b`` and ``y_b`` are then free to take any value, positive or
 negative, and ``theta_b = atan2(y_b, x_b)`` carries its own sign.  That
 reparametrisation is what makes the design space a plain box.
@@ -138,7 +138,7 @@ class Design:
         """Signed angle ``atan2(y_b, x_b)`` between ``AE`` and ``AD`` [rad].
 
         Equivalent to the Carnot expression
-        ``arccos((b^2 + c^2 - d^2) / (2 b c))`` of the report, but with a sign.
+        ``arccos((b^2 + c^2 - d^2) / (2 b c))``, but with a sign.
         """
         return math.atan2(self.y_b, self.x_b)
 
@@ -194,8 +194,8 @@ class Bounds:
     ) -> Bounds:
         """Bounds centred on ``design``, as used for the local Pareto fronts.
 
-        The report shrinks the box to ``0.9 X_0 <= X <= 1.1 X_0`` before running
-        a MOEA seeded near a known solution.  A purely multiplicative rule
+        A MOEA seeded near a known solution wants a shrunken box, nominally
+        ``0.9 X_0 <= X <= 1.1 X_0``.  A purely multiplicative rule
         collapses on variables that may be negative or near zero (``x_1``,
         ``y_b``, the angles), so angles get a symmetric absolute window instead.
 
@@ -231,9 +231,9 @@ class Bounds:
 
 #: Global bounds used by the global searches.
 #:
-#: The report never tabulates ``l_b`` and ``u_b``; these are chosen to comfortably
-#: contain its published solution while keeping every length physically sensible
-#: for a single-cylinder engine of 74 mm expansion stroke.
+#: Chosen to comfortably contain every design found here while keeping each
+#: length physically sensible for a single-cylinder engine of 74 mm expansion
+#: stroke.
 GLOBAL_BOUNDS = Bounds(
     lower=np.array([20.0, 20.0, 20.0, -200.0, -200.0, -100.0, 40.0, 2.0, 2.0, -180.0, -180.0]),
     upper=np.array([250.0, 250.0, 150.0, 250.0, 200.0, 100.0, 300.0, 60.0, 80.0, 180.0, 180.0]),

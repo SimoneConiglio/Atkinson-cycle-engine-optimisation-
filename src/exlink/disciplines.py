@@ -1,12 +1,12 @@
 """GEMSEO wrappers around the mechanism analysis.
 
-The 2015 study was written in MATLAB, with the penalty function, the design
-space and the algorithm loop all hand-rolled.  Here GEMSEO owns the problem
-formulation: :class:`ExlinkDiscipline` exposes the analysis as a discipline with
-a named grammar, and the scenarios in :mod:`exlink.scenarios` attach objectives
-and constraints to it declaratively.  Every algorithm in GEMSEO's catalogue --
-gradient-based, derivative-free, evolutionary, multi-objective -- then applies
-to the same problem without touching the physics.
+GEMSEO owns the problem formulation, rather than the penalty function, the
+design space and the algorithm loop being hand-rolled: :class:`ExlinkDiscipline`
+exposes the analysis as a discipline with a named grammar, and the scenarios in
+:mod:`exlink.scenarios` attach objectives and constraints to it declaratively.
+Every algorithm in GEMSEO's catalogue -- gradient-based, derivative-free,
+evolutionary, multi-objective -- then applies to the same problem without
+touching the physics.
 
 Two disciplines are provided:
 
@@ -16,9 +16,8 @@ Two disciplines are provided:
     the natural form for GEMSEO and the one the scenarios use.
 
 :class:`PenalisedExlinkDiscipline`
-    Adds the report's external penalty function ``F(X)`` as one extra output, so
-    that the historical "penalise, then run an unconstrained solver" workflow
-    can be reproduced as-is.
+    Adds an external penalty function ``F(X)`` as one extra output, so that a
+    "penalise, then run an unconstrained solver" workflow can be run as-is.
 """
 
 from __future__ import annotations
@@ -253,9 +252,9 @@ def to_output_data(
 
 
 class PenalisedExlinkDiscipline(ExlinkDiscipline):
-    """Adds the report's external penalty function as an output.
+    """Adds an external penalty function as an output.
 
-    The report converts the constrained problem into an unconstrained one via
+    This converts the constrained problem into an unconstrained one via
 
     .. math::
         F(X) = -\\eta(X) + \\frac{1}{r^2}\\left(
@@ -263,11 +262,11 @@ class PenalisedExlinkDiscipline(ExlinkDiscipline):
 
     where ``<c>`` keeps only the violated inequalities and ``0 < r < 1`` is the
     penalty parameter.  Smaller ``r`` means a more accurate but worse
-    conditioned problem -- the trade-off the report describes, and the reason it
-    finishes with an augmented Lagrangian instead.
+    conditioned problem -- the trade-off that motivates finishing with an
+    augmented Lagrangian instead.
 
-    The size objectives are handled the way the report handles them when it
-    sweeps a Pareto front by hand: as moving limits ``H <= h_max``,
+    The size objectives are handled the way a hand-swept Pareto front handles
+    them: as moving limits ``H <= h_max``,
     ``B <= b_max`` folded into the penalty.
 
     Args:
@@ -321,9 +320,9 @@ class PenalisedExlinkDiscipline(ExlinkDiscipline):
 # =============================================================================
 # The coupled sizing problem
 #
-# Everything above is the report's own, one-way problem: geometry in, efficiency
-# and envelope out.  What follows adds the iteration the report deferred, and it
-# is genuinely two-way.  :class:`DynamicsDiscipline` needs the member sections
+# Everything above is the one-way, geometric problem: geometry in, efficiency
+# and envelope out.  What follows adds the structural iteration, and it is
+# genuinely two-way.  :class:`DynamicsDiscipline` needs the member sections
 # to know the inertia forces; :class:`StructureDiscipline` needs the resulting
 # internal loads to choose those sections.  Neither can run first, so an MDA has
 # to resolve them -- see :func:`exlink.scenarios.build_coupled_scenario`.

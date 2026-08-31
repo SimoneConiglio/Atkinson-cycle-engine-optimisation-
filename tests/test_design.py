@@ -37,7 +37,7 @@ def test_replace_rejects_unknown_variables(published: Design) -> None:
 def test_trigonal_reparametrisation_satisfies_carnot(published: Design) -> None:
     """``theta_b`` from ``atan2(y_b, x_b)`` must agree with the Carnot theorem.
 
-    The report introduces ``(x_b, y_b)`` precisely so that ``b``, ``c`` and ``d``
+    ``(x_b, y_b)`` is introduced precisely so that ``b``, ``c`` and ``d``
     always close a triangle; this checks the two routes to ``theta_b`` agree.
     """
     b, c, d = published.b, published.c, published.d

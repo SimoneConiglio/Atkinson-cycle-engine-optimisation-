@@ -98,7 +98,7 @@ def ramp_derivative(angles: FloatArray, order: int = 1) -> FloatArray:
 def rate_and_acceleration(values: FloatArray, speed: float) -> tuple[FloatArray, FloatArray]:
     """Convert crank-angle derivatives into time derivatives.
 
-    The report analyses the mechanism at constant crankshaft speed, so
+    The mechanism is analysed at constant crankshaft speed, so
     ``d/dt = Omega d/dtheta_1`` and ``d^2/dt^2 = Omega^2 d^2/dtheta_1^2``
     exactly -- no ``theta_1``-dot-dot term.
 

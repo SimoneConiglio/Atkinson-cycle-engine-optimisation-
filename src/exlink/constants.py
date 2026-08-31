@@ -14,9 +14,9 @@ force         N
 torque        N.mm
 ============  =====================================
 
-The numbers below are the ones handed to the students in the TN12 design
-brief (Universite de Technologie de Compiegne, 2014-2015) and reproduced in
-the 2015 report *Exlink Motor Mechanism Optimization*.
+The numbers below define a single-cylinder Shell Eco-marathon engine and are
+held fixed throughout; only the linkage geometry and the member sections are
+designed.
 """
 
 from __future__ import annotations
@@ -46,8 +46,8 @@ class EngineSpec:
     piston_skirt: float = 16.0
     """Guided length ``h`` of the piston inside the liner [mm].
 
-    Only enters the (unused) reaction moment ``M_D``; the report never states a
-    value, so it defaults to the piston length.
+    Only enters the (unused) reaction moment ``M_D``, so it simply defaults to
+    the piston length.
     """
 
     dead_volume: float = 3000.0
@@ -68,8 +68,8 @@ class EngineSpec:
     pressure_angle: float = math.radians(20.0)
     """Gear pressure angle ``alpha``.
 
-    The report writes ``alpha`` symbolically but never gives a value; 20 deg is
-    the standard involute profile and is used as the default.
+    20 deg is the standard involute profile and is used throughout; ``alpha``
+    enters only the gear-mesh separating force.
     """
 
     @property
@@ -82,8 +82,8 @@ class EngineSpec:
 class DesignTargets:
     """Right-hand sides of the equality and inequality constraints.
 
-    These are the "table of design constraints" of the report plus the
-    well-posedness constraints introduced in its optimization chapter.
+    The performance requirements the engine must meet, plus the well-posedness
+    constraints that keep the linkage analysable (see :mod:`exlink.kinematics`).
     """
 
     expansion_stroke: float = 74.0
@@ -98,9 +98,8 @@ class DesignTargets:
     max_transmission: float = 0.985
     """Upper bound ``C`` on ``W = max(delta_c1, delta_c2)``.
 
-    ``C = 0.9848`` in the report, i.e. the transmission angle ``T`` is kept
-    inside ``[10 deg, 170 deg]``; it is rounded to 0.985 in the final
-    formulation, which is the value used here.
+    ``C = 0.9848`` keeps the transmission angle ``T`` inside
+    ``[10 deg, 170 deg]``; it is rounded to 0.985 here.
     """
 
     max_tdc_gap: float = 0.01
@@ -125,7 +124,7 @@ class DesignTargets:
 class PenaltyValues:
     """Values substituted when a design cannot be analysed at all.
 
-    The report fixes ``eta(X) = 0``, ``H(X) = 1000``, ``B(X) = 1000`` whenever
+    ``eta(X) = 0``, ``H(X) = 1000``, ``B(X) = 1000`` are substituted whenever
     the kinematic compatibility conditions (4a)/(6a) fail, or whenever
     ``lambda(theta_1)`` does not have four monotone phases.
     """

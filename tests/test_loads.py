@@ -18,8 +18,8 @@ def test_torque_equals_the_virtual_work_torque(design) -> None:
     In a massless, frictionless, quasi-static mechanism the instantaneous power
     in equals the power out, so the whole force chain -- piston, trigonal link,
     both shafts, the gear pair -- is pinned by this one identity.  It is what
-    the report appeals to when it justifies calling ``eta`` an efficiency, and
-    it is what exposed the sign slip in the report's printed inversion of the
+    justifies calling ``eta`` an efficiency, and it is what exposed the sign
+    slip in a careless inversion of the
     trigonal-link moment equation: with the sign as printed, this test fails by
     a factor of about -4.
     """

@@ -1,26 +1,55 @@
 # EX-link Atkinson-cycle engine optimization
 
-A Python reconstruction of a 2015 student project at the Université de Technologie de
-Compiègne: sizing an **extended-expansion (Atkinson) linkage** for a Shell Eco-marathon
-single-cylinder engine, by optimizing eleven geometric design variables against three
-competing objectives.
+Multidisciplinary sizing of an **extended-expansion (Atkinson) linkage** for a
+single-cylinder engine: eleven geometric design variables, competing objectives in
+efficiency, envelope and structural mass, and a strongly coupled structure/dynamics
+analysis solved as an MDA.
 
-The original study was written in MATLAB. Here the physics is NumPy and the optimization
-is driven by **[GEMSEO](https://gemseo.readthedocs.io)**, so the same problem can be handed
-to a gradient-based solver, differential evolution, an augmented Lagrangian, or NSGA-II
-without rewriting anything. The mechanism is animated with **matplotlib**.
+The physics is NumPy — closed-form kinematics, an idealised Atkinson cycle, a full
+d'Alembert load analysis and static/fatigue/buckling sizing — with exact analytic
+derivatives throughout. The optimization is driven by
+**[GEMSEO](https://gemseo.readthedocs.io)**, so the same problem can be handed to SLSQP,
+differential evolution, an augmented Lagrangian or NSGA-II without rewriting anything. The
+mechanism is animated with **matplotlib**.
 
 ---
 
-## The problem
+## The design problem
 
-Honda's EX-link mechanism reaches top dead centre **twice per crankshaft revolution**, with
-two *different* bottom dead centres. The short one sets the compression stroke, the long one
-the expansion stroke — so the engine expands the burnt gas further than it compressed the
-fresh charge, and recovers work an Otto cycle throws away with the exhaust.
+An extended-expansion engine expands the burnt gas further than it compressed the fresh
+charge, recovering work that an Otto cycle throws away with the exhaust. Doing that
+*mechanically* — rather than by holding the inlet valve open — needs a linkage whose piston
+reaches top dead centre **twice per crankshaft revolution**, with two *different* bottom dead
+centres: the short one sets the compression stroke, the long one the expansion stroke.
 
-Getting a linkage to do that, at a 74 mm expansion stroke and a compression ratio of 16,
-while staying small and keeping the piston rod within 10° of vertical, is the design problem.
+The linkage used here follows Honda's
+[EXlink](https://global.honda/en/power/technology/exlink/) topology, with three changes: a
+crank is inserted between the eccentric shaft and the swing rod, and another between the
+crankshaft and the trigonal link, which frees up two more dimensions to optimize; and the
+roles of the crankshaft and eccentric shaft are exchanged, so the whole four-stroke cycle
+completes in **one** turn of the output shaft.
+
+### Specification
+
+The engine data are those of a Shell Eco-marathon prototype class single cylinder:
+
+| quantity | symbol | value |
+|---|---|---|
+| bore | `Φ` | 32 mm |
+| expansion stroke | `STE` | 74 mm (required) |
+| compression ratio | `ε` | 16 (required) |
+| clearance volume | `V₀` | 3 cm³ |
+| plenum pressure | `P₀` | 1.2 bar |
+| combustion pressure ratio | `k = P₃/P₂` | 1.7 |
+| polytropic exponent | `γ` | 1.22 |
+| piston length (pin to crown) | `p` | 16 mm |
+| max piston-rod tilt | `mra` | 10° |
+| gear ratio, crankshaft : eccentric | `r₁/r₂` | 2 |
+
+`ε = 16` is high enough to knock on pump fuel; the target assumes variable valve phasing and
+a suitable fuel, and is treated here purely as a geometric requirement. With `Φ = 32 mm` and
+`V₀ = 3 cm³` it pins the compression stroke at `STC = 15 V₀/A_p ≈ 55.95 mm` against the
+required `STE = 74 mm` — that asymmetry is what the linkage exists to produce.
 
 ![the mechanism turning through one cycle](docs/figures/exlink.gif)
 
@@ -56,8 +85,8 @@ s.t. c(X)    = (mra−10, W−0.985, g−0.01, 10−d, γ−0.02)ᵀ ≤ 0
      c_eq(X) = (STE−74, ε−16)ᵀ = 0
 ```
 
-Most of those constraints exist to make the problem **well posed**, not to express a
-specification — and that is the interesting part of the original work:
+Most of those constraints exist to make the problem **well posed** rather than to express a
+specification, and they are the interesting part of the formulation:
 
 - **`W ≤ 0.985`** — the two arccosine arguments of the closed-form inversion. If either
   reaches 1, the crankshaft cannot turn through a full revolution; it only rocks. Feeding
@@ -104,7 +133,7 @@ NSGA-II. Everything except `exlink pareto` works without it.
 
 ```bash
 exlink analyse                       # objectives and constraints of the reference design
-exlink analyse --design published    # the design as tabulated in the 2015 report
+exlink analyse --design published    # the historical baseline design (see Provenance)
 exlink plot -o figures               # motion, p-V cycle, torque, mechanism
 exlink animate -o figures/exlink.gif # animated mechanism + live cycle and torque
 exlink refine --design published --save refined.json   # augmented Lagrangian
@@ -135,24 +164,28 @@ front = pareto_front(pop_size=200, max_gen=60)   # NSGA-II
 
 ---
 
-## How the 2015 workflow maps onto GEMSEO
+## Solution strategies
 
-The report worked through four stages, each of which has a direct counterpart here:
+The formulation is exposed through GEMSEO, so several strategies apply to the same problem:
 
-| 2015 (MATLAB) | here (GEMSEO) |
+| strategy | entry point |
 |---|---|
 | external penalty `F(X) = −η + r⁻²(c_eqᵀc_eq + ⟨c⟩ᵀ⟨c⟩)` | `PenalisedExlinkDiscipline` |
-| conjugate gradient / simplex | `NELDER-MEAD`, `SLSQP`, `NLOPT_COBYLA` |
-| genetic algorithm, 550 individuals | `DIFFERENTIAL_EVOLUTION` (`maximise_efficiency`) |
-| MOEA seeded near a known optimum | `local_pareto` (`PYMOO_NSGA2` in a shrunk box) |
+| gradient-based local search | `SLSQP` (`maximise_efficiency`, `minimise_mass`) |
+| derivative-free local search | `NELDER-MEAD`, `NLOPT_COBYLA` |
+| global search | `DIFFERENTIAL_EVOLUTION` (`maximise_efficiency`) |
+| multi-objective front | `pareto_front` / `local_pareto` (`PYMOO_NSGA2`) |
 | moving limits on `H` and `B` | `sweep_moving_limits` |
-| augmented Lagrangian, final polish | `Augmented_Lagrangian_order_0` (`refine`) |
+| ε-constraint on efficiency | `sweep_efficiency_floor` |
+| constraint-accurate polish | `Augmented_Lagrangian_order_0` (`refine`) |
+
+Which of these actually work on this problem is not a matter of taste, and the rest of this
+section reports what was measured.
 
 ### Why the multi-objective stage needs a relaxed problem
 
-The report found its MOEA "still disappointing … even with big population I still got
-solutions that were even worse than the ones I got with the gradient based methods." Sampling
-2000 designs from a box around a good solution shows why:
+Population methods fare badly here, and sampling 2000 designs from a box around a good
+solution shows why:
 
 | constraint | satisfied by |
 |---|---|
@@ -202,48 +235,41 @@ did not previously meet, and a smaller budget returns "no feasible point" instea
 
 ---
 
-## Does it reproduce the original?
+## Verification
 
-**The model: yes, and it is independently verified.** The quasi-static force chain is pinned
-by the principle of virtual work — in a massless, frictionless mechanism the instantaneous
-power in must equal the power out, so `M_r(θ₁) = −P dλ/dθ₁` at every crank angle. The chain
-reproduces that to machine precision (`tests/test_loads.py`). Every link also keeps its
-length to 1e-9 mm over the revolution.
+The model is checked against physical invariants rather than against another
+implementation, so the checks stand on their own.
 
-That check found a **sign slip in the report**: its printed inversion of the trigonal-link
-moment equation gives the swing-rod load `A` with the wrong sign, which makes the torque
-disagree with virtual work by a factor of about −4. The corrected sign is used here and
-documented in `exlink/loads.py`.
+**Rigid-body kinematics.** Every link keeps its length to 1e-9 mm over the revolution, and
+the piston pin and crown stay on the cylinder axis to the same tolerance
+(`tests/test_kinematics.py`).
 
-**The published design vector: no — and it does not reproduce for the report's own code
-either.** Re-analysed as printed, it gives `g = 8.5 mm` against the reported 0.0069. Since
-`g` is exactly the quantity the optimizer drove to zero, the printed table cannot be the
-design that produced the reported properties. It is printed to four significant figures, and
-perturbing each variable by its rounding half-width moves the answers far too little to
-explain the discrepancy. The design sits at `W = 0.982`, a hair from the singularity, where
-the piston motion is extremely sensitive to the link lengths.
+**The quasi-static force chain** is pinned by the principle of virtual work: in a massless,
+frictionless mechanism the instantaneous power in equals the power out, so
+`M_r(θ₁) = −P dλ/dθ₁` at *every* crank angle. The chain reproduces that to machine precision
+(`tests/test_loads.py`), which constrains the whole chain — piston, trigonal link, both
+shafts and the gear pair — not just its endpoints. A second, independent route agrees: the
+mean torque equals the indicated p–V loop area over 2π.
 
-**The published *properties*: yes, closely.** Running the report's own final step — the
-augmented Lagrangian, from the published table — lands on a fully feasible design that
-matches the reported table almost line for line:
+That check earns its keep. It caught a **sign error in the trigonal-link moment inversion**
+while the model was being built — the version that disagreed with virtual work by a factor
+of about −4. Expanding `DA ∧ F_A + DE ∧ F_E = 0` gives
+`−c A sin(θ_a − θ_T) − C (DE ∧ û_e)_z = 0`, so the swing-rod load carries a leading minus
+sign; see `exlink/loads.py`.
 
-| | this reconstruction | report, 2015 |
-|---|---|---|
-| `η` efficiency | **27.87 %** | 27.76 % |
-| `W` compatibility | 0.9811 | 0.9817 |
-| `mra` rod angle | 8.68° | 7.55° |
-| `g` TDC gap | 0.0060 mm | 0.0069 mm |
-| `STE` expansion stroke | 74.000 mm | 73.98 mm |
-| `ε` compression ratio | 16.000 | 15.98 |
-| `γ` side load | 0.0181 | 0.02 |
-| `B` width | 151.9 mm | 156.2 mm |
-| `H` height | 238.6 mm | 256.7 mm |
+**Dynamics.** At zero speed the 18×18 simultaneous solve reproduces the sequential
+quasi-static elimination exactly — torque, joint forces and gear load to 1e-11. Mean torque
+is provably independent of engine speed (inertia does no net work over a closed cycle) and
+holds to 1e-6 from 0 to 3000 rpm. With the gas load removed every reaction scales as exactly
+`Ω²`.
 
-That design ships as `exlink.reference.REFINED_DESIGN` and is what the CLI uses by default.
+**Derivatives.** Every analytic derivative is compared against a *converged* central
+difference, and independently by GEMSEO's own `check_jacobian`. Details in
+[Gradients](#gradients).
 
-`d` (trigonal-link to cylinder clearance) is not compared: the report states the constraint
-but not the geometric construction behind it, so it is reconstructed here — monotone in the
-right direction and zero on contact, but not expected to match digit for digit.
+**The gear pair** transmits no net power: with `ω₂ = −2ω₁` and `r₁ = 2r₂` the two gear
+torques cancel exactly, checked explicitly — a pair that generated power would silently
+inflate the efficiency.
 
 ---
 
@@ -255,7 +281,7 @@ box with sides of tens of millimetres, while `W` and `γ` sit within 0.4 % and 7
 bounds. A derivative-free method cannot work in that — COBYLA returns its starting point
 unchanged after 313 s and 120 evaluations, whatever the budget.
 
-Everything the report derives is closed form, so the derivatives are too. `exlink.jacobian`
+The whole analysis chain is closed form, so its derivatives are too. `exlink.jacobian`
 propagates them forward through the same chain the kinematics evaluates, and gets the
 extremum-based metrics from the **envelope theorem**: for `max_θ f(X, θ)` attained at `θ*`,
 the derivative is `∂f/∂X` evaluated there, because the term through the moving maximiser
@@ -272,20 +298,22 @@ that failure mode.
 | moved from start | 0 mm | 32 mm | 38 mm |
 | time | 313 s | 15 s | **4 s** |
 
-Run from the published design, the gradient-based search reaches **η = 30.77 %**, feasible
-at every resolution from 720 samples up, against the report's 27.76 % and the 27.87 % of the
-augmented-Lagrangian reproduction:
+Started from the historical baseline design, the gradient-based search reaches
+**η = 30.77 %**, feasible at every resolution from 720 samples up:
 
 | | η | `H` | `W` | `g` | feasible |
 |---|---|---|---|---|---|
-| report, 2015 | 27.76 % | 256.7 mm | 0.9817 | 0.0069 | — |
+| historical baseline (`PUBLISHED_DESIGN`) | 35.62 % | 283.2 mm | 0.9892 | 8.52 mm | **no** |
 | augmented Lagrangian (`REFINED_DESIGN`) | 27.87 % | 238.5 mm | 0.9811 | 0.0060 | yes |
 | SLSQP + exact gradients (`GRADIENT_DESIGN`) | **30.77 %** | 319.8 mm | 0.9850 | 0.0095 | yes |
 
-Read that comparison carefully: nothing limits the envelope in this single-objective form, so
-the extra efficiency is bought partly with size — the mechanism grows to `H = 320 mm`. What
-it does show is that the report's final step stopped three points short of the efficiency
-available to it, and that the method rather than the mechanism was the limit.
+Read that comparison carefully. The baseline's 35.62 % is not a real result: that design
+violates five constraints when re-analysed, most glaringly `g = 8.5 mm` against a 0.01 mm
+bound, and efficiency is unbounded above once the constraints are dropped. And nothing limits
+the envelope in this single-objective form, so the gradient result's extra three points over
+the augmented Lagrangian are bought partly with size — the mechanism grows to `H = 320 mm`.
+What the comparison does show is that a derivative-free polish stops well short of the
+efficiency available at comparable feasibility.
 
 ### Through the MDA, too
 
@@ -341,9 +369,9 @@ integral.
 
 ## Sizing the parts, and the coupling it creates
 
-The report stops before this on purpose — *"to have the masses of the pieces we have to know
-their shape, so those passages are for another iteration"*. That iteration is here, and it
-closes a loop the quasi-static study does not have:
+A quasi-static study cannot do this, and the reason is circular: the inertia loads need the
+part masses, and the masses need the sections, which need the loads. Restoring inertia
+therefore closes a loop:
 
 ```
     section diameters ──▶ member masses ──▶ inertia forces ──▶ internal loads
@@ -371,9 +399,10 @@ from exlink.scenarios import minimise_mass
 best = minimise_mass(speed_rpm=1000, min_efficiency=0.25)
 ```
 
-**Why the report's method cannot simply be extended.** Without inertia every rod is a
-two-force member, which is exactly what lets the report eliminate unknowns one body at a
-time. Give a rod mass and its end forces are no longer collinear, so nothing can be solved
+**Why sequential elimination stops working.** Without inertia every rod is a two-force
+member — the forces at its two ends are equal, opposite and collinear with the rod — which is
+what lets the loads be eliminated one body at a time, from the piston down to the crankshaft.
+Give a rod mass and its end forces are neither collinear nor equal, so nothing can be solved
 before its neighbours. Gruebler gives the mechanism one degree of freedom, so the load
 problem is statically determinate — **18 unknowns against 6 bodies × 3 equations** — and
 `exlink.dynamics` assembles and solves that 18×18 system at every crank angle. Its
@@ -406,9 +435,9 @@ goes as the cube of the acceleration level, it goes as the **sixth power of engi
 Fatigue binds on six of the seven members; the long slender piston rod goes to Euler
 buckling instead.
 
-**The quasi-static optimum turns out to be the wrong answer.** The report's design sits at
-`W = 0.981`, a hair from the singularity, because that is where the quasi-static lever arm is
-longest. But that same proximity is what amplifies accelerations — joint `A` sees 75× the
+**The quasi-static optimum turns out to be the wrong answer.** Maximising efficiency without
+inertia drives the design to `W = 0.981`, a hair from the transmission-angle singularity,
+because that is where the quasi-static lever arm is longest. But that same proximity is what amplifies accelerations — joint `A` sees 75× the
 crank pin's. Backing off costs nothing and saves almost everything:
 
 | swing rod | `W` | `η` | `H` [mm] | mass [kg] | peak bearing [N] |
@@ -424,9 +453,9 @@ design was an artefact of leaving inertia out.
 
 Both tables above are printed by `python examples/05_sizing_and_dynamics.py` (about 30 s).
 
-The coupled problem therefore gains an objective the report could not express — structural
-mass, since nothing in its formulation determines a cross-section — and three constraints
-that only exist once loads are dynamic: `saturation_margin` (the loop ran away),
+The coupled problem therefore gains an objective a quasi-static formulation cannot express —
+structural mass, since nothing in it determines a cross-section — and three constraints that
+only exist once the loads are dynamic: `saturation_margin` (the loop ran away),
 `slenderness_margin` (a "rod" thicker than a third of its length is not a beam), and
 `bearing_margin`.
 
@@ -469,13 +498,32 @@ pytest                  # everything, optimizers included
 tox                     # across Python 3.10 – 3.12
 ```
 
-## Reference
+## Provenance
 
-S. Coniglio, *Exlink Motor Mechanism Optimization*, Université de Technologie de Compiègne,
-2015. Mechanism after Honda's
-[EXlink](http://world.honda.com/powerproducts-technology/exlink/), with a crank added
-between each shaft and its link, and the roles of the crankshaft and eccentric shaft
-exchanged.
+The mechanism and the design brief come from an unpublished student study by the author
+(Université de Technologie de Compiègne, 2015), which set up the kinematics, the idealised
+cycle, the quasi-static load chain and the efficiency measure, and solved the quasi-static
+problem in MATLAB. Everything needed to read, run and check this repository is restated here
+and in [docs/theory.md](docs/theory.md); the document itself is not a citable reference and
+nothing here depends on it.
+
+Two designs carry over from that study as **historical baselines**, and they are labelled as
+such wherever they appear:
+
+- `PUBLISHED_DESIGN` — the design vector tabulated there. Re-analysed it violates five
+  constraints (notably `g = 8.5 mm` against a 0.01 mm bound), so it is used as a *starting
+  point*, not as a result. See `exlink/reference.py` for why it cannot be the design that
+  produced the properties reported alongside it.
+- `REFINED_DESIGN` — what an augmented Lagrangian makes of it here: feasible, `η = 27.87 %`.
+  The quasi-static reference point the rest of the study is measured against.
+
+Everything else — the dynamic load analysis, the sizing disciplines, the coupled MDA, the
+analytic derivatives, and the `GRADIENT_DESIGN` and `COUPLED_DESIGN` results — is new work in
+this repository.
+
+Mechanism topology after Honda's
+[EXlink](https://global.honda/en/power/technology/exlink/), modified as described in
+[The design problem](#the-design-problem).
 
 ## License
 

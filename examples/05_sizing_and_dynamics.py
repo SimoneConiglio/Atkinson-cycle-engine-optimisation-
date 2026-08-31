@@ -1,7 +1,7 @@
 """Size the parts with inertia in the load path, and watch the coupling bite.
 
-The report stops before this: the masses are not known until the parts have a
-shape. Restoring inertia closes a loop -- sections set masses, masses set
+The geometric problem stops before this: the masses are not known until the
+parts have a shape. Restoring inertia closes a loop -- sections set masses, masses set
 inertia loads, loads set sections -- which has to be solved rather than
 sequenced.
 
@@ -9,7 +9,7 @@ Two things this prints that the quasi-static study cannot show:
 
 * the mean torque is untouched by engine speed, while the peak bearing load
   grows as its square and the structural mass as its sixth power;
-* the report's near-singular design, optimal without inertia, becomes the worst
+* the near-singular geometry that is optimal without inertia becomes the worst
   possible choice with it.
 
 Takes about a minute.
@@ -65,7 +65,7 @@ def main() -> None:
     print()
     print(format_coupled(results[2], "sizing at 1000 rpm"))
 
-    # The report's design sits at W = 0.981, a hair from the singularity, because
+    # The baseline sits at W = 0.981, a hair from the singularity, because
     # that is where the quasi-static lever arm is longest.  Proximity to the
     # singularity is also what amplifies the accelerations, so with inertia in
     # the load path the same choice becomes the expensive one.

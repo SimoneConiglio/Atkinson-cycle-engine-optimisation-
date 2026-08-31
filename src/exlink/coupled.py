@@ -24,8 +24,8 @@ reaches it -- but slowly, and with a mass that grows as the *cube* of the
 acceleration level.  Under-relaxation is provided for the stiff cases, and the
 cubic sensitivity is why the answer is so sensitive to engine speed.
 
-The result is that speed, which never appeared in the report at all, becomes
-one of the strongest drivers in the problem.
+The result is that speed, which does not enter the geometric problem at all,
+becomes one of the strongest drivers here.
 """
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ def solve_coupled(
     Args:
         kinematics: A solved mechanism.
         thermodynamics: Its solved cycle, supplying the gas load.
-        speed_rpm: Crankshaft speed [rev/min].  Zero recovers the report's
+        speed_rpm: Crankshaft speed [rev/min].  Zero recovers purely
             quasi-static sizing, with no coupling at all.
         material: The material.
         safety: The design factors.

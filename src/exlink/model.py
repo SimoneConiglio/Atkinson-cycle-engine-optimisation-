@@ -2,14 +2,13 @@
 
 :func:`analyse` chains kinematics -> Atkinson cycle -> quasi-static loads ->
 metrics, and -- crucially for the optimizer -- never raises on a bad design.
-Following the report, a design that cannot be analysed is *penalised* rather
-than rejected:
+A design that cannot be analysed is *penalised* rather than rejected:
 
 * the compatibility conditions (4a)/(6a) fail, so the crankshaft only rocks; or
 * ``lambda(theta_1)`` does not have four monotone phases, so no Atkinson cycle
   can be fitted onto it.
 
-In either case the report substitutes ``eta = 0``, ``H = 1000``, ``B = 1000``.
+In either case ``eta = 0``, ``H = 1000``, ``B = 1000`` are substituted.
 The constraint measures that *can* still be computed (notably ``W``) are
 returned unchanged, so a gradient-free optimizer still has a signal telling it
 which way to go -- that signal is what makes the global search converge.
@@ -210,7 +209,7 @@ def analyse(
 
 
 def objectives(analysis: Analysis) -> np.ndarray:
-    """``f(X) = (-eta, H, B)^T`` of the report's final formulation."""
+    """``f(X) = (-eta, H, B)^T``, the three competing objectives."""
     m = analysis.metrics
     return np.array([-m.efficiency, m.height, m.width], dtype=float)
 
@@ -218,7 +217,7 @@ def objectives(analysis: Analysis) -> np.ndarray:
 def inequality_constraints(
     analysis: Analysis, targets: DesignTargets = DEFAULT_TARGETS
 ) -> np.ndarray:
-    """``c(X) <= 0`` of the report's final formulation.
+    """``c(X) <= 0``, the inequality constraints.
 
     Order: ``mra - 10``, ``W - 0.985``, ``g - 0.01``, ``10 - d``,
     ``gamma - 0.02``.
@@ -242,7 +241,7 @@ def inequality_constraints(
 def equality_constraints(
     analysis: Analysis, targets: DesignTargets = DEFAULT_TARGETS
 ) -> np.ndarray:
-    """``c_eq(X) = 0`` of the report's final formulation.
+    """``c_eq(X) = 0``, the equality constraints.
 
     Order: ``STE - 74``, ``epsilon - 16``.
     """

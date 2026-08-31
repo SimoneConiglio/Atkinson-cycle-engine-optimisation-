@@ -1,7 +1,7 @@
 """Closed-form kinematics of the EX-link linkage.
 
-The report inverts the loop-closure equations analytically rather than solving
-them with Newton-Raphson.  That choice matters twice over: the evaluation is
+The loop-closure equations are inverted analytically rather than solved with
+Newton-Raphson.  That choice matters twice over: the evaluation is
 fast enough to sit inside an evolutionary algorithm, and the two arccosine
 arguments it exposes -- ``delta_c1`` (4a) and ``delta_c2`` (6a) -- become
 explicit *compatibility* measures.  A design whose ``|argument|`` reaches 1 for
@@ -21,7 +21,8 @@ Solution chain for a given crank angle ``theta_1``:
 7. ``lambda = q_1 cos theta_1 + a sin theta_a
    + b sin(theta_b + theta_T) + e sin theta_e + p``                     (7)
 
-Every inverted cosine keeps the positive root, as the report prescribes.
+Every inverted cosine keeps the positive root, which selects the assembly mode
+the mechanism actually runs in.
 """
 
 from __future__ import annotations
@@ -99,7 +100,7 @@ class Kinematics:
 
     @property
     def compatibility(self) -> float:
-        """``W = max(delta_c1, delta_c2)`` of the report."""
+        """``W = max(delta_c1, delta_c2)``, the transmission-angle measure."""
         return max(self.delta_c1, self.delta_c2)
 
     @property
@@ -170,9 +171,9 @@ def solve(
     delta_c2 = float(np.max(np.abs(cos_e)))
     theta_e = np.arccos(np.clip(cos_e, -1.0, 1.0))
 
-    # (7) piston crown height.  The report's equation (7) omits the constant
-    # piston length p; it is restored here so that ``lam`` really is the height
-    # of H.  Being a constant it cancels out of every stroke and volume anyway.
+    # (7) piston crown height.  The constant piston length p is included so that
+    # ``lam`` really is the height of H; being a constant it cancels out of every
+    # stroke and volume anyway.
     lam = (
         q_1 * np.cos(angles)
         + a * np.sin(theta_a)

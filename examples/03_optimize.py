@@ -1,8 +1,8 @@
-"""Reproduce the report's final step: augmented Lagrangian from the published table.
+"""Augmented Lagrangian, started from the historical baseline.
 
 Started from a design that does not satisfy its own constraints when
 re-analysed, the augmented Lagrangian lands on a genuinely feasible one at
-essentially the reported efficiency.
+essentially the same efficiency.
 
 Takes about two minutes.
 

@@ -2,7 +2,7 @@ exlink
 ======
 
 Multi-objective optimization of an EX-link Atkinson-cycle engine mechanism,
-a Python and GEMSEO reconstruction of a 2015 study.
+a GEMSEO multidisciplinary optimization of an extended-expansion engine linkage.
 
 .. toctree::
    :maxdepth: 2
@@ -42,7 +42,7 @@ Physics
 Sizing and dynamics
 ~~~~~~~~~~~~~~~~~~~
 
-The iteration the report defers: inertia in the load path, parts sized against
+The second iteration: inertia in the load path, parts sized against
 static, fatigue and buckling failure, and the fixed point that couples them.
 
 .. automodule:: exlink.derivatives

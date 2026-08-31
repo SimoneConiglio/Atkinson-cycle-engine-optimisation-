@@ -9,7 +9,7 @@ two equality constraints leave a band 0.1 mm wide on ``STE`` and 0.1 wide on
 cannot work in that: every trial step of a sensible size lands outside, so
 COBYLA returns its starting point unchanged however large its budget.
 
-Everything the report derives is closed form, so the derivatives are too.  This
+The whole analysis chain is closed form, so its derivatives are too.  This
 module propagates them forward through the same chain
 :mod:`exlink.kinematics` evaluates, carrying ``d/dX`` alongside each quantity.
 That turns the problem over to SLSQP, which handles thin feasible sets by

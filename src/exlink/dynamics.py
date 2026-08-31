@@ -1,14 +1,15 @@
 """Dynamic load analysis: the quasi-static chain with inertia restored.
 
-The 2015 report stops short of this deliberately -- "to have the masses of the
-pieces we have to know their shape so we should have a first design, so those
-passages are for another iteration".  This module is that iteration.
+The geometric problem stops short of this of necessity: to have the masses of
+the pieces one must know their shape, which needs a first design.  This module
+is that second iteration.
 
-Why the report's solution method cannot simply be extended
-----------------------------------------------------------
+Why sequential elimination cannot simply be extended
+----------------------------------------------------
 Without inertia every rod is a *two-force member*: the forces at its two ends
-are equal, opposite and collinear with the rod.  That is what lets the report
-eliminate unknowns one body at a time, from the piston down to the crankshaft.
+are equal, opposite and collinear with the rod.  That is what lets
+:mod:`exlink.loads` eliminate unknowns one body at a time, from the piston down
+to the crankshaft.
 
 Add inertia and that collapses.  A rod with mass has a distributed d'Alembert
 load along it, so its end forces are neither collinear nor equal, and no body
@@ -27,17 +28,16 @@ One degree of freedom, so the load problem is statically determinate: exactly
 18 scalar unknowns against 6 bodies x 3 equilibrium equations.  Assembling and
 solving that 18x18 system at every crank angle is what :func:`solve` does.
 
-The determinant of that matrix is the same quantity the report's condition (4a)
-protects: at a critical configuration the mechanism gains a degree of freedom,
-the matrix goes singular, and the internal forces blow up.  The conditioning is
-reported in :attr:`DynamicLoads.conditioning` so the connection is visible.
+The determinant of that matrix is the same quantity condition (4a) protects: at
+a critical configuration the mechanism gains a degree of freedom, the matrix goes
+singular, and the internal forces blow up.  The conditioning is reported in
+:attr:`DynamicLoads.conditioning` so the connection is visible.
 
 Constant crankshaft speed
 -------------------------
-The report analyses the mechanism at constant ``Omega``, which is inherited
-here: ``d/dt = Omega d/dtheta_1`` exactly, with no angular acceleration of the
-crankshaft.  Two consequences worth stating, because they simplify the
-bookkeeping and are easy to get wrong:
+The mechanism is analysed at constant ``Omega``: ``d/dt = Omega d/dtheta_1``
+exactly, with no angular acceleration of the crankshaft.  Two consequences worth
+stating, because they simplify the bookkeeping and are easy to get wrong:
 
 * Both shaft assemblies turn at constant rate (``theta_2 = -2 theta_1 +
   theta_f``), so neither has an angular acceleration and neither contributes an
@@ -218,8 +218,7 @@ class DynamicLoads:
     """Worst 2-norm condition number of the 18x18 equilibrium matrix.
 
     Large values mean the mechanism is near a configuration where it gains a
-    degree of freedom -- exactly what the report's ``W`` constraint keeps it
-    away from.
+    degree of freedom -- exactly what the ``W`` constraint keeps it away from.
     """
 
     @property
@@ -342,8 +341,8 @@ def solve(
         gas_force: Gas force on the piston crown at each crank angle [N],
             positive downwards.
         properties: Body masses, centres of mass and inertias.
-        speed: Crankshaft speed ``Omega`` [rad/s].  Zero recovers the report's
-            quasi-static result exactly.
+        speed: Crankshaft speed ``Omega`` [rad/s].  Zero recovers the
+            quasi-static result of :mod:`exlink.loads` exactly.
         spec: Fixed engine data.
 
     Returns:
@@ -427,7 +426,7 @@ def solve(
     arm = contact_1 - properties.body_com["crank_1"]
     matrix[:, 2, _I_GEAR] += -(arm[:, 0] * line_of_action[1] - arm[:, 1] * line_of_action[0])
     # Signed so that the unknown is the torque delivered *out* of the
-    # crankshaft, matching the report's convention: the moment equation reads
+    # crankshaft: the moment equation reads
     # ``sum(M) - M_r = 0``, so a positive M_r is useful work out.
     matrix[:, 2, _I_TORQUE] += -1.0
     set_inertia(0, "crank_1")

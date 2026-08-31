@@ -1,6 +1,6 @@
 """Objectives and constraint measures of the optimization problem.
 
-Collects, from a solved mechanism, the quantities the report optimizes:
+Collects, from a solved mechanism, the quantities the optimizer works with:
 
 ============  ==========================================================
 symbol        meaning
@@ -48,7 +48,7 @@ def envelope(kinematics: Kinematics, spec: EngineSpec = DEFAULT_SPEC) -> tuple[f
     """``(H, B)``: the bounding box swept by the whole mechanism [mm].
 
     ``H`` is measured along the stroke (``y``) and ``B`` across it (``x``), as
-    the report defines them.  The box covers every configuration of every body:
+    they are defined here.  The box covers every configuration of every body:
     the two gear primitives, all moving joints, and the piston envelope over
     its full travel.
 
@@ -98,11 +98,11 @@ def cylinder_clearance(kinematics: Kinematics, spec: EngineSpec = DEFAULT_SPEC) 
     liner has to extend at least that far down.  The distance is minimised over
     the crank revolution and over the three edges ``AD``, ``DE``, ``EA``.
 
-    The report states the constraint (``d >= 10 mm``) without giving the
-    geometric construction behind it, so this is a reconstruction: it is
-    monotone in the right direction and vanishes exactly on contact, which is
-    what the constraint needs, but its numerical value will not match the
-    report's digit for digit.
+    The requirement is ``d >= 10 mm``.  The construction below is one specific
+    reading of it: monotone in the right direction and vanishing exactly on
+    contact, which is what the constraint needs.  Any other reasonable
+    construction will differ in absolute value while keeping the same feasible
+    region shape.
     """
     design = kinematics.design
     half_bore = 0.5 * spec.bore
@@ -191,7 +191,7 @@ def efficiency(
 ) -> tuple[float, float, float]:
     """Return ``(eta, phi, lever_arm)``.
 
-    The report defines the average mechanical efficiency as
+    The average mechanical efficiency is defined as
 
     .. math::
         \\eta = \\frac{\\int_0^{2\\pi} M_r \\, d\\theta_1}

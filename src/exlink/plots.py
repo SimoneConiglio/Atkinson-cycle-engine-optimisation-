@@ -1,6 +1,6 @@
 """Static matplotlib views of a design and of an optimization run.
 
-Every figure here is also a diagnostic used while reading the report:
+Every figure here doubles as a diagnostic:
 
 * :func:`plot_motion` shows the four monotone phases of ``lambda(theta_1)``.
   A design that is *not* Atkinson shows up immediately -- either as a single
@@ -9,8 +9,8 @@ Every figure here is also a diagnostic used while reading the report:
 * :func:`plot_cycle` shows the approximate Atkinson cycle in the ``p-V`` plane,
   where the expansion loop being longer than the compression loop is the whole
   point of the linkage.
-* :func:`plot_pareto` shows the efficiency-versus-size trade-off that the
-  report's multi-objective run produces.
+* :func:`plot_pareto` shows the efficiency-versus-size trade-off produced by a
+  multi-objective run.
 """
 
 from __future__ import annotations
@@ -550,7 +550,8 @@ def plot_efficiency_mass(
     reference: tuple[Design, Any] | None = None,
     **kwargs: Any,
 ) -> Figure:
-    """Efficiency against structural mass -- the trade the report could not see.
+    """Efficiency against structural mass -- the trade the geometric problem
+    cannot see.
 
     Nothing in the quasi-static formulation determines a cross-section, so mass
     is not an objective it can express. Once the parts are sized it becomes the

@@ -111,7 +111,7 @@ def test_format_analysis_explains_a_penalised_design() -> None:
 
 @pytest.mark.slow
 def test_the_augmented_lagrangian_makes_the_published_design_feasible() -> None:
-    """The report's own last step, reproduced.
+    """The augmented-Lagrangian polish, end to end.
 
     Started from the published table -- which does not satisfy its own
     constraints when re-analysed -- the augmented Lagrangian must land on a
@@ -245,7 +245,7 @@ def test_feasibility_tolerates_a_constraint_sitting_on_its_bound() -> None:
 
 
 def test_the_coupled_scenario_carries_the_dynamic_constraints() -> None:
-    """The MDF problem keeps the report's constraints and adds its own."""
+    """The MDF problem keeps the geometric constraints and adds its own."""
     from exlink.scenarios import COUPLED_INEQUALITY_OUTPUTS, build_coupled_scenario
 
     problem = build_coupled_scenario(speed_rpm=1000.0).formulation.optimization_problem
@@ -280,7 +280,7 @@ def test_the_bearing_margin_is_signed_against_its_limit() -> None:
 def test_backing_off_the_singularity_buys_mass_for_nothing() -> None:
     """The finding that makes the coupled problem worth solving.
 
-    The report's geometry sits at ``W = 0.981`` because that is where the
+    The baseline geometry sits at ``W = 0.981`` because that is where the
     quasi-static lever arm is longest. The same proximity to the singularity is
     what amplifies the accelerations, so once the parts must survive their own
     inertia it becomes the expensive choice -- and backing off costs no

@@ -1,6 +1,6 @@
 """GEMSEO problem formulations for the EX-link sizing problem.
 
-The report's final formulation is
+The quasi-static formulation is
 
 .. math::
     \\begin{cases}
@@ -13,30 +13,29 @@ The report's final formulation is
 with ``c = (mra - 10, W - 0.985, g - 0.01, 10 - d, \\gamma - 0.02)^T`` and
 ``c_eq = (STE - 74, \\epsilon - 16)^T``.
 
-Four entry points cover the workflow the report went through, in the order it
-went through it:
+Five entry points cover the strategies that apply to it, in the order a study
+would normally use them:
 
 :func:`maximise_efficiency`
-    Single objective, all constraints, global search.  The report's "big
-    population GA" step; :data:`DEFAULT_GLOBAL_ALGORITHM` is differential
-    evolution, which -- unlike NSGA-II -- handles the equality constraints
-    directly.
+    Single objective, all constraints, global search.
+    :data:`DEFAULT_GLOBAL_ALGORITHM` is differential evolution, which -- unlike
+    NSGA-II -- handles the equality constraints directly.
 
 :func:`refine`
-    Augmented Lagrangian polish from a starting design.  The report's last step,
-    taken because the external penalty function is accurate only for small ``r``
-    and badly conditioned when ``r`` is small.
+    Augmented Lagrangian polish from a starting design.  Worth having because
+    the external penalty function is accurate only for small ``r`` and badly
+    conditioned when ``r`` is small.
 
 :func:`pareto_front`
-    Multi-objective search over all three objectives.  The report's MOEA step.
+    Multi-objective search over all three objectives.
 
 :func:`local_pareto`
-    The trick that finally worked for the report: run the MOEA in a box shrunk
-    around a design already known to be good, rather than over the whole space.
+    The MOEA in a box shrunk around a design already known to be good, rather
+    than over the whole space -- which is what makes it work at all here.
 
 :func:`sweep_moving_limits`
-    The report's *first* Pareto method: keep efficiency as the only objective
-    and walk a moving upper limit on ``H`` and ``B`` down, re-solving each time.
+    Keep efficiency as the only objective and walk a moving upper limit on
+    ``H`` and ``B`` down, re-solving each time.
 """
 
 from __future__ import annotations
@@ -72,13 +71,13 @@ from .reference import PUBLISHED_DESIGN
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_GLOBAL_ALGORITHM = "DIFFERENTIAL_EVOLUTION"
-"""Global search used in place of the report's genetic algorithm."""
+"""Global search over the full design box."""
 
 DEFAULT_LOCAL_ALGORITHM = "Augmented_Lagrangian_order_0"
-"""Local refinement; the report's own final step."""
+"""Local refinement, accurate on the active constraints."""
 
 DEFAULT_MOEA = "PYMOO_NSGA2"
-"""Multi-objective evolutionary algorithm, the report's MOEA."""
+"""Multi-objective evolutionary algorithm."""
 
 OBJECTIVE_NAMES: tuple[str, str, str] = ("neg_efficiency", "height", "width")
 """``f(X) = (-eta, H, B)^T``."""
@@ -104,8 +103,8 @@ DEFAULT_EQUALITY_TOLERANCE: dict[str, float] = {
 An algorithm such as NSGA-II cannot take equality constraints.  Relaxing
 ``STE = 74`` to ``|STE - 74| <= 0.05 mm`` and ``epsilon = 16`` to
 ``|epsilon - 16| <= 0.05`` keeps the design within manufacturing tolerance of
-the specification -- the same pragmatism the report applies to ``g``, which it
-constrains to a tolerance rather than to zero.
+the specification -- the same pragmatism already applied to ``g``, which is
+constrained to a tolerance rather than to zero.
 """
 
 MOEA_EQUALITY_TOLERANCE: dict[str, float] = {
@@ -128,9 +127,8 @@ def moea_targets(
     """Relax ``g`` for a population-based run.
 
     Why this is necessary is worth stating plainly, because it is the same wall
-    the report hit ("the results were still disappointing ... even with big
-    population I still got solutions that were even worse than the ones I got
-    with the gradient based methods").
+    a population method hits on this problem: it returns solutions no better,
+    and often worse, than a local search from the same starting point.
 
     Sampling 2000 designs uniformly from a box around a known-good solution and
     testing each constraint on its own gives:
@@ -157,7 +155,7 @@ def moea_targets(
     device that maps the *shape* of the efficiency-versus-size trade-off.  The
     design finally quoted comes from :func:`refine`, which drives ``g``, ``STE``
     and ``epsilon`` back onto their true targets -- exactly the two-stage
-    workflow the report ends up with::
+    two-stage workflow::
 
         front = pareto_front()
         final = refine(front.design)
@@ -295,7 +293,7 @@ def _attach_constraints(
     max_height: float,
     max_width: float,
 ) -> None:
-    """Attach the report's constraints to a scenario."""
+    """Attach the formulation's constraints to a scenario."""
     for name in INEQUALITY_OUTPUTS:
         scenario.add_constraint(name, constraint_type="ineq")
 
@@ -420,8 +418,9 @@ def maximise_efficiency(
 ) -> Outcome:
     """Maximise ``eta`` subject to every constraint.
 
-    This is the report's single-objective step, with the size objectives either
-    dropped or turned into the moving limits ``max_height`` / ``max_width``.
+    The single-objective reading of the geometric problem, with the size
+    objectives either dropped or turned into the moving limits ``max_height`` /
+    ``max_width``.
 
     Args:
         algorithm: Any GEMSEO optimizer; the default is differential evolution.
@@ -474,10 +473,10 @@ def refine(
     sub_algorithm_settings: dict[str, Any] | None = None,
     **settings: Any,
 ) -> Outcome:
-    """Polish a design with the augmented Lagrangian, as the report's last step.
+    """Polish a design with the augmented Lagrangian.
 
-    The report reaches its published solution by taking a point off the Pareto
-    front and running an augmented Lagrangian from it, precisely because the
+    The natural last step of a penalty-based workflow: take a point off the
+    Pareto front and run an augmented Lagrangian from it, precisely because the
     external penalty function cannot be both accurate and well conditioned.
 
     Args:
@@ -567,8 +566,8 @@ def pareto_front(
         algorithm: A multi-objective algorithm; NSGA-II by default.
         bounds: The design box.
         initial: Starting design, used only by algorithms that take one.
-        pop_size: Population size.  The report needed at least 550 individuals
-            over the full space and grew to 2492; start smaller and grow.
+        pop_size: Population size.  Over the full space this needs hundreds of
+            individuals to find anything; start smaller and grow.
         max_gen: Generation budget.  On this problem it matters more than
             ``pop_size``: seeded in a box around a good design, 20 generations
             still return a single point whatever the population, because the
@@ -661,7 +660,7 @@ def local_pareto(
 ) -> Outcome:
     """Run the MOEA in a box shrunk around a known-good design.
 
-    This is the move that made the report's multi-objective step work: over the
+    This is the move that makes the multi-objective step work at all: over the
     full eleven-dimensional space the MOEA returned solutions worse than the
     gradient-based ones, but seeded near an existing optimum it produced a
     usable local front.  Combining several such fronts into one starting
@@ -689,7 +688,7 @@ def sweep_moving_limits(
 ) -> list[Outcome]:
     """Trace a Pareto front by walking a moving size limit downwards.
 
-    The report's first approach to the multi-objective problem: treat ``H`` (or
+    The epsilon-constraint approach to the multi-objective problem: treat ``H`` (or
     ``B``) as a constraint rather than an objective, solve for maximum
     efficiency, tighten the limit, and repeat.  Each solve is an ordinary
     single-objective problem, and the sequence of solutions traces the
@@ -763,7 +762,7 @@ def format_analysis(analysis: Analysis, title: str = "analysis") -> str:
 # =============================================================================
 # The coupled problem
 #
-# Everything above optimizes the report's own formulation, in which geometry
+# Everything above optimizes the quasi-static formulation, in which geometry
 # determines performance one way.  Adding the sizing discipline and inertia
 # closes a loop between them, so these scenarios use the MDF formulation: every
 # objective evaluation runs an MDA to convergence before the optimizer sees a
@@ -776,10 +775,10 @@ COUPLED_OBJECTIVE_NAMES: tuple[str, str, str, str] = (
     "width",
     "total_mass",
 )
-"""``f(X) = (-eta, H, B, M)^T``: the report's three objectives plus mass.
+"""``f(X) = (-eta, H, B, M)^T``: the three geometric objectives plus mass.
 
-Structural mass cannot appear in the report's formulation at all -- nothing in
-it determines a cross-section.  It only becomes an objective once the parts are
+Structural mass cannot appear in the quasi-static formulation at all -- nothing
+in it determines a cross-section.  It only becomes an objective once the parts are
 sized, and it is the objective the dynamics most affects.
 """
 
@@ -893,7 +892,7 @@ def build_coupled_scenario(
     """Assemble the coupled scenario, under the MDF formulation.
 
     Three disciplines take part.  :class:`~exlink.disciplines.ExlinkDiscipline`
-    supplies the report's own objectives and constraints and is feed-forward
+    supplies the geometric objectives and constraints and is feed-forward
     from the design variables.  The other two --
     :class:`~exlink.disciplines.DynamicsDiscipline` and
     :class:`~exlink.disciplines.StructureDiscipline` -- are strongly coupled to
@@ -977,9 +976,9 @@ def minimise_mass(
 ) -> Outcome:
     """Minimise total moving mass at a floor on efficiency.
 
-    The natural single-objective reading of the coupled problem: the report's
-    efficiency becomes a constraint to hold, and the mass the dynamics creates
-    becomes the thing to reduce.
+    The natural single-objective reading of the coupled problem: efficiency
+    becomes a constraint to hold, and the mass the dynamics creates becomes the
+    thing to reduce.
 
     Budget realistically, and note that the budget depends entirely on whether
     the solver has gradients.  With them (the default) a few dozen evaluations

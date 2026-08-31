@@ -1,41 +1,43 @@
-"""The design published in the 2015 report, and notes on reproducing it.
+"""Reference designs: one historical baseline and three results.
 
-The report closes with a table of the eleven design variables of its chosen
-solution and a table of that solution's properties.  :data:`PUBLISHED_DESIGN`
-is the first table; :data:`PUBLISHED_METRICS` is the second.
+:data:`PUBLISHED_DESIGN` is a **historical baseline** -- a design vector carried
+over from an earlier, unpublished MATLAB study of this mechanism (Universite de
+Technologie de Compiegne, 2015) by the same author.  It is kept as a *starting
+point*, not as a result, and everything needed to use it is stated here.
 
-Reproducing the second table from the first
+Why it is a starting point and not a result
 -------------------------------------------
-It does not reproduce, and the reason is instructive rather than alarming.
+Re-analysed as printed it violates five constraints.  Most tellingly it gives a
+top-dead-centre gap of ``g = 8.5 mm`` against a 0.01 mm bound, and
+``STE = 79.6 mm`` against a required 74 mm.  Since ``g`` is precisely the
+quantity such an optimization drives to zero, this vector cannot be the design
+that produced the properties recorded alongside it in that study.
 
-The published design sits at ``W = 0.982``, i.e. a hair away from the
-transmission-angle singularity ``W = 1`` that condition (4a) exists to keep it
-clear of.  Near that boundary the piston motion is violently sensitive to the
-link lengths: re-analysing the table as printed gives ``STE = 79.6 mm`` against
-the reported 73.98, and -- the telling one -- a top-dead-centre gap of
-``g = 8.5 mm`` against the reported 0.0069.  Since ``g`` is precisely the
-quantity the optimizer drove to zero, a design that misses it by three orders of
-magnitude cannot be the design that produced the second table.
+Rounding does not explain it.  The vector is given to four significant figures,
+and perturbing each variable by its rounding half-width moves ``STE`` by less
+than 0.2 mm.
 
-The table is printed to four significant figures.  Perturbing each variable by
-its rounding half-width moves ``STE`` by less than 0.2 mm, so rounding alone
-does not explain the gap either; the printed values are a rounded record of a
-design that the report's own MATLAB code would also fail to reproduce.
+The real reason is conditioning, and it generalises.  The vector sits at
+``W = 0.982``, a hair from the transmission-angle singularity at ``W = 1``, where
+the piston motion is violently sensitive to the link lengths.  A design in that
+region is not reproducible to four digits across two independent
+implementations -- a property of where the optimum sits, not of either
+implementation.  That same proximity to the singularity is what
+:mod:`exlink.dynamics` later shows to be the expensive place to be once inertia
+enters the load path.
 
-What *does* hold up is the model.  Sweeping the two crank angles about the
-published values recovers the reported figures closely -- ``theta_f = 86 deg``,
-``theta_r = -30 deg`` gives ``W = 0.9817`` (reported 0.9817) and
-``mra = 6.7 deg`` (reported 7.55) -- and the force chain reproduces the
-virtual-work torque to machine precision at every crank angle.
+Sweeping the two crank angles about the baseline values does recover its
+recorded figures closely -- ``theta_f = 86 deg``, ``theta_r = -30 deg`` gives
+``W = 0.9817`` and ``mra = 6.7 deg`` -- so the *model* agrees; it is the vector
+that is not reproducible.
 
-So this package treats the published table as a *starting point*, not as an
-answer to be matched.  :data:`REFINED_DESIGN` is what the framework produces
-when the augmented Lagrangian is run from it; it is genuinely feasible, and it
-is what the tests and examples use.
-
-One correction is folded into the code: the report's printed inversion of the
-trigonal-link moment equation has a sign slip in the swing-rod load ``A``.  See
-:mod:`exlink.loads`.
+The three results
+-----------------
+============================  ==========================================
+:data:`REFINED_DESIGN`        augmented Lagrangian, ``eta = 27.87 %``
+:data:`GRADIENT_DESIGN`       SLSQP with exact gradients, ``eta = 30.77 %``
+:data:`COUPLED_DESIGN`        coupled sizing, ``0.234 kg`` at 1000 rpm
+============================  ==========================================
 """
 
 from __future__ import annotations
@@ -55,7 +57,11 @@ PUBLISHED_DESIGN = Design(
     theta_f=111.1,
     theta_r=-43.1,
 )
-"""The design vector tabulated at the end of the 2015 report."""
+"""Historical baseline: the design vector from the earlier MATLAB study.
+
+Infeasible when re-analysed -- see the module docstring.  Used as a starting
+point for the optimizers, and as the "before" in every comparison here.
+"""
 
 PUBLISHED_METRICS: dict[str, float] = {
     "efficiency": 0.2776,
@@ -72,10 +78,10 @@ PUBLISHED_METRICS: dict[str, float] = {
 }
 """The properties tabulated for that design.
 
-``torque_pressure_ratio`` is reported as "94.46%".  The report defines
-``phi = M_r,ave / p_ave``, which has the dimension of a volume; no normalisation
-turning it into a percentage is given, so the figure is recorded here as
-printed but is not compared against.
+``torque_pressure_ratio`` was recorded there as "94.46%".  With
+``phi = M_r,ave / p_ave`` that quantity has the dimension of a volume and no
+normalisation turning it into a percentage was given, so it is kept here for
+completeness but never compared against.
 """
 
 
@@ -99,11 +105,11 @@ Nelder-Mead sub-problems) from the published table, in successively tighter
 boxes, with a small margin held on the active constraints so that the design
 stays feasible at any crank-angle resolution.
 
-It lands remarkably close to the report's own published *properties*, which is
-the real evidence that this reconstruction is faithful:
+It lands close to the *properties* recorded in the earlier study, which is
+worth noting even though those numbers are not independently verifiable:
 
 ==========  ==========  ==========
-quantity    this        report 2015
+quantity    this        earlier study
 ==========  ==========  ==========
 ``eta``     27.87 %     27.76 %
 ``W``       0.9811      0.9817
@@ -116,9 +122,9 @@ quantity    this        report 2015
 ``H``       238.6 mm    256.7 mm
 ==========  ==========  ==========
 
-``d`` is not compared: the report gives the constraint but not the geometric
-construction behind it, so :func:`exlink.metrics.cylinder_clearance` is a
-reconstruction (see its docstring).
+``d`` is not compared: no geometric construction for the clearance was recorded,
+so :func:`exlink.metrics.cylinder_clearance` defines its own (see its
+docstring).
 
 Reproduce it with::
 
@@ -155,18 +161,18 @@ GRADIENT_DESIGN = Design(
 )
 """What a gradient-based search finds, starting from the published table.
 
-SLSQP with the exact Jacobians of :mod:`exlink.jacobian`, run on the report's
-own single-objective problem (maximise ``eta`` subject to every constraint),
-from :data:`PUBLISHED_DESIGN`.  It reaches **eta = 30.77 %** against the
-report's 27.76 % and the 27.87 % of :data:`REFINED_DESIGN`, and it is feasible
-at every crank-angle resolution from 720 samples up.
+SLSQP with the exact Jacobians of :mod:`exlink.jacobian`, on the single-objective
+geometric problem (maximise ``eta`` subject to every constraint), started from
+:data:`PUBLISHED_DESIGN`.  It reaches **eta = 30.77 %** against the 27.87 % of
+:data:`REFINED_DESIGN`, and is feasible at every crank-angle resolution from 720
+samples up.
 
 It is not a strictly better engine, and the comparison should not be read that
 way: with no limit on the envelope in this formulation, it buys the efficiency
 partly with size, growing to ``H = 320 mm`` against 239 mm.  What it does show
-is that the report's augmented-Lagrangian step stopped well short of the
-efficiency available to it -- three points of it -- and that the reason was the
-method rather than the mechanism.
+is that a derivative-free polish stops well short of the efficiency available at
+comparable feasibility -- three points of it -- and that the limit is the method
+rather than the mechanism.
 
 Reproduce it with::
 

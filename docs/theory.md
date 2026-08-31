@@ -1,7 +1,9 @@
 # Theory
 
-The mathematics behind `exlink`, and where this reconstruction departs from the
-2015 report. Symbols follow the report; the code follows the symbols.
+The mathematics behind `exlink`: the kinematic inversion, the cycle model, the
+load analysis, the sizing criteria, the optimization formulation, and the exact
+derivatives of all of it. Symbols are defined where they first appear, and the
+code follows them.
 
 Units throughout: **mm**, **rad** (degrees only at the API surface), **N**,
 **MPa** = N/mm², **N·mm**.
@@ -22,15 +24,16 @@ rigid triangle `A–D–E`; the piston rod `e` runs `E → P`; the piston crown 
 
 Describing the triangle by its three sides `b`, `c`, `d` would force the design
 space to respect the triangle inequality, and would leave the sign of `θ_b`
-undetermined. The report instead places `E` in the frame carried by `c = AD`:
+undetermined. `E` is therefore placed in the frame carried by `c = AD`:
 
     b = √(x_b² + y_b²)      θ_b = atan2(y_b, x_b)      d = √((x_b − c)² + y_b²)
 
 Now `x_b` and `y_b` range freely over ℝ, `θ_b` carries its own sign, and the design
 space is a plain box. `Design.b`, `.theta_b`, `.d` in `exlink/design.py`.
 
-This is checked against the report's own Carnot expression
-`θ_b = arccos((b² + c² − d²)/(2bc))` in `tests/test_design.py`.
+The two routes to `θ_b` — this one and the Carnot expression
+`θ_b = arccos((b² + c² − d²)/(2bc))` — are checked against each other in
+`tests/test_design.py`.
 
 ---
 
@@ -84,17 +87,15 @@ Then, with `q = atan2(a sin T, a cos T + c)`:
 
     λ = q₁ cos θ₁ + a sin θ_a + b sin(θ_b + θ_T) + e sin θ_e + p
 
-> **Departure.** The report's equation (7) omits the constant `+ p`, so its `λ`
-> is the height of the wrist pin `P`, not of the crown `H`. It is restored here
-> so the two agree with the figure. Being constant it cancels out of every stroke
-> and volume, so nothing downstream changes.
+Note the constant `+ p`: `λ` is the height of the crown `H`, not of the wrist
+pin `P`. Being a constant it cancels out of every stroke and volume, so only the
+absolute datum depends on it.
 
 **Why the analytic inversion matters.** Newton–Raphson would solve the same
 equations. But `δ_c1` and `δ_c2` only exist because the inversion is explicit, and
 handing those two numbers to the optimizer — instead of letting the analysis
 diverge — is what turns a problem full of hard failures into one with a usable
-search landscape. The report makes this point, and it is the single most
-important idea in the study.
+search landscape. It is the single most important modelling decision here.
 
 **Critical configurations.** `|cos T| = 1` means `a` and `c` are parallel: the
 swing rod stops working as a rod and the mechanism gains a degree of freedom.
@@ -139,9 +140,8 @@ Volume and pressure, with `A_p = πΦ²/4` the bore area:
 The gas force on the crown uses the **gauge** pressure, `P_gas = (P − P₀)·A_p`, so
 intake and exhaust are unloaded.
 
-> **Departure.** The report writes compression as `P = P₀(V/V₁)^γ`, which would
-> make pressure *fall* as the charge is compressed. The exponent sign is a typo:
-> its own `P₂ = P₀ε^γ` requires `P = P₀(V₁/V)^γ`, which is what is implemented.
+Note the sense of the compression exponent: `P = P₀(V₁/V)^γ`, so pressure rises
+as the charge is compressed, and at `V = V₀` it gives `P₂ = P₀ ε^γ` as it must.
 
 Given `Φ = 32 mm`, `V₀ = 3 cc` and `ε = 16`, the compression stroke is pinned at
 `STC = 15·V₀/A_p ≈ 55.95 mm` against `STE = 74 mm` — the asymmetry the linkage
@@ -173,17 +173,17 @@ Writing `DE = b·u(θ_b + θ_T) − c·u(θ_T)` and `u_e = (cos θ_e, sin θ_e)`
 
     Q_x = C cos θ_e − A cos θ_a        Q_y = C sin θ_e − A sin θ_a
 
-> **Departure — a sign correction.** The report prints this inversion **without
-> the leading minus sign**. With its sign, the computed torque disagrees with the
-> principle of virtual work by a factor of about −4, and the efficiency comes out
-> negative. With the sign above, agreement is exact. See §6.
+> **The leading minus sign matters.** Drop it — an easy slip when inverting the
+> moment equation — and the computed torque disagrees with the principle of
+> virtual work by a factor of about −4, with the efficiency coming out negative.
+> With the sign above, agreement is exact. This is what the check in §6 is for.
 
 Note `sin(θ_a − θ_T) = sin T` in the denominator: the swing-rod load blows up at
 exactly the critical configurations condition (4a) excludes — a second,
 independent reason to enforce it.
 
 **Shafts.** With `α` the gear pressure angle (20°, the standard involute value;
-the report writes `α` symbolically but never gives a number):
+20° is the standard involute value and is used throughout):
 
     T_gear = −q₂(Q_y sin θ₂ + Q_x cos θ₂) / (r₂ cos α)
 
@@ -194,16 +194,15 @@ with `ω₂ = −2ω₁` and `r₁ = 2r₂` the pair transmits no net power — 
 explicitly in `tests/test_loads.py`, since a gear pair that generated power would
 silently inflate the efficiency.
 
-> **Departure.** The report's bearing reactions `R₁ₓ = A cos θ_a + T sin α` and
-> `R₁ᵧ = A sin θ_a − T cos α` drop the `θ_r` dependence of the tooth-force
-> direction. They should read `sin(θ_r + α)` and `cos(θ_r + α)`, as implemented.
-> These reactions feed nothing downstream, so only their own values change.
+The bearing reactions carry the tooth-force direction in full,
+`R₁ₓ = A cos θ_a + T sin(θ_r + α)` and `R₁ᵧ = A sin θ_a − T cos(θ_r + α)`: the
+line of action rotates with the shaft axis `θ_r`, not with `α` alone.
 
 ---
 
 ## 5. Objectives and constraints
 
-**Efficiency.** The report's average mechanical efficiency:
+**Efficiency.** The average mechanical efficiency is defined as:
 
     η = ∮M_r dθ₁ / (2(STE + STC)·⟨P⟩) = (⟨M_r⟩/⟨P⟩) · π/(STE + STC)
 
@@ -212,9 +211,9 @@ piston. It measures the linkage's aptitude for turning force into torque, and it
 grows without bound as the mechanism grows. That unboundedness is exactly why `H`
 and `B` must enter the problem.
 
-`φ = ⟨M_r⟩/⟨p⟩` is also reported. It has the dimension of a volume; the report
-prints it as "94.46 %" with no stated normalisation, so `exlink` computes it in
-mm³ and does not compare against that figure.
+A companion measure `φ = ⟨M_r⟩/⟨p⟩`, the torque-per-unit-pressure ratio, is also
+computed. It has the dimension of a volume and `exlink` reports it in mm³; it is
+proportional to `η` at fixed stroke, so it adds no independent information.
 
 **Envelope.** `H` along the stroke, `B` across it: the bounding box of every body
 over every configuration — joints, both gear primitives, and the piston over its
@@ -222,13 +221,12 @@ full travel.
 
 **Clearance `d`.** The trigonal link must stay 10 mm clear of the cylinder.
 
-> **Departure.** The report states this constraint but not the construction
-> behind it. `cylinder_clearance` models the liner as the half-strip
+> **An idealisation.** `cylinder_clearance` models the liner as the half-strip
 > `x ∈ [x₁ ± Φ/2]`, `y ≥ y_bottom`, with `y_bottom` the lowest point the piston
 > skirt reaches, and minimises the distance from the three triangle edges over
 > the revolution. It is monotone in the right direction and vanishes on contact,
 > which is what the constraint needs — but its numerical value is not expected to
-> match the report's.
+> a detailed CAD clearance check.
 
 **Final formulation.**
 
@@ -252,7 +250,7 @@ power in equals power out:
 Every step of the chain — piston, trigonal link, both shafts, the gear pair —
 must conspire to satisfy this at *every* crank angle. `exlink` reproduces it to
 machine precision (`tests/test_loads.py`), which is what exposed the sign slip in
-§4: with the report's printed sign, the two disagree by a factor of about −4.
+§4: with the sign dropped, the two disagree by a factor of about −4.
 
 A second, independent route: the mean torque must equal the indicated p–V loop
 area divided by 2π. That is also checked, and it never touches the force chain.
@@ -264,15 +262,16 @@ model to be wrong in a way the tests would not see.
 
 ## 7. Numerical procedure
 
-The report's own sequence, and its counterpart here:
+A sequence that works on this problem, and what implements each stage:
 
 1. **External penalty**, `F(X) = −η + r⁻²(c_eqᵀc_eq + ⟨c⟩ᵀ⟨c⟩)`, turning the
    constrained problem into an unconstrained one — `PenalisedExlinkDiscipline`.
    Accurate only for small `r`, badly conditioned when `r` is small; that
-   trade-off is why the report finishes with an augmented Lagrangian.
+   trade-off is why a penalty method wants an augmented Lagrangian to finish.
 2. **Local solvers** (conjugate gradient, simplex) — start-point dependent, and
    the problem is strongly non-convex. `NELDER-MEAD`, `SLSQP`, `NLOPT_COBYLA`.
-3. **Global search.** The report needed ≥ 550 individuals over 11 variables.
+3. **Global search.** Over 11 variables this needs a large population — ≥ 550
+   individuals in the MATLAB study this problem originates from.
    `DIFFERENTIAL_EVOLUTION`, via `maximise_efficiency`.
 4. **MOEA.** Over the full box it returned solutions *worse* than the
    gradient-based ones. What worked was shrinking the box around an already-good
@@ -285,8 +284,8 @@ The report's own sequence, and its counterpart here:
    `Augmented_Lagrangian_order_0`.
 
 Because NSGA-II takes no equality constraints, `relax_equalities` rewrites each
-as a pair of one-sided inequalities, `|residual| ≤ tol` — the same pragmatism the
-report applies to `g`.
+as a pair of one-sided inequalities, `|residual| ≤ tol` — the same pragmatism
+already applied to `g`, which is constrained to a tolerance rather than to zero.
 
 Two practical notes on the multi-objective stage, both measured:
 
@@ -322,37 +321,39 @@ generation budget be the budget that applies.
 
 ---
 
-## 8. On reproducing the published solution
+## 8. The historical baseline, and why the problem is ill-conditioned
 
-Re-analysed exactly as printed, the report's design table gives `g = 8.5 mm`
-against its reported 0.0069, and `STE = 79.6 mm` against 73.98. Since `g` is
-precisely the quantity the optimizer drove to zero, the printed table cannot be
-the design that produced the reported properties.
+`exlink.reference.PUBLISHED_DESIGN` is a design vector carried over from the
+earlier MATLAB study this problem originates from (see the README's *Provenance*
+section). It is kept as a **starting point**, not as a result, and re-analysing it
+shows why.
 
-Rounding does not explain it: the table is printed to four significant figures,
-and perturbing each variable by its rounding half-width moves `STE` by less than
-0.2 mm. The design sits at `W = 0.982`, a hair from the singularity at `W = 1`,
-where the piston motion is extremely sensitive to the link lengths — which is
-also why a 2015 MATLAB script and a 2026 Python one would not agree to four
-digits even given identical formulae.
+As printed it gives `g = 8.5 mm` against a 0.01 mm bound and `STE = 79.6 mm`
+against a required 74 mm — five constraints violated in all. Rounding does not
+explain that: the vector is given to four significant figures, and perturbing
+each variable by its rounding half-width moves `STE` by less than 0.2 mm.
 
-What *does* reproduce is the physics and the workflow. Running the report's own
-final step — the augmented Lagrangian, started from the published table — lands
-on a fully feasible design at **η = 27.87 %** against the reported 27.76 %, with
-`W`, `g`, `STE`, `ε` and `γ` all matching closely (see the table in the README).
-That design ships as `exlink.reference.REFINED_DESIGN`.
+The reason is conditioning, and it generalises well beyond this one design.
+The vector sits at `W = 0.982`, a hair from the singularity at `W = 1`, and there
+the piston motion is violently sensitive to the link lengths. A design in that
+region is not reproducible to four digits across two independent
+implementations — which is a property of the optimum's *location*, not of either
+implementation, and is the first hint of the result in §9.5: the quasi-statically
+optimal design sits exactly where the mechanism is worst conditioned.
+
+Started from it, an augmented Lagrangian reaches a fully feasible design at
+**η = 27.87 %**, shipped as `exlink.reference.REFINED_DESIGN`. That is the
+quasi-static reference point the rest of this document measures against.
 
 
 ---
 
 ## 9. Sizing the parts, and the coupling that creates
 
-The report stops before this deliberately:
-
-> to have the masses of the pieces we have to know their shape so we should have
-> a first design, so those passages are for another iteration.
-
-That iteration is `exlink.dynamics`, `exlink.sizing` and `exlink.coupled`. It
+A quasi-static study cannot size the parts, and the obstruction is circular: the
+inertia loads need the part masses, the masses need the cross-sections, and the
+cross-sections need the loads. `exlink.dynamics`, `exlink.sizing` and
+`exlink.coupled` close that loop. It
 closes a loop the quasi-static study does not have:
 
 ```
@@ -365,11 +366,11 @@ closes a loop the quasi-static study does not have:
 Neither half can go first. That is a genuine multidisciplinary coupling, and it
 has to be **solved** rather than sequenced.
 
-### 9.1 Why the report's solution method cannot just be extended
+### 9.1 Why sequential elimination cannot just be extended
 
 Without inertia every rod is a **two-force member**: the forces at its two ends
 are equal, opposite and collinear with the rod. That is exactly what lets the
-report eliminate unknowns one body at a time, piston to crankshaft.
+loads be eliminated one body at a time, piston to crankshaft.
 
 Add mass and that collapses. A rod with a distributed d'Alembert load has end
 forces that are neither collinear nor equal, so no body can be solved before its
@@ -401,8 +402,8 @@ the inertia forces and, through them, the sizing loop. Angles that accumulate
 whole turns — `theta_2 = −2 theta_1 + theta_f` — are split into ramp plus
 periodic part first (`exlink.derivatives`).
 
-Constant crankshaft speed is inherited from the report, and simplifies the
-bookkeeping in two ways worth stating:
+Constant crankshaft speed is assumed throughout, which simplifies the bookkeeping
+in two ways worth stating:
 
 - both shafts turn at constant rate, so neither has angular acceleration and
   neither contributes an inertia couple;
@@ -468,8 +469,8 @@ and plain Gauss-Seidel reaches it — but slowly, and with a mass that grows as 
 *cube* of the acceleration level, hence the **sixth power of engine speed**.
 That is why `MDAGaussSeidel` is the right MDA here (no coupled Jacobians needed,
 and the bisection has no useful derivative to give a Newton method anyway), and
-why speed — which never appears in the report — becomes one of the strongest
-drivers in the problem.
+why engine speed — which does not appear in the quasi-static problem at all —
+becomes one of the strongest drivers here.
 
 ### 9.5 What the dynamics changes
 
@@ -482,9 +483,9 @@ therefore *untouched* by speed. Only the peaks change — and the peaks are what
 size the parts. With the gas load switched off, every reaction scales as exactly
 `Ω²`.
 
-**The quasi-static optimum is the wrong answer.** The report's design sits at
-`W = 0.981`, a hair from the singularity, because that is where the quasi-static
-lever arm is longest. But proximity to the singularity is also what amplifies
+**The quasi-static optimum is the wrong answer.** Maximising efficiency without
+inertia drives the design to `W = 0.981`, a hair from the singularity, because
+that is where the quasi-static lever arm is longest. But proximity to the singularity is also what amplifies
 velocities and accelerations: joint `A` sees 75× the crank pin's acceleration.
 Backing off costs nothing and saves almost everything:
 
@@ -504,15 +505,15 @@ out.
 ```
 l_b ≤ X ≤ u_b
 min  f(X)    = (−η, H, B, M)ᵀ
-s.t. c(X)    ≤ 0     the report's five, plus
+s.t. c(X)    ≤ 0     the five of §5, plus
                      saturation_margin   loop ran away, no section is thick enough
                      slenderness_margin  a "rod" thicker than a third of its length
                      bearing_margin      peak reaction against its limit
      c_eq(X) = 0
 ```
 
-Structural mass cannot appear in the report's formulation at all — nothing in it
-determines a cross-section. It only becomes an objective once the parts are
+Structural mass cannot appear in a quasi-static formulation at all — nothing in
+one determines a cross-section. It only becomes an objective once the parts are
 sized, and it is the objective the dynamics most affects.
 
 Under GEMSEO this is the **MDF** formulation: `ExlinkDiscipline` is feed-forward
@@ -534,7 +535,7 @@ with sides of tens of millimetres, while `W` and `γ` sit within 0.4 % and 7 % o
 their bounds. A derivative-free method cannot work in that: COBYLA returns its
 starting point unchanged after 313 s, and loosening the bands does not help.
 
-Everything the report derives is closed form, so the derivatives are too.
+The whole analysis chain is closed form, so its derivatives are too.
 
 ### 10.1 The two ideas
 

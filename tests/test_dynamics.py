@@ -38,7 +38,7 @@ def test_zero_speed_reproduces_the_quasi_static_chain(solved, properties) -> Non
     """The whole point of building the 18x18 system: it must contain the old one.
 
     With no inertia every rod becomes a two-force member again and the
-    simultaneous solve has to return exactly what the report's sequential
+    simultaneous solve has to return exactly what the sequential
     elimination gives -- torque, joint forces, gear load and all.
     """
     loads = solve_dynamics(
@@ -202,7 +202,7 @@ def test_every_member_has_a_length(solved) -> None:
 def test_the_equilibrium_matrix_is_well_conditioned(solved, properties) -> None:
     """Far from the singularity the 18x18 system should solve cleanly.
 
-    The condition number is the same quantity the report's ``W`` constraint
+    The condition number is the same quantity the ``W`` constraint
     protects; a design inside that constraint must not be near-singular.
     """
     loads = solve_dynamics(

@@ -1,6 +1,6 @@
 """Trace the efficiency-versus-size trade-off, two ways.
 
-The report tried both: moving limits on the envelope with a single-objective
+Two routes are available: moving limits on the envelope with a single-objective
 solver, and a multi-objective evolutionary algorithm. Moving limits are the
 robust route on this problem -- see the note in ``exlink.scenarios``.
 

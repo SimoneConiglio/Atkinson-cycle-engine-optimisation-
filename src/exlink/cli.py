@@ -244,7 +244,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="exlink",
         description=(
             "Optimization of the EX-link Atkinson-cycle engine mechanism "
-            "(GEMSEO reconstruction of a 2015 study)."
+            "of an extended-expansion (Atkinson) engine linkage."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="design variables:\n"

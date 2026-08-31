@@ -30,7 +30,7 @@ def at_speed():
 def test_there_is_no_coupling_at_rest(at_rest) -> None:
     """Without inertia the masses do not feed back, so one sweep settles it.
 
-    This is the report's own problem: sizing is a post-processing step, not a
+    This is the geometric problem: sizing is a post-processing step, not a
     loop. It takes a second sweep only to confirm nothing moved.
     """
     assert at_rest.converged

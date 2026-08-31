@@ -1,7 +1,8 @@
 """Quasi-static force analysis of the linkage.
 
-Inertia forces and torques are neglected, as in the report: this is a first
-sizing iteration, and the masses are not known until the parts have a shape.
+Inertia forces and torques are neglected here: this is a first sizing
+iteration, and the masses are not known until the parts have a shape.
+:mod:`exlink.dynamics` restores them.
 The chain runs from the piston down to the two shafts.
 
 **Piston.** With ``P`` the gas force on the crown and ``theta_e`` the piston-rod
@@ -81,7 +82,7 @@ class Loads:
 
     @property
     def side_load_ratio(self) -> float:
-        """``gamma = max(D) / max(P)``, the report's side-load limit."""
+        """``gamma = max(D) / max(P)``, the piston side-load ratio."""
         peak = float(np.max(np.abs(self.piston_force)))
         if peak == 0.0:
             return float("inf")
@@ -133,11 +134,12 @@ def solve(
     lever = de_x * sin_e - de_y * cos_e
     # NOTE the leading minus sign.  Expanding ``DA ^ F_A + DE ^ F_E = 0`` gives
     # ``-c A sin(theta_a - theta_T) - C (DE ^ u_e)_z = 0``, so the swing-rod load
-    # is the *negative* of the expression printed in the report -- a sign slip
-    # there.  With the sign below the chain reproduces the virtual-work torque
-    # ``-P dlambda/dtheta_1`` to machine precision at every crank angle, which
-    # is exactly the identity the report appeals to when it defines ``eta``;
-    # with the report's sign it does not.  See ``tests/test_loads.py``.
+    # is the *negative* of what a careless expansion of the cross products gives
+    # -- an easy sign to drop, and it costs a factor of -4 in the crank torque.
+    # With the sign below the chain reproduces the virtual-work torque
+    # ``-P dlambda/dtheta_1`` to machine precision at every crank angle, which is
+    # exactly the identity ``eta`` is defined against; with the other sign it does
+    # not.  See ``tests/test_loads.py``.
     swing_force = -rod_force * lever / (c * np.sin(theta_a - theta_T))
 
     reaction_x = rod_force * cos_e - swing_force * np.cos(theta_a)
