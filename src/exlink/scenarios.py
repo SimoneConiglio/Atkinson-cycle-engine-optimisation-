@@ -385,13 +385,53 @@ def build_scenario(
     return scenario
 
 
-def _best_design(scenario: BaseScenario, objective: str = "neg_efficiency") -> Design:
-    """Extract the best design from a solved single-objective scenario."""
+def _best_design(
+    scenario: BaseScenario,
+    objective: str = "neg_efficiency",
+    fallback: Design | None = None,
+) -> Design:
+    """Extract the best design from a solved single-objective scenario.
+
+    The design space does not always carry all eleven variables: the range
+    problem pins ``I`` to the gear lattice and leaves it out, so the optimizer
+    returns ten.  A missing entry is read back from the disciplines' own
+    default input data, which is where :func:`build_range_scenario` put the
+    pinned value and therefore what the disciplines were actually run with --
+    rather than from the caller, who would have to re-derive it and could get
+    it wrong.
+
+    Args:
+        scenario: A solved scenario.
+        objective: The objective that was minimised.
+        fallback: Last resort for a variable that is in neither the design
+            space nor any discipline's defaults; the reference design if
+            omitted.
+
+    Returns:
+        The best design found.
+    """
+    del objective
     problem = scenario.formulation.optimization_problem
     solution = problem.solution
     if solution is not None and solution.x_opt is not None:
-        return Design.from_array(solution.x_opt)
-    return Design.from_array(problem.database.get_x_vect(-1))
+        vector = solution.x_opt
+    else:
+        vector = problem.database.get_x_vect(-1)
+
+    names = list(problem.design_space.variable_names)
+    if len(names) == len(VARIABLE_NAMES):
+        return Design.from_array(vector)
+
+    base = (PUBLISHED_DESIGN if fallback is None else fallback).to_array()
+    values = dict(zip(names, np.asarray(vector, dtype=float).ravel(), strict=True))
+    for discipline in scenario.disciplines:
+        defaults = discipline.default_input_data
+        for index, name in enumerate(VARIABLE_NAMES):
+            if name not in values and name in defaults:
+                base[index] = float(np.ravel(defaults[name])[0])
+    return Design.from_array(
+        [values.get(name, base[index]) for index, name in enumerate(VARIABLE_NAMES)]
+    )
 
 
 def _run(
@@ -1451,7 +1491,7 @@ def maximise_range(
         ``(speed, module, teeth)`` to the range reached.  Combinations where
         nothing feasible was found map to zero.
     """
-    from .gears import lattice_neighbours
+    from .gears import lattice_inter_axle, lattice_neighbours
     from .performance import evaluate
     from .reference import COUPLED_DESIGN
 
@@ -1477,7 +1517,8 @@ def maximise_range(
             except Exception:  # a failed combination is data, not an error
                 history[key] = 0.0
                 continue
-            candidate = _best_design(scenario, objective="neg_range")
+            pinned = start.replace(I=lattice_inter_axle(module, teeth))
+            candidate = _best_design(scenario, objective="neg_range", fallback=pinned)
             outcome = evaluate(candidate, speed_rpm=speed, module=module, teeth=teeth)
             value = outcome.km_per_litre if outcome.feasible else 0.0
             history[key] = value
