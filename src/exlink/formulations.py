@@ -33,9 +33,28 @@ all, but the design space grows by the 7 diameters and 7 equality constraints
 come with them.
 
 The textbook trade is that IDF wins when the MDA is expensive and loses when
-the coupling variables are numerous.  Here the MDA is expensive *and* the
-coupling variables are numerous, so the answer is not obvious from theory and
-has to be measured.  :func:`compare_formulations` measures it.
+the coupling variables are numerous.  Here the MDA is expensive, so the trade
+looks open -- until the coupling is counted.
+
+It is not close.  The strong couplings are ``diameters`` and ``piston_mass``,
+which are small, and ``member_axial`` and ``member_bending``, which are not
+scalars at all: they are the internal load history of every member, at every
+crank angle, at every station along it.  That is **45 367 coupling scalars
+against 11 design variables**.  IDF would carry all of them in the design space
+with a matching consistency constraint each, to optimise eleven real degrees of
+freedom.
+
+So the formulation question has a decisive answer on this problem, and it is
+structural rather than a matter of timing: IDF is not slower here, it is
+unavailable.  :func:`coupling_dimension` reports the count and
+:func:`compare_formulations` runs both anyway, because an attempt that fails
+for a stated reason is a better answer than an assertion.
+
+The general lesson is worth separating from this mechanism.  IDF's cost scales
+with the *dimension* of the coupling, and a discipline pair that exchanges
+distributed fields -- load histories, pressure distributions, temperature
+fields -- rather than a handful of scalars will always sit on the wrong side of
+that trade, however expensive its MDA.
 
 One asymmetry is worth stating in advance, because it is a property of this
 problem rather than of the formulations in general: intermediate IDF iterates
@@ -289,4 +308,71 @@ def format_coupling(measurements: list[CouplingStrength]) -> str:
             f"  {item.speed_rpm:>7.0f}{item.rho:>10.4f}{item.sweeps:>9}"
             f"{rendered:>13}   {item.descriptor}"
         )
+    return "\n".join(lines)
+
+
+def coupling_dimension(
+    samples: int | None = None, stations: int | None = None
+) -> dict[str, int]:
+    """How many scalars the two coupled disciplines exchange.
+
+    This is the number that decides the formulation question, and it is not
+    close.  The strong couplings here are ``diameters``, ``piston_mass`` and --
+    dominating everything -- ``member_axial`` and ``member_bending``, which are
+    not scalars but the *internal load history of every member, at every crank
+    angle, at every station along it*.
+
+    IDF puts every coupling variable into the design space with a matching
+    consistency constraint.  With 11 real degrees of freedom and tens of
+    thousands of coupling scalars, that trade is not merely unfavourable, it is
+    unavailable: the optimizer would carry four orders of magnitude more
+    variables than the problem has.
+
+    Args:
+        samples: Crank angles per revolution; the package default if omitted.
+        stations: Sections along each member; the package default if omitted.
+
+    Returns:
+        ``{variable: size}`` plus ``"total"`` and ``"design_variables"``.
+    """
+    from .design import VARIABLE_NAMES
+    from .disciplines import COUPLED_SAMPLES
+    from .dynamics import MEMBER_NAMES
+    from .sizing import STATIONS
+
+    n_angles = COUPLED_SAMPLES if samples is None else samples
+    n_stations = STATIONS if stations is None else stations
+    history = len(MEMBER_NAMES) * n_angles * n_stations
+    sizes = {
+        "member_axial": history,
+        "member_bending": history,
+        "diameters": len(MEMBER_NAMES),
+        "piston_mass": 1,
+    }
+    sizes["total"] = sum(sizes.values())
+    sizes["design_variables"] = len(VARIABLE_NAMES)
+    return sizes
+
+
+def format_formulations(rows: list[FormulationResult]) -> str:
+    """Render a formulation comparison, with the coupling dimension that explains it."""
+    sizes = coupling_dimension()
+    lines = ["formulation comparison", "=" * 22, ""]
+    lines.append(f"  {'name':<6}{'objective':>12}{'evals':>8}{'seconds':>10}{'feasible':>10}")
+    for row in rows:
+        objective = "n/a" if not np.isfinite(row.objective) else f"{row.objective:.4f}"
+        lines.append(
+            f"  {row.name:<6}{objective:>12}{row.evaluations:>8}"
+            f"{row.seconds:>10.1f}{row.feasible!s:>10}"
+        )
+        if row.error:
+            lines.append(f"      {row.error[:100]}")
+    lines.append("")
+    lines.append("  why, in one number:")
+    lines.append(f"    design variables      {sizes['design_variables']:>8}")
+    lines.append(f"    coupling variables    {sizes['total']:>8}")
+    lines.append(
+        f"      of which load histories {2 * sizes['member_axial']:>6}"
+        f"  ({sizes['member_axial'] // 1} each)"
+    )
     return "\n".join(lines)

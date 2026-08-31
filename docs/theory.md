@@ -894,10 +894,28 @@ point*, and the dependence is steep.
 MDF converges the MDA at every optimizer iteration, so every point evaluated is
 physically consistent and the design space stays small. IDF hands the coupling
 variables to the optimizer with consistency constraints, so no inner iteration
-runs but the design space grows by seven variables and seven equalities. The
-textbook trade favours IDF when the MDA is expensive and penalises it when the
-coupling variables are numerous; here both hold, so the answer has to be
-measured rather than argued.
+runs but the design space grows by the dimension of the coupling. The textbook
+trade favours IDF when the MDA is expensive and penalises it when the coupling
+variables are numerous.
+
+Here the MDA is expensive, so the trade looks open until the coupling is
+counted. It is not close. The strong couplings are `diameters` and
+`piston_mass`, which are small, and `member_axial` and `member_bending`, which
+are not scalars at all: each is the internal load history of every member, at
+every crank angle, at every station along it, $7 \times 360 \times 9 = 22\,680$
+values. The total is **45 367 coupling scalars against 11 design variables**.
+
+IDF would therefore carry 45 367 extra design variables and 45 367 consistency
+equalities in order to optimise eleven real degrees of freedom, and GEMSEO
+refuses to build it for exactly that reason. On this problem IDF is not slower;
+it is unavailable.
+
+The lesson generalises away from this mechanism. IDF's cost scales with the
+*dimension* of the coupling, not with the cost of the MDA, so any discipline
+pair exchanging distributed fields -- load histories, pressure distributions,
+temperature fields -- sits on the wrong side of the trade however expensive its
+MDA. Reducing the coupling to a few scalars first, by a modal or spectral
+representation of the histories, is what would make IDF a candidate at all.
 
 One asymmetry is a property of this problem rather than of the formulations.
 Intermediate IDF iterates are not physically consistent, so any quantity read

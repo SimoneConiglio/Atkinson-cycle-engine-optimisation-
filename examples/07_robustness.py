@@ -14,7 +14,12 @@ Takes about a minute.
 from __future__ import annotations
 
 from exlink.cli import configure_logging
-from exlink.formulations import coupling_curve, format_coupling
+from exlink.formulations import (
+    compare_formulations,
+    coupling_curve,
+    format_coupling,
+    format_formulations,
+)
 from exlink.reference import COUPLED_DESIGN, REFINED_DESIGN
 from exlink.robustness import (
     CONSTRAINT_NAMES,
@@ -62,6 +67,19 @@ def main() -> None:
     print("  At rest rho is exactly zero: with no inertia there is no path from")
     print("  mass to load, so the quasi-static problem is recovered and there is")
     print("  nothing to iterate. The gain grows with omega^2.")
+
+    print()
+    print(
+        format_formulations(
+            compare_formulations(
+                initial=COUPLED_DESIGN, speed_rpm=1000.0, max_iter=15, relative=0.20
+            )
+        )
+    )
+    print()
+    print("  IDF is not slower here, it is unavailable: the coupling variables are")
+    print("  load histories, not scalars, so it would carry four orders of magnitude")
+    print("  more variables than the problem has degrees of freedom.")
 
 
 if __name__ == "__main__":

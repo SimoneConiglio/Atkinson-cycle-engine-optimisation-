@@ -75,3 +75,43 @@ def test_format_coupling_renders_every_row() -> None:
 def test_descriptor_thresholds_are_monotone() -> None:
     words = [CouplingStrength(0.0, rho, 1, True).descriptor for rho in (0.01, 0.3, 0.8, 1.2)]
     assert words == ["weak", "moderate", "strong", "divergent"]
+
+
+def test_the_coupling_is_load_histories_not_scalars() -> None:
+    """Why the formulation question has a structural answer here.
+
+    IDF's cost scales with the dimension of the coupling, and the coupling in
+    this problem is not a handful of scalars: ``member_axial`` and
+    ``member_bending`` are the internal load history of every member, at every
+    crank angle, at every station.  Four orders of magnitude more coupling
+    variables than design variables means IDF cannot be posed, never mind won.
+    """
+    from exlink.disciplines import COUPLED_SAMPLES
+    from exlink.dynamics import MEMBER_NAMES
+    from exlink.formulations import coupling_dimension
+    from exlink.sizing import STATIONS
+
+    sizes = coupling_dimension()
+    history = len(MEMBER_NAMES) * COUPLED_SAMPLES * STATIONS
+    assert sizes["member_axial"] == history
+    assert sizes["member_bending"] == history
+    assert sizes["total"] > 1000 * sizes["design_variables"]
+
+
+def test_idf_reports_its_own_refusal_rather_than_raising() -> None:
+    """A formulation that cannot be built is a comparison outcome, not an error.
+
+    The run has to come back with the reason attached, so the comparison can
+    state *why* IDF is unavailable instead of simply omitting it.
+    """
+    from exlink.formulations import compare_formulations, format_formulations
+    from exlink.reference import COUPLED_DESIGN
+
+    rows = compare_formulations(
+        initial=COUPLED_DESIGN, speed_rpm=0.0, max_iter=2, names=("IDF",)
+    )
+    assert len(rows) == 1
+    assert not rows[0].feasible
+    assert rows[0].error
+    rendered = format_formulations(rows)
+    assert "coupling variables" in rendered

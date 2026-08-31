@@ -748,8 +748,38 @@ that the measure reflects the physics rather than the solver. The gain grows wit
 1500 rpm each discipline rewrites two thirds of the other's input on every sweep.
 
 So the answer to "does this problem need an MDA?" is *it depends on the operating point*, and
-the dependence is steep. `build_coupled_scenario` also takes a `formulation_name`, so MDF and
-IDF can be run on the identical problem and compared.
+the dependence is steep.
+
+### MDF or IDF?
+
+`build_coupled_scenario` takes a `formulation_name`, so both can be run on the identical
+problem. The comparison has a decisive answer, and it is structural rather than a matter of
+timing:
+
+| | objective | evaluations | seconds | feasible |
+|---|---|---|---|---|
+| MDF | 0.1444 kg | 25 | 41 | yes |
+| IDF | — | 0 | — | **cannot be posed** |
+
+IDF hands the coupling variables to the optimizer as design variables with consistency
+constraints. Counting them settles it:
+
+```
+  design variables            11
+  coupling variables       45368
+    of which load histories  45360   (22680 each)
+```
+
+`member_axial` and `member_bending` are not scalars. They are the internal load history of
+every member, at every crank angle, at every station along it — 7 × 360 × 9 apiece. IDF would
+carry **45 367 variables and 45 367 equality constraints to optimise eleven real degrees of
+freedom.**
+
+So IDF is not slower here; it is unavailable. The general lesson separates cleanly from this
+mechanism: IDF's cost scales with the *dimension* of the coupling, so a discipline pair that
+exchanges distributed fields — load histories, pressure distributions, temperature fields —
+rather than a handful of scalars will sit on the wrong side of that trade however expensive
+its MDA.
 
 ---
 
