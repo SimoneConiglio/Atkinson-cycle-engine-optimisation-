@@ -139,4 +139,10 @@ __all__ = [
     "tolerance_report",
 ]
 
+#: :mod:`exlink.minlp` is deliberately *not* re-exported here.  It needs the
+#: optional ``gemseo-bilevel-outer-approximation`` plugin (``pip install
+#: exlink-opt[minlp]``), and importing it from the package root would make that
+#: plugin a hard dependency of everything.  Import it directly instead::
+#:
+#:     from exlink.minlp import solve, candidates_from_design
 __version__ = "1.0.0"

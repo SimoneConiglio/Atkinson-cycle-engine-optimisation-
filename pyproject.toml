@@ -43,6 +43,9 @@ dependencies = [
 [project.optional-dependencies]
 # NSGA-II and friends, for the multi-objective runs.
 moea = ["gemseo-pymoo>=2.0"]
+# The Benders formulation and the bi-level outer-approximation master, for the
+# mixed-integer gear choice in ``exlink.minlp``.
+minlp = ["gemseo-bilevel-outer-approximation>=0.1"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
@@ -55,7 +58,7 @@ docs = [
     "sphinx-autodoc-typehints>=2.0",
     "myst-parser>=2.0",
 ]
-all = ["exlink-opt[moea,dev,docs]"]
+all = ["exlink-opt[moea,minlp,dev,docs]"]
 
 [project.urls]
 Homepage = "https://github.com/SimoneConiglio/Atkinson-cycle-engine-optimisation-"

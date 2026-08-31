@@ -38,7 +38,7 @@ jobs:
         run: uv venv --python ${{ matrix.python-version }}
 
       - name: Install the project
-        run: uv pip install -e ".[dev,moea]"
+        run: uv pip install -e ".[dev,moea,minlp]"
 
       - name: Run the fast tests
         run: .venv/bin/pytest -m "not slow" --cov --cov-report=term-missing
@@ -57,7 +57,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv venv --python 3.11
-      - run: uv pip install -e ".[dev,moea]"
+      - run: uv pip install -e ".[dev,moea,minlp]"
       - name: Run the optimizer tests
         run: .venv/bin/pytest -m slow
 
@@ -70,7 +70,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv venv --python 3.11
-      - run: uv pip install -e ".[dev,moea]"
+      - run: uv pip install -e ".[dev,moea,minlp]"
       - run: .venv/bin/ruff check src tests examples
       - run: .venv/bin/ruff format --check src tests examples
       - run: .venv/bin/mypy src/exlink

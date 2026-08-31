@@ -343,8 +343,19 @@ RANGE_OUTPUTS: tuple[str, ...] = (
     "brake_power",
     "runs_margin",
     "gear_margin",
+    "runs_violation",
+    "gear_violation",
 )
-"""Everything :class:`RangeDiscipline` reports, in a stable order."""
+"""Everything :class:`RangeDiscipline` reports, in a stable order.
+
+The two margins appear twice, once in each sign convention.  ``*_margin`` is
+positive when satisfied, which reads naturally and is what the single-level
+scenarios attach with ``positive=True``.  ``*_violation`` is the negation,
+positive when violated, matching the coupled margins.  The bi-level formulation
+needs the second form because its scenario adapter identifies a constraint by
+its *output* name, and ``positive=True`` renames it to ``-runs_margin``, which
+is not an output of anything.
+"""
 
 #: What the range chain returns for a design the kinematics cannot close.
 RANGE_PENALTY: dict[str, float] = {
@@ -358,6 +369,8 @@ RANGE_PENALTY: dict[str, float] = {
     "brake_power": 0.0,
     "runs_margin": -1.0,
     "gear_margin": -1.0,
+    "runs_violation": 1.0,
+    "gear_violation": 1.0,
 }
 
 
@@ -366,6 +379,15 @@ COUPLING_AXIAL = "member_axial"
 
 COUPLING_BENDING = "member_bending"
 """Internal bending moment of every member, flattened [N.mm]."""
+
+GEAR_MODULE = "gear_module"
+"""Chosen gear module [mm], an input so a mixed-integer master can set it."""
+
+GEAR_TEETH = "gear_teeth"
+"""Teeth on the small gear, likewise."""
+
+_DEFAULT_MODULE = 1.5
+_DEFAULT_TEETH = 25
 
 COUPLING_DIAMETERS = "diameters"
 """Section diameter of every member, in the order of ``MEMBER_NAMES`` [mm]."""
@@ -838,14 +860,41 @@ class RangeDiscipline(Discipline):
         self.spec = spec
         self.step = step
 
-        self.input_grammar.update_from_names([*VARIABLE_NAMES, COUPLING_DIAMETERS])
+        # The gear pair enters as *inputs* rather than as fixed construction
+        # data, so that a mixed-integer master can choose it: under the Benders
+        # formulation of :mod:`exlink.minlp` a catalogue interpolation maps the
+        # master's one-hot selection onto these, and the sub-problem sees them
+        # as constants.  Passing ``module``/``teeth`` to the constructor simply
+        # sets their defaults, which is what every single-level scenario does.
+        self.input_grammar.update_from_names(
+            [*VARIABLE_NAMES, COUPLING_DIAMETERS, GEAR_MODULE, GEAR_TEETH]
+        )
         self.output_grammar.update_from_names(list(RANGE_OUTPUTS))
         self.default_input_data = {
             **PUBLISHED_DESIGN.to_mapping(),
             COUPLING_DIAMETERS: _initial_diameters(),
+            GEAR_MODULE: np.array([_DEFAULT_MODULE if module is None else module]),
+            GEAR_TEETH: np.array([float(_DEFAULT_TEETH if teeth is None else teeth)]),
         }
 
-    def _evaluate(self, design: Design, diameters: np.ndarray) -> dict[str, float]:
+    def _gear_pair(self, data: StrKeyMapping) -> tuple[float, int]:
+        """The gear pair in force, from the inputs if given and the defaults otherwise."""
+        module = data.get(GEAR_MODULE)
+        teeth = data.get(GEAR_TEETH)
+        chosen = self.module if module is None else float(np.ravel(module)[0])
+        count = self.teeth if teeth is None else round(float(np.ravel(teeth)[0]))
+        return (
+            _DEFAULT_MODULE if chosen is None else chosen,
+            _DEFAULT_TEETH if count is None else count,
+        )
+
+    def _evaluate(
+        self,
+        design: Design,
+        diameters: np.ndarray,
+        module: float | None = None,
+        teeth: int | None = None,
+    ) -> dict[str, float]:
         """The whole range chain, as plain floats.
 
         A design the kinematics cannot close returns the penalty row rather
@@ -893,8 +942,8 @@ class RangeDiscipline(Discipline):
             metrics.width,
             metrics.expansion_stroke + metrics.compression_stroke,
             float(np.max(thermo.gauge_pressure)),
-            module=self.module,
-            teeth=self.teeth,
+            module=self.module if module is None else module,
+            teeth=self.teeth if teeth is None else teeth,
             fluctuation=self.fluctuation,
             spec=self.spec,
             material=self.material,
@@ -918,13 +967,20 @@ class RangeDiscipline(Discipline):
             "runs_margin": loss.brake_work / max(loss.indicated_work, 1.0),
             # Positive means the gear pair is within its face-width limit.
             "gear_margin": (MAX_WIDTH_FACTOR - pair.width_factor if pair is not None else -1.0),
+            # The same two negated: positive means violated.  The bi-level
+            # formulation needs this form; see RANGE_OUTPUTS.
+            "runs_violation": -loss.brake_work / max(loss.indicated_work, 1.0),
+            "gear_violation": (
+                pair.width_factor - MAX_WIDTH_FACTOR if pair is not None else 1.0
+            ),
         }
 
     def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
         data = dict(input_data)
         design = Design.from_mapping(data)
         diameters = np.asarray(data[COUPLING_DIAMETERS], dtype=float).ravel()
-        values = self._evaluate(design, diameters)
+        module, teeth = self._gear_pair(data)
+        values = self._evaluate(design, diameters, module, teeth)
         return {name: np.array([values[name]]) for name in RANGE_OUTPUTS}
 
     def _compute_jacobian(
@@ -943,15 +999,20 @@ class RangeDiscipline(Discipline):
         design = Design.from_mapping(data)
         base_vector = design.to_array()
         diameters = np.asarray(data[COUPLING_DIAMETERS], dtype=float).ravel()
+        module, teeth = self._gear_pair(data)
 
         def perturbed(index: int, delta: float) -> dict[str, float]:
             if index < len(VARIABLE_NAMES):
                 vector = base_vector.copy()
                 vector[index] += delta
-                return self._evaluate(Design.from_array(vector), diameters)
-            sections = diameters.copy()
-            sections[index - len(VARIABLE_NAMES)] += delta
-            return self._evaluate(design, sections)
+                return self._evaluate(Design.from_array(vector), diameters, module, teeth)
+            if index < len(VARIABLE_NAMES) + diameters.size:
+                sections = diameters.copy()
+                sections[index - len(VARIABLE_NAMES)] += delta
+                return self._evaluate(design, sections, module, teeth)
+            # The module column: the gear pair is a master-level choice, so the
+            # sub-problem holds it fixed and its derivative is not required.
+            return self._evaluate(design, diameters, module, teeth)
 
         columns = [*base_vector, *diameters]
         gradients: dict[str, list[float]] = {name: [] for name in RANGE_OUTPUTS}

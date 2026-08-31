@@ -613,6 +613,73 @@ two results are the same fact reached independently: `∂g/∂I ≈ 0.27` mm per
 to *any* perturbation of the geometry — a machining tolerance, a gear lattice — far faster than
 its 0.01 mm band allows. It is not a constraint that geometry can hold.
 
+### Solving it as a mixed-integer problem
+
+Enumerating a handful of lattice points and keeping the best is not a method: it has no
+bound, no stopping criterion, and no way to know whether an unvisited point would have won.
+`exlink/minlp.py` states the gear choice as the MINLP it is and hands it to the
+[`gemseo-bilevel-outer-approximation`](https://pypi.org/project/gemseo-bilevel-outer-approximation/)
+plugin, which implements the Duran–Grossmann decomposition:
+
+```
+main       gear_choice, a one-hot selection over the lattice   (categorical)
+           solved by BILEVEL_MASTER_OUTER_APPROXIMATION
+                |                                    ^
+                | I, gear_module, gear_teeth         | linearisations and
+                v      (catalogue interpolation)     | feasibility
+sub        the ten remaining linkage variables       (continuous)
+           MDF over the coupled disciplines, solved by SLSQP
+```
+
+GEMSEO's `Benders` formulation performs the split itself — categorical variables to the main
+problem, everything continuous to a sub-scenario it wraps in an `MDOScenarioAdapterBenders` —
+so the main problem optimises the sub-problem's *optimum*. A `CatalogueDesignSpace`
+categorical variable drives three catalogue interpolations (`I`, the module and the tooth
+count) so that picking a lattice point sets all three; at unit SIMP penalty the interpolation
+is exactly `I = Σⱼ yⱼ Iⱼ`, linear and analytically differentiable, which is what the
+outer-approximation master linearises.
+
+Two changes were needed to make the package fit the formulation, and both are the formulation
+being right rather than convenient:
+
+- **The gear pair became `RangeDiscipline` *inputs*.** With the module fixed at construction
+  time there is nothing for a master to choose.
+- **The range margins are published in both sign conventions.** `positive=True` makes GEMSEO
+  rename a constraint to `-runs_margin`, which is not an output of anything, and the scenario
+  adapter addresses constraints by output name. So `runs_violation` and `gear_violation` are
+  emitted alongside the margins, and the bi-level formulation attaches those.
+
+**Infeasible sub-problems need no special machinery**, which is the reason OA fits here.
+Pinning `I` throws the design off the equalities `I` was one of the variables used to satisfy,
+so several lattice points have no feasible continuous solution at all. Attaching the
+constraints with `main_level=True` puts an `is_feasible` condition on the main problem, and
+such a point is excluded on evidence — carrying exactly the information enumeration discarded.
+
+Outer approximation's finite convergence to the *global* optimum needs the sub-problem convex
+in the continuous variables for each fixed choice, which this problem violates comprehensively.
+So the master's bound is a bound under an assumption that does not hold, and `minlp.exhaustive`
+solves every candidate separately so the decomposition's answer can be checked against the
+true best over the lattice.
+
+That check is worth reporting rather than skipping. Over four candidates at 1000 rpm, with a
+25-iteration SLSQP budget per sub-problem:
+
+| | chosen pair | range | sub-solves | seconds |
+|---|---|---|---|---|
+| outer approximation | m=0.8, z=48 | 3366 km/L | **2** | 575 |
+| exhaustive | m=1.0, z=39 | 3385 km/L | 4 | 1056 |
+
+The decomposition costs half the sub-solves and lands **0.6 % short** of the best point on the
+lattice. That is exactly what nonconvexity buys you: the master stopped on a bound that is not
+valid here, so it terminated before reaching the best candidate. The honest summary is that on
+this problem the formulation's value is structural — a real mixed-integer statement, principled
+handling of infeasible sub-problems, and a stopping criterion instead of a guessed budget —
+rather than a better answer than enumeration. With a lattice too large to enumerate, that
+structure is the only thing on offer.
+
+Install it with `pip install exlink-opt[minlp]`; `exlink.minlp` is the only module that needs
+the plugin and is deliberately not imported from the package root.
+
 There is a second trap in the enumeration itself. Ranking candidate lattice points by
 *distance* from the requested `I` is the obvious thing and the wrong thing: the nearest points
 are reached with the **smallest** modules, and a small module needs a wide face to carry a

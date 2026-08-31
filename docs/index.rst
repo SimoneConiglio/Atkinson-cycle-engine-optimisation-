@@ -91,6 +91,16 @@ problem actually is, and whether the finding generalises past one linkage.
 .. automodule:: exlink.formulations
 .. automodule:: exlink.slidercrank
 
+Mixed-integer design
+~~~~~~~~~~~~~~~~~~~~
+
+The gear choice is discrete, and it pins the inter-axle distance.  This states
+that as a mixed-integer program and solves it by bi-level outer approximation.
+Needs the optional ``gemseo-bilevel-outer-approximation`` plugin
+(``pip install exlink-opt[minlp]``).
+
+.. automodule:: exlink.minlp
+
 Optimization
 ~~~~~~~~~~~~
 
