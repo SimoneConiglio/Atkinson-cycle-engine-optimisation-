@@ -308,10 +308,16 @@ def build_minlp_scenario(
     inequality = MDOFunction.ConstraintType.INEQ
     for name in INEQUALITY_OUTPUTS:
         scenario.add_constraint(name, constraint_type=inequality, main_level=True)
-    # The two equalities go in as equalities rather than as the usual relaxed
-    # pairs.  SLSQP takes them directly, and the adapter identifies constraints
-    # by their *output* name, so adding one output twice under two invented
-    # constraint names breaks its lookup.
+    # The two equalities go in as equalities.  The plugin's source notes that
+    # the master does not linearise equality constraints and suggests relaxing
+    # them into inequality bands first -- but doing that here is what makes the
+    # run exhaust memory: four extra sub-problem constraints, each carrying a
+    # post-optimal sensitivity through an MDF sub-problem whose coupling
+    # variables are the 45 367 load-history entries
+    # :func:`exlink.formulations.coupling_dimension` counts.  With equalities
+    # the formulation adds a single ``is_feasible`` condition instead and the
+    # run fits in 0.5 GB.  The cost is that these two constraints inform the
+    # master only through feasibility, not through a linearisation.
     for name in EQUALITY_OUTPUTS:
         scenario.add_constraint(
             name, constraint_type=MDOFunction.ConstraintType.EQ, main_level=True
@@ -333,8 +339,9 @@ def solve(
     max_iter: int = 20,
     sub_max_iter: int = 25,
     samples: int | None = None,
-    posa: float = 1.0,
-    adapt: bool = False,
+    posa: float = 2.0,
+    adapt: bool = True,
+    min_dfk: float = 0.0,
     max_step: float = 1000.0,
     **kwargs: Any,
 ) -> MinlpResult:
@@ -349,8 +356,17 @@ def solve(
         max_iter: Main-problem iteration budget.
         sub_max_iter: SLSQP budget per sub-problem.
         samples: Crank angles per revolution.
-        posa: Post-optimal sensitivity amplification constant.
-        adapt: Whether to exploit adaptive convexification.
+        posa: Post-optimal sensitivity amplification.  Multiplies the cut
+            slopes, making each linearisation steeper and so less likely to cut
+            off a lattice point that is actually better.  ``1.0`` is the raw
+            linearisation, which on a nonconvex problem terminates early: with
+            it this problem stops after two sub-solves, 0.6 % short of the best
+            lattice point.
+        adapt: Adaptive convexification.  Corrects the slopes by a secant
+            method over the visited history so the cuts behave like valid
+            supports even where the true value function is not convex.  This is
+            the plugin's own answer to premature convergence.
+        min_dfk: Convexity margin used by the adaptive correction.
         max_step: Main-problem trust radius.
         **kwargs: Forwarded to :func:`build_minlp_scenario`.
 
@@ -383,6 +399,7 @@ def solve(
             normalize_design_space=False,
             posa=posa,
             adapt=adapt,
+            min_dfk=min_dfk,
             max_step=max_step,
         )
     except Exception as error:  # a failed run is a result, not a crash

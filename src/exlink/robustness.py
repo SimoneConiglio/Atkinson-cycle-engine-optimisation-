@@ -53,9 +53,13 @@ adjusted at assembly with a shim -- rather than bounded.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
+from gemseo.core.discipline import Discipline
+from gemseo.typing import StrKeyMapping
 
 from .constants import DEFAULT_SPEC, DEFAULT_TARGETS, DesignTargets, EngineSpec
 from .design import ANGULAR_VARIABLES, VARIABLE_NAMES, Design
@@ -463,3 +467,232 @@ def required_grade(
     factor_needed = IT_FACTORS[reference] * allowed / sigma_reference
     workable = [g for g, f in IT_FACTORS.items() if f <= factor_needed]
     return (max(workable) if workable else None), factor_needed
+
+
+#: The constraints worth robustifying, and the Jacobian row that carries each.
+#: ``clearance`` is left out deliberately: its capability is above 400, so a
+#: robust margin on it would only add cost, and it is the one constraint here
+#: without an analytic gradient.
+ROBUST_SOURCES: dict[str, str] = {
+    "rod_angle_margin": "rod_angle_margin",
+    "compatibility_margin": "compatibility_margin",
+    "tdc_gap_margin": "tdc_gap_margin",
+    "side_load_margin": "side_load_margin",
+    "stroke_band_upper": "stroke_error",
+    "stroke_band_lower": "stroke_error",
+    "ratio_band_upper": "compression_ratio_error",
+    "ratio_band_lower": "compression_ratio_error",
+}
+
+ROBUST_NAMES: tuple[str, ...] = tuple(f"{name}_robust" for name in ROBUST_SOURCES)
+"""The robust counterparts, each ``<= 0`` when the design is robustly feasible."""
+
+DEFAULT_SIGMA_LEVEL = 3.0
+"""Standard deviations of margin the robust constraints hold.
+
+``g + k sigma_g <= 0`` at ``k = 3`` puts the nominal design three standard
+deviations inside the constraint, i.e. a one-sided process capability of 1.0.
+The usual industrial target is 1.33, which is ``k = 4``; that is available and
+is what a production drawing would ask for, but on this problem it is
+unreachable for the top-dead-centre gap at any geometry -- see
+:func:`required_grade`.
+"""
+
+
+def robust_margins(
+    design: Design,
+    sigma_level: float = DEFAULT_SIGMA_LEVEL,
+    grade: int = DEFAULT_GRADE,
+    angular: float = ANGULAR_TOLERANCE,
+    samples: int = 360,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> dict[str, float]:
+    """The robust counterpart of each geometric constraint.
+
+    Replaces ``g(X) <= 0`` by
+
+    .. math:: g(X) + k \\sqrt{\\nabla g^\\top \\Sigma \\nabla g} \\le 0
+
+    so the optimizer is required to hold the constraint not at the nominal
+    design but ``k`` standard deviations inside it, given the manufacturing
+    covariance of the parts.  This is what
+    :func:`tolerance_report` measures *after* the fact, moved into the
+    formulation so the optimizer has to pay for it while choosing.
+
+    Every gradient here is the exact one from :mod:`exlink.jacobian`, so the
+    robust margin costs one Jacobian evaluation on top of the analysis -- the
+    same observation that made the tolerance study cheap.
+
+    Args:
+        design: The design to assess.
+        sigma_level: ``k``, the standard deviations of margin required.
+        grade: ISO 286 IT grade of the machined dimensions.
+        angular: Angular assembly half-width [deg].
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+
+    Returns:
+        ``{name_robust: value}`` over :data:`ROBUST_NAMES`, each non-positive
+        when the design is robustly feasible.  A design that cannot be analysed
+        returns large positive values rather than raising, so an optimizer can
+        walk through it.
+    """
+    from .scenarios import DEFAULT_EQUALITY_TOLERANCE
+
+    analysis = analyse(design, samples=samples, spec=spec)
+    if not analysis.valid:
+        return dict.fromkeys(ROBUST_NAMES, 1.0e3)
+
+    kinematic = kinematic_jacobian(design, analysis.require_solved().kinematics, spec)
+    rows = metric_jacobian(design, analysis, kinematic, spec)
+    sigma_matrix = covariance(design, grade, angular)
+
+    metrics = analysis.metrics
+    stroke = metrics.expansion_stroke - targets.expansion_stroke
+    ratio = metrics.compression_ratio - targets.compression_ratio
+    nominal = {
+        "rod_angle_margin": metrics.rod_angle - targets.max_rod_angle,
+        "compatibility_margin": metrics.compatibility - targets.max_transmission,
+        "tdc_gap_margin": metrics.tdc_gap - targets.max_tdc_gap,
+        "side_load_margin": metrics.side_load_ratio - targets.max_side_load,
+        "stroke_band_upper": stroke - DEFAULT_EQUALITY_TOLERANCE["stroke_error"],
+        "stroke_band_lower": -stroke - DEFAULT_EQUALITY_TOLERANCE["stroke_error"],
+        "ratio_band_upper": (ratio - DEFAULT_EQUALITY_TOLERANCE["compression_ratio_error"]),
+        "ratio_band_lower": (-ratio - DEFAULT_EQUALITY_TOLERANCE["compression_ratio_error"]),
+    }
+
+    result: dict[str, float] = {}
+    for name, source in ROBUST_SOURCES.items():
+        gradient = np.asarray(rows[source], dtype=float)
+        if name.endswith("_lower"):
+            gradient = -gradient
+        deviation = float(np.sqrt(max(gradient @ sigma_matrix @ gradient, 0.0)))
+        result[f"{name}_robust"] = float(nominal[name]) + sigma_level * deviation
+    return result
+
+
+def robust_report(
+    design: Design,
+    sigma_level: float = DEFAULT_SIGMA_LEVEL,
+    grade: int = DEFAULT_GRADE,
+    samples: int = 360,
+) -> str:
+    """Render the robust margins beside the nominal ones."""
+    from .model import analyse as _analyse
+
+    robust = robust_margins(design, sigma_level, grade, samples=samples)
+    analysis = _analyse(design, samples=samples)
+    title = f"robust margins at IT{grade}, k = {sigma_level:g}"
+    lines = [title, "=" * len(title), ""]
+    lines.append(f"  {'constraint':<24}{'nominal':>12}{'robust':>12}   holds")
+    nominal_rows = dict(
+        zip(
+            ("rod_angle_margin", "compatibility_margin", "tdc_gap_margin", "side_load_margin"),
+            inequality_constraints(analysis)[[0, 1, 2, 4]],
+            strict=True,
+        )
+    )
+    for name in ROBUST_SOURCES:
+        value = robust[f"{name}_robust"]
+        shown = nominal_rows.get(name)
+        nominal = f"{shown:12.5f}" if shown is not None else " " * 12
+        lines.append(f"  {name:<24}{nominal}{value:>12.5f}   {'yes' if value <= 0 else 'NO'}")
+    return "\n".join(lines)
+
+
+class RobustMarginDiscipline(Discipline):
+    """The robust counterparts of the geometric constraints, as a GEMSEO discipline.
+
+    Publishes ``g + k sigma_g`` for each constraint in :data:`ROBUST_SOURCES`,
+    so an optimizer can be *required* to hold every constraint ``k`` standard
+    deviations inside its bound given the manufacturing covariance -- rather
+    than being told afterwards that its answer does not survive tolerance.
+
+    Derivatives are finite differences, deliberately.  The exact route would
+    need second derivatives of ``g``: the robust margin contains
+    ``sqrt(grad g' Sigma grad g)``, whose gradient carries a Hessian this
+    package does not compute.  The usual first-order dodge is to hold ``sigma``
+    locally constant and reuse ``grad g``, but that discards precisely the term
+    that makes a robust optimum differ from a nominal one -- the pull towards
+    regions where the constraint is *less* sensitive.  Since the underlying
+    analysis is geometric and costs about ten milliseconds, differencing the
+    whole robust margin is affordable and keeps that term.
+
+    Args:
+        sigma_level: ``k``, the standard deviations of margin required.
+        grade: ISO 286 IT grade of the machined dimensions.
+        angular: Angular assembly half-width [deg].
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+        step: Relative finite-difference step.
+        name: Discipline name.
+    """
+
+    auto_detect_grammar_files: ClassVar[bool] = False
+
+    def __init__(
+        self,
+        sigma_level: float = DEFAULT_SIGMA_LEVEL,
+        grade: int = DEFAULT_GRADE,
+        angular: float = ANGULAR_TOLERANCE,
+        samples: int = 360,
+        targets: DesignTargets = DEFAULT_TARGETS,
+        spec: EngineSpec = DEFAULT_SPEC,
+        step: float = 1.0e-5,
+        name: str = "",
+    ) -> None:
+        from .reference import PUBLISHED_DESIGN
+
+        super().__init__(name=name)
+        self.sigma_level = sigma_level
+        self.grade = grade
+        self.angular = angular
+        self.samples = samples
+        self.targets = targets
+        self.spec = spec
+        self.step = step
+        self.input_grammar.update_from_names(VARIABLE_NAMES)
+        self.output_grammar.update_from_names(list(ROBUST_NAMES))
+        self.default_input_data = PUBLISHED_DESIGN.to_mapping()
+
+    def _margins(self, design: Design) -> dict[str, float]:
+        return robust_margins(
+            design,
+            self.sigma_level,
+            self.grade,
+            self.angular,
+            self.samples,
+            self.targets,
+            self.spec,
+        )
+
+    def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
+        values = self._margins(Design.from_mapping(dict(input_data)))
+        return {name: np.array([values[name]]) for name in ROBUST_NAMES}
+
+    def _compute_jacobian(
+        self,
+        input_names: Sequence[str] = (),
+        output_names: Sequence[str] = (),
+    ) -> None:
+        self._init_jacobian(input_names, output_names)
+        base = Design.from_mapping(dict(self.io.data)).to_array()
+        gradients: dict[str, list[float]] = {name: [] for name in ROBUST_NAMES}
+        for index, value in enumerate(base):
+            delta = self.step * max(abs(float(value)), 1.0)
+            ahead, behind = base.copy(), base.copy()
+            ahead[index] += delta
+            behind[index] -= delta
+            forward = self._margins(Design.from_array(ahead))
+            backward = self._margins(Design.from_array(behind))
+            for name in ROBUST_NAMES:
+                gradients[name].append((forward[name] - backward[name]) / (2.0 * delta))
+        for output in ROBUST_NAMES:
+            if output not in self.jac:
+                continue
+            for index, variable in enumerate(VARIABLE_NAMES):
+                if variable in self.jac[output]:
+                    self.jac[output][variable] = np.array([[gradients[output][index]]])

@@ -174,3 +174,85 @@ def test_the_gap_is_hypersensitive_to_the_geometry_that_produces_it() -> None:
 
     sensitivity = (shifted.metrics.tdc_gap - nominal.metrics.tdc_gap) / 0.18
     assert sensitivity > 0.1
+
+
+# -- the robust formulation ----------------------------------------------------
+
+
+def test_the_robust_margin_is_the_nominal_plus_k_sigma() -> None:
+    """``g + k sigma_g``, checked against the sigma the tolerance study measures.
+
+    The two have to agree: the robust constraint is the tolerance study moved
+    into the formulation, not a second and different model of the same thing.
+    """
+    from exlink.robustness import DEFAULT_SIGMA_LEVEL, robust_margins
+
+    report = tolerance_report(COUPLED_DESIGN, samples=60, crank_samples=CRANK)
+    margins = robust_margins(COUPLED_DESIGN, samples=CRANK)
+
+    nominal = report.nominal["tdc_gap"]
+    sigma = report.linear_sigma["tdc_gap"]
+    assert margins["tdc_gap_margin_robust"] == pytest.approx(
+        nominal + DEFAULT_SIGMA_LEVEL * sigma, rel=0.05
+    )
+
+
+def test_a_robust_margin_is_never_looser_than_the_nominal_one() -> None:
+    from exlink.model import analyse, inequality_constraints
+    from exlink.robustness import robust_margins
+
+    margins = robust_margins(COUPLED_DESIGN, samples=CRANK)
+    nominal = inequality_constraints(analyse(COUPLED_DESIGN, samples=CRANK))
+    for index, name in enumerate(
+        ["rod_angle_margin", "compatibility_margin", "tdc_gap_margin"]
+    ):
+        assert margins[f"{name}_robust"] >= nominal[index] - 1.0e-12
+
+
+def test_the_reference_design_is_not_robustly_feasible() -> None:
+    """The point of putting tolerance in the formulation.
+
+    ``COUPLED_DESIGN`` satisfies every constraint nominally, and fails the
+    top-dead-centre gap at three sigma -- which is what the post-hoc study said
+    and what a deterministic optimizer had no way to know while choosing.
+    """
+    from exlink.robustness import robust_margins
+
+    margins = robust_margins(COUPLED_DESIGN, samples=CRANK)
+    assert margins["tdc_gap_margin_robust"] > 0.0
+
+
+def test_a_looser_grade_makes_the_robust_margins_worse() -> None:
+    from exlink.robustness import robust_margins
+
+    tight = robust_margins(COUPLED_DESIGN, grade=6, samples=CRANK)
+    loose = robust_margins(COUPLED_DESIGN, grade=10, samples=CRANK)
+    assert loose["tdc_gap_margin_robust"] > tight["tdc_gap_margin_robust"]
+
+
+def test_zero_sigma_recovers_the_nominal_constraint() -> None:
+    from exlink.model import analyse, inequality_constraints
+    from exlink.robustness import robust_margins
+
+    margins = robust_margins(COUPLED_DESIGN, sigma_level=0.0, samples=CRANK)
+    nominal = inequality_constraints(analyse(COUPLED_DESIGN, samples=CRANK))
+    assert margins["rod_angle_margin_robust"] == pytest.approx(nominal[0])
+    assert margins["tdc_gap_margin_robust"] == pytest.approx(nominal[2])
+
+
+def test_the_robust_discipline_matches_the_function() -> None:
+    from exlink.robustness import ROBUST_NAMES, RobustMarginDiscipline, robust_margins
+
+    discipline = RobustMarginDiscipline(samples=CRANK)
+    output = discipline.execute(COUPLED_DESIGN.to_mapping())
+    values = robust_margins(COUPLED_DESIGN, samples=CRANK)
+    for name in ROBUST_NAMES:
+        assert float(output[name][0]) == pytest.approx(values[name])
+
+
+def test_an_unanalysable_design_is_penalised_not_raised() -> None:
+    from exlink.robustness import ROBUST_NAMES, robust_margins
+
+    broken = COUPLED_DESIGN.replace(a=0.4 * COUPLED_DESIGN.a)
+    margins = robust_margins(broken, samples=CRANK)
+    assert all(margins[name] > 0.0 for name in ROBUST_NAMES)

@@ -661,6 +661,46 @@ So the master's bound is a bound under an assumption that does not hold, and `mi
 solves every candidate separately so the decomposition's answer can be checked against the
 true best over the lattice.
 
+#### Convexification, and what it does here
+
+Outer approximation's premature convergence on a nonconvex problem is exactly what the
+plugin's convexification options exist for, and they are enabled by default: `posa` amplifies
+the cut slopes so a linearisation is less likely to exclude a lattice point that is actually
+better, and `adapt` corrects them by a secant method over the visited history so the cuts
+behave like valid supports where the value function is not convex.
+
+On this problem, measured over four candidates, they change nothing:
+
+| setting | chosen | range | sub-solves |
+|---|---|---|---|
+| raw cuts (`posa=1`, `adapt=off`) | m=0.8, z=48 | 3366 km/L | 2 |
+| `posa=2` only | m=0.8, z=48 | 3366 km/L | 2 |
+| `adapt` only | m=0.8, z=48 | 3366 km/L | 2 |
+| `posa=2` + `adapt` | m=0.8, z=48 | 3366 km/L | 2 |
+
+The reason is structural rather than a failure of the options. The master terminates after two
+sub-solves, and the adaptive secant correction needs more history than that before it can
+adjust anything; and because the two equality constraints reach the master only through its
+feasibility condition rather than as linearisations, there is little cut information for
+`posa` to steepen. The options are left on because they are the right default — they can only
+make the master more conservative — but on this problem they are a measured no-op, and saying
+so is more useful than implying they fixed the shortfall.
+
+#### Why the equalities stay equalities
+
+The plugin's source notes that the master does not linearise equality constraints and
+suggests relaxing them into inequality bands first. Doing that here exhausts memory: four
+extra sub-problem constraints, each carrying a post-optimal sensitivity through an MDF
+sub-problem whose coupling variables are the **45 367** load-history entries counted in
+[How coupled is it, really?](#how-coupled-is-it-really). The process is OOM-killed past 15 GB.
+With equalities the formulation adds a single `is_feasible` condition instead and the run
+fits in **0.51 GB**.
+
+That is the IDF result from earlier arriving in a second place: it is the *dimension* of the
+coupling, not the cost of the MDA, that decides what a decomposition can afford. The cost of
+the workaround is stated above — those two constraints inform the master only through
+feasibility.
+
 That check is worth reporting rather than skipping. Over four candidates at 1000 rpm, with a
 25-iteration SLSQP budget per sub-problem:
 
@@ -676,6 +716,43 @@ this problem the formulation's value is structural — a real mixed-integer stat
 handling of infeasible sub-problems, and a stopping criterion instead of a guessed budget —
 rather than a better answer than enumeration. With a lattice too large to enumerate, that
 structure is the only thing on offer.
+
+### Tolerance in the formulation, not after it
+
+`robustness.tolerance_report` measures what manufacturing does to a *finished* design. That
+is the wrong end of the process: it can only tell the optimizer it was wrong. The robust
+counterpart puts it in the constraint,
+
+> `g(X) + k·√(∇gᵀ Σ ∇g) ≤ 0`
+
+so the optimizer must hold every constraint `k` standard deviations inside its bound given
+the manufacturing covariance, and pays for that while choosing. The exact Jacobians make it
+cheap — one Jacobian evaluation on top of the analysis — which is the same observation that
+made the post-hoc study affordable.
+
+At IT8 and `k = 3` the coupled reference design is **not** robustly feasible:
+
+```
+  constraint                   nominal      robust   holds
+  rod_angle_margin            -0.29992    -0.26935   yes
+  compatibility_margin        -0.04783    -0.04763   yes
+  tdc_gap_margin              -0.00326     0.04266   NO
+  side_load_margin            -0.00059    -0.00040   yes
+  stroke_band_upper                        0.00718   NO
+  stroke_band_lower                        0.06743   NO
+  ratio_band_upper                        -0.05748   yes
+  ratio_band_lower                         0.00258   NO
+```
+
+which is the post-hoc study's conclusion arriving early enough to act on. Pass `robust=True`
+to `build_full_minlp_scenario` to optimise against these instead of the nominal constraints.
+
+Derivatives of the robust margins are finite differences, deliberately. The exact route needs
+second derivatives of `g`, since the margin contains `√(∇gᵀ Σ ∇g)`. The usual first-order
+dodge holds `σ` locally constant and reuses `∇g`, but that discards exactly the term that
+makes a robust optimum differ from a nominal one — the pull towards regions where the
+constraint is *less* sensitive. The underlying analysis is geometric and costs ~10 ms, so
+differencing the whole margin is affordable and keeps that term.
 
 Install it with `pip install exlink-opt[minlp]`; `exlink.minlp` is the only module that needs
 the plugin and is deliberately not imported from the package root.
