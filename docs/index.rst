@@ -64,6 +64,7 @@ sensitivities; extended-expansion engine.
    use_case
    results
    conclusions
+   references
 
 .. toctree::
    :maxdepth: 2

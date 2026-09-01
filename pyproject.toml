@@ -60,6 +60,7 @@ docs = [
     "furo>=2024.1",
     "sphinx-autodoc-typehints>=2.0",
     "myst-parser>=2.0",
+    "sphinxcontrib-bibtex>=2.6",
 ]
 all = ["exlink-opt[moea,minlp,uq,dev,docs]"]
 

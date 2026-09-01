@@ -10,7 +10,7 @@ Eleven continuous dimensions describe the linkage:
 
 $$X = (a,\; c,\; I,\; x_b,\; y_b,\; x_1,\; e,\; q_1,\; q_2,\; \theta_f,\; \theta_r)^{\mathsf T}$$
 
-§2.1 rejected the conventional objective. The objective used here is the
+§2.3 rejected the conventional objective. The objective used here is the
 quantity the application scores,
 
 $$\max_X \; R(X) \quad [\mathrm{km/L}]$$
@@ -58,7 +58,7 @@ combustion model alongside it.
 
 ### 3.2.2 Mechanical losses
 
-§2.1 noted that $\eta$ loses nothing. The real losses come from quantities the
+§2.3 noted that $\eta$ loses nothing. The real losses come from quantities the
 equilibrium solve already produces — joint reactions $R_j$ turning through
 relative angles $\Delta\theta_j$, and the liner reaction $D$ that the side-load
 constraint already bounds:
@@ -81,7 +81,7 @@ of the problem rather than its scale.
 
 **The crankcase converts the envelope into kilograms.** A box encloses the
 mechanism and its walls scale with $H \times B$, so the two envelope objectives
-of §2.1 become mass at a rate the physics fixes rather than the designer.
+of §2.3 become mass at a rate the physics fixes rather than the designer.
 
 **The flywheel converts torque ripple into kilograms.** A single cylinder needs
 rotating inertia to carry it through compression,
@@ -160,7 +160,7 @@ Measured consequences:
 | uniform samples within 10 % of a feasible design | 0 feasible in 4000 |
 
 **Resolution (a): the optimizer.** Only a method that *moves along* the manifold
-can be used, which selects SQP with exact gradients (§2.2). This is what makes
+can be used, which selects SQP with exact gradients (§2.6). This is what makes
 §3.5 necessary rather than merely desirable.
 
 **Resolution (b): the specification.** A requirement stated as an equality
@@ -246,7 +246,7 @@ throws the design off both. A 0.18 mm snap to the nearest lattice point moves
 the top-dead-centre gap from 0.003 mm to 0.058 mm.
 
 **The resolution.** State it as the MINLP it is and decompose. Of the two
-candidates in §2.5, outer approximation is chosen because of what each master
+candidates in §2.7, outer approximation is chosen because of what each master
 requires:
 
 - a **Benders** cut needs the optimal-value sensitivity $d\theta/dI$, which
@@ -306,7 +306,7 @@ optimization; sampling is the reference against which it is checked.
 
 ## 3.9 Limitation: the problem is nonconvex and the answer is one local solution
 
-**The limitation.** Everything above yields a local solution. §2.7 lists the
+**The limitation.** Everything above yields a local solution. §2.9 lists the
 global strategies, all of which require generating feasible starting points —
 which §3.4 shows uniform sampling cannot do.
 

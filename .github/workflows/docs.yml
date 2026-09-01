@@ -61,7 +61,8 @@ jobs:
       - name: Check every page rendered
         run: |
           for page in index introduction state_of_the_art methodology framework \
-                      use_case results conclusions implementation api theory; do
+                      use_case results conclusions references implementation \
+                      api theory; do
             test -f "docs/_build/html/$page.html" || {
               echo "::error::$page.html was not produced"; exit 1; }
           done

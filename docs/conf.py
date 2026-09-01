@@ -25,7 +25,57 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx_autodoc_typehints",
     "myst_parser",
+    "sphinxcontrib.bibtex",
 ]
+
+# One bibliography file for the whole site.  ``author_year`` is the citation
+# style expected in the engineering-optimization literature this work sits in:
+# the text names the authors, so footnote-style numbering would hide exactly
+# the information the sentence depends on.
+#
+# sphinxcontrib-bibtex ships no bibliography style whose *labels* are author
+# and year, so an inline "Duran and Grossmann [1986]" would point at an entry
+# labelled "[4]".  The style below supplies matching labels; it is the recipe
+# from the sphinxcontrib-bibtex documentation, narrowed to what is needed here.
+bibtex_bibfiles = ["references.bib"]
+bibtex_reference_style = "author_year"
+
+
+def _setup_author_year_labels() -> str:
+    from pybtex.plugin import register_plugin
+    from pybtex.style.formatting.unsrt import Style as UnsrtStyle
+    from pybtex.style.labels import BaseLabelStyle
+
+    class AuthorYearLabelStyle(BaseLabelStyle):
+        def format_labels(self, sorted_entries):
+            for entry in sorted_entries:
+                persons = entry.persons.get("author") or entry.persons.get("editor") or []
+                names = [
+                    (" ".join(str(part) for part in person.last_names)
+                     if person.last_names else str(person))
+                    .replace("{", "")
+                    .replace("}", "")
+                    for person in persons
+                ]
+                if not names:
+                    who = entry.fields.get("organization", entry.key)
+                elif len(names) == 1:
+                    who = names[0]
+                elif len(names) == 2:
+                    who = f"{names[0]} and {names[1]}"
+                else:
+                    who = f"{names[0]} et al."
+                yield f"{who}, {entry.fields.get('year', 'n.d.')}"
+
+    class AuthorYearStyle(UnsrtStyle):
+        default_sorting_style = "author_year_title"
+        default_label_style = AuthorYearLabelStyle
+
+    register_plugin("pybtex.style.formatting", "authoryear", AuthorYearStyle)
+    return "authoryear"
+
+
+bibtex_default_style = _setup_author_year_labels()
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 

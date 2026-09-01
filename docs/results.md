@@ -224,7 +224,7 @@ Four gear candidates, 25 SLSQP iterations per sub-problem:
 | exhaustive | m=1.0, z=39 | 3385 km/L | 4 | 1056 |
 
 Half the sub-solves, 0.6 % short of the best lattice point. The convexification
-options of §2.5 were enabled and measured to change nothing here: the master
+options of §2.7 were enabled and measured to change nothing here: the master
 terminates after two solves, which is less history than the adaptive correction
 needs.
 
