@@ -49,7 +49,12 @@ figures:  ## regenerate the static figures
 animation:  ## regenerate the animated GIF
 	$(BIN)/exlink animate -o figures/exlink.gif --frames 120
 
+docs:  ## build the Sphinx documentation
+	$(BIN)/python -m pip install -q -e ".[docs]"
+	$(BIN)/sphinx-build docs docs/_build/html
+	@echo "open docs/_build/html/index.html"
+
 clean:  ## remove build and test artefacts
-	rm -rf build dist .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov
+	rm -rf build dist .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov docs/_build
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
 	find . -name '*.egg-info' -type d -prune -exec rm -rf {} +

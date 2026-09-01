@@ -5,123 +5,69 @@ Multidisciplinary design of an EX-link Atkinson-cycle engine mechanism for a
 Shell Eco-marathon car, optimised for the only thing that competition scores:
 distance on a given quantity of fuel.
 
-.. toctree::
-   :maxdepth: 2
+Eleven geometric design variables, a discrete gear choice, a strongly coupled
+structure/dynamics analysis solved as an MDA, and a chain carrying all of it
+through to kilometres per litre -- so that efficiency, envelope size, torque
+ripple and structural mass are priced against each other by physics rather than
+by weights.
 
-   theory
+Three findings
+--------------
+
+**The quasi-static optimum is the worst place to be.**
+   Maximising efficiency without inertia drives the linkage to its
+   transmission-angle singularity, which is exactly where the accelerations, the
+   bearing loads and hence the structure are worst.  Backing off costs nothing
+   and halves the engine.  See :doc:`coupling`.
+
+**A specified constraint cannot be manufactured.**
+   The top-dead-centre gap is bounded at 0.01 mm, and the dimensions producing it
+   scatter by more than that.  Four independent routes agree, and a
+   reliability formulation puts the number on it: a 64.5 % chance of missing at
+   least one requirement.  See :doc:`reliability`.
+
+**The Atkinson linkage's advantage is firing frequency, not extended expansion.**
+   Against a slider-crank sized by identical code it wins 24 %; remove the
+   one-revolution cycle and the advantage falls to 2.8 %.  See :doc:`validation`.
 
 Start here
 ----------
 
 .. code-block:: python
 
-   from exlink import analyse, PUBLISHED_DESIGN
-   from exlink.scenarios import format_analysis, refine
+   from exlink import analyse, COUPLED_DESIGN, evaluate
 
-   print(format_analysis(analyse(PUBLISHED_DESIGN)))
-   outcome = refine(PUBLISHED_DESIGN)
+   # geometry, cycle, quasi-static loads, metrics
+   print(analyse(COUPLED_DESIGN).metrics.efficiency)
 
-   # size the parts, with inertia in the load path
-   from exlink import solve_for_design
-   sized = solve_for_design(PUBLISHED_DESIGN, speed_rpm=1000.0)
-   print(sized.total_mass_kg, sized.feasible)
-
-   # carry it all the way to kilometres per litre
-   from exlink import COUPLED_DESIGN, evaluate
+   # the whole chain, to kilometres per litre
    outcome = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
    print(outcome.km_per_litre, outcome.engine_mass_kg)
    print(outcome.budget.kilograms())
 
-API
----
+Guide
+-----
 
-Physics
-~~~~~~~
+.. toctree::
+   :maxdepth: 2
+   :caption: The study
 
-.. automodule:: exlink.design
-.. automodule:: exlink.constants
-.. automodule:: exlink.kinematics
-.. automodule:: exlink.cycle
-.. automodule:: exlink.loads
-.. automodule:: exlink.metrics
-.. automodule:: exlink.model
+   problem
+   formulation
+   coupling
+   gradients
+   discrete
+   reliability
+   search
+   validation
+   results
 
-Sizing and dynamics
-~~~~~~~~~~~~~~~~~~~
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
 
-The second iteration: inertia in the load path, parts sized against
-static, fatigue and buckling failure, and the fixed point that couples them.
-
-.. automodule:: exlink.derivatives
-.. automodule:: exlink.materials
-.. automodule:: exlink.dynamics
-.. automodule:: exlink.sizing
-.. automodule:: exlink.coupled
-
-Derivatives
-~~~~~~~~~~~
-
-Exact derivatives of the whole chain, which is what makes a gradient-based
-optimizer applicable to a feasible set this thin.
-
-.. automodule:: exlink.jacobian
-.. automodule:: exlink.dynamics_jacobian
-
-The vehicle-level problem
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-What turns three competing objectives into one: friction makes the constraint
-set cost something, the mass budget converts the envelope and the torque ripple
-into kilograms, and the vehicle converts kilograms and efficiency into range.
-
-.. automodule:: exlink.friction
-.. automodule:: exlink.gears
-.. automodule:: exlink.manufacturing
-.. automodule:: exlink.mass_budget
-.. automodule:: exlink.vehicle
-.. automodule:: exlink.performance
-
-Study of the result
-~~~~~~~~~~~~~~~~~~~
-
-Whether the optimum survives manufacturing tolerance, how strongly coupled the
-problem actually is, and whether the finding generalises past one linkage.
-
-.. automodule:: exlink.robustness
-.. automodule:: exlink.formulations
-.. automodule:: exlink.slidercrank
-
-Mixed-integer design
-~~~~~~~~~~~~~~~~~~~~
-
-The gear choice is discrete, and it pins the inter-axle distance.  This states
-that as a mixed-integer program and solves it by bi-level outer approximation.
-Needs the optional ``gemseo-bilevel-outer-approximation`` plugin
-(``pip install exlink-opt[minlp]``).
-
-.. automodule:: exlink.minlp
-
-Optimization
-~~~~~~~~~~~~
-
-.. automodule:: exlink.disciplines
-.. automodule:: exlink.scenarios
-
-Visualisation
-~~~~~~~~~~~~~
-
-.. automodule:: exlink.plots
-.. automodule:: exlink.animation
-
-Command line
-~~~~~~~~~~~~
-
-.. automodule:: exlink.cli
-
-Reference designs
-~~~~~~~~~~~~~~~~~
-
-.. automodule:: exlink.reference
+   theory
+   api
 
 Indices
 -------
