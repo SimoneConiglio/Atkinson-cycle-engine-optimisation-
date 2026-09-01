@@ -80,24 +80,24 @@ def rpm_to_rad_per_s(rpm: float) -> float:
 
 @dataclass(frozen=True)
 class Member:
-    """One sized structural member, spanning two joints of the linkage.
-
-    Attributes:
-        name: Identifier, also the sizing output key.
-        start: Joint at the member's first end.
-        end: Joint at its second end.
-        kind: ``"link"`` for a free two-node member (swing rod, piston rod),
-            ``"cantilever"`` for a crank throw built into its shaft, or
-            ``"truss"`` for a side of the trigonal link.
-        length_attribute: Name of the :class:`~exlink.design.Design` property
-            giving its length.
-    """
+    """One sized structural member, spanning two joints of the linkage."""
 
     name: str
+    """Identifier, also the sizing output key."""
+
     start: str
+    """Joint at the member's first end."""
+
     end: str
+    """Joint at its second end."""
+
     kind: str
+    """``"link"`` for a free two-node member (swing rod, piston rod),
+    ``"cantilever"`` for a crank throw built into its shaft, or ``"truss"`` for
+    a side of the trigonal link."""
+
     length_attribute: str
+    """Name of the :class:`~exlink.design.Design` property giving its length."""
 
 
 MEMBERS: tuple[Member, ...] = (
