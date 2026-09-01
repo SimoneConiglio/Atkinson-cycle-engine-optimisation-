@@ -46,6 +46,9 @@ moea = ["gemseo-pymoo>=2.0"]
 # The Benders formulation and the bi-level outer-approximation master, for the
 # mixed-integer gear choice in ``exlink.minlp``.
 minlp = ["gemseo-bilevel-outer-approximation>=0.1"]
+# Sampling and Taylor-polynomial uncertainty estimators, for the reliability
+# reference in ``exlink.robustness``.
+uq = ["gemseo-umdo>=4.0"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
@@ -58,7 +61,7 @@ docs = [
     "sphinx-autodoc-typehints>=2.0",
     "myst-parser>=2.0",
 ]
-all = ["exlink-opt[moea,minlp,dev,docs]"]
+all = ["exlink-opt[moea,minlp,uq,dev,docs]"]
 
 [project.urls]
 Homepage = "https://github.com/SimoneConiglio/Atkinson-cycle-engine-optimisation-"

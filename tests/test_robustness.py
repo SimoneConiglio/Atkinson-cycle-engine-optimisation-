@@ -176,83 +176,169 @@ def test_the_gap_is_hypersensitive_to_the_geometry_that_produces_it() -> None:
     assert sensitivity > 0.1
 
 
-# -- the robust formulation ----------------------------------------------------
+# -- reliability: a probability of failure, not a fixed margin ------------------
 
 
-def test_the_robust_margin_is_the_nominal_plus_k_sigma() -> None:
-    """``g + k sigma_g``, checked against the sigma the tolerance study measures.
+def test_the_constraints_are_strongly_correlated() -> None:
+    """Why a per-constraint margin is the wrong formulation.
 
-    The two have to agree: the robust constraint is the tolerance study moved
-    into the formulation, not a second and different model of the same thing.
+    Every constraint is a function of the same eleven dimensions, so their
+    scatter is dependent -- here up to 0.94, and exactly -1 for the two sides of
+    a relaxed equality.  Requiring each of them separately to hold at k sigma
+    is a reliability statement only if they are independent, which they are
+    emphatically not.
     """
-    from exlink.robustness import DEFAULT_SIGMA_LEVEL, robust_margins
+    from exlink.robustness import constraint_moments
 
-    report = tolerance_report(COUPLED_DESIGN, samples=60, crank_samples=CRANK)
-    margins = robust_margins(COUPLED_DESIGN, samples=CRANK)
+    moments = constraint_moments(COUPLED_DESIGN, samples=CRANK)
+    assert moments is not None
+    off_diagonal = moments.correlation[~np.eye(len(moments.names), dtype=bool)]
+    assert np.max(np.abs(off_diagonal)) > 0.9
 
-    nominal = report.nominal["tdc_gap"]
-    sigma = report.linear_sigma["tdc_gap"]
-    assert margins["tdc_gap_margin_robust"] == pytest.approx(
-        nominal + DEFAULT_SIGMA_LEVEL * sigma, rel=0.05
+    # The two sides of the stroke band are the same residual, negated.
+    upper = moments.names.index("stroke_upper")
+    lower = moments.names.index("stroke_lower")
+    assert moments.correlation[upper, lower] == pytest.approx(-1.0, abs=1.0e-9)
+
+
+def test_the_correlation_changes_the_system_probability() -> None:
+    """And not always in the reassuring direction.
+
+    The two largest contributors here are anti-correlated, so keeping the
+    correlation makes "at least one constraint fails" *more* likely than
+    assuming independence, not less.  Either way the point stands: the
+    independent figure is not the answer.
+    """
+    from exlink.robustness import failure_probability
+
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK)
+    assert reliability is not None
+    assert reliability.system != pytest.approx(reliability.independent_bound, rel=1.0e-3)
+
+
+def test_form_agrees_with_sampling_at_the_system_level() -> None:
+    """The first-order estimate has to be checked against sampling, not trusted.
+
+    At the system level it is good here.  Per constraint it is not uniformly so
+    -- the top-dead-centre gap is strongly nonlinear and FORM under-predicts its
+    failure probability -- which is why the sampling estimate is the reference
+    and the first-order one is what is cheap enough to evaluate every iteration.
+    """
+    from exlink.robustness import failure_probability
+
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK)
+    sampled = tolerance_report(COUPLED_DESIGN, samples=1500, crank_samples=CRANK)
+    assert reliability is not None
+    assert reliability.system == pytest.approx(sampled.any_violation_rate, abs=0.1)
+
+
+def test_the_reliability_index_is_minus_the_normal_quantile() -> None:
+    from scipy.stats import norm
+
+    from exlink.robustness import failure_probability
+
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK)
+    assert reliability is not None
+    assert reliability.system_beta == pytest.approx(float(norm.isf(reliability.system)))
+
+
+def test_beta_is_the_margin_in_standard_deviations() -> None:
+    from exlink.robustness import constraint_moments
+
+    moments = constraint_moments(COUPLED_DESIGN, samples=CRANK)
+    assert moments is not None
+    assert np.allclose(moments.beta, -moments.value / moments.sigma)
+
+
+def test_the_gap_dominates_the_failure_probability() -> None:
+    """The same finding as every other route, now as a probability.
+
+    At the specified 0.01 mm bound the top-dead-centre gap alone fails in a
+    large fraction of nominally-conforming builds, and it is the constraint
+    contributing most of the system probability.
+    """
+    from exlink.robustness import failure_probability
+
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK)
+    assert reliability is not None
+    assert reliability.binding() == "tdc_gap"
+    assert reliability.per_constraint["tdc_gap"] > 0.1
+
+
+def test_required_bound_inverts_the_reliability_relation() -> None:
+    """Answers *how much* the specification would have to give, with a number.
+
+    Applying the returned bound must bring that constraint's own failure
+    probability to the target.
+    """
+    from dataclasses import replace
+
+    from exlink.constants import DEFAULT_TARGETS
+    from exlink.robustness import (
+        TARGET_FAILURE_PROBABILITY,
+        failure_probability,
+        required_bound,
+    )
+
+    bound = required_bound(COUPLED_DESIGN, "tdc_gap", samples=CRANK)
+    assert bound > DEFAULT_TARGETS.max_tdc_gap
+
+    relaxed = replace(DEFAULT_TARGETS, max_tdc_gap=bound)
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK, targets=relaxed)
+    assert reliability is not None
+    assert reliability.per_constraint["tdc_gap"] == pytest.approx(
+        TARGET_FAILURE_PROBABILITY, rel=0.05
     )
 
 
-def test_a_robust_margin_is_never_looser_than_the_nominal_one() -> None:
-    from exlink.model import analyse, inequality_constraints
-    from exlink.robustness import robust_margins
+def test_relaxing_the_gap_alone_is_not_enough() -> None:
+    """What reliability-based design says that a deterministic one cannot.
 
-    margins = robust_margins(COUPLED_DESIGN, samples=CRANK)
-    nominal = inequality_constraints(analyse(COUPLED_DESIGN, samples=CRANK))
-    for index, name in enumerate(
-        ["rod_angle_margin", "compatibility_margin", "tdc_gap_margin"]
-    ):
-        assert margins[f"{name}_robust"] >= nominal[index] - 1.0e-12
-
-
-def test_the_reference_design_is_not_robustly_feasible() -> None:
-    """The point of putting tolerance in the formulation.
-
-    ``COUPLED_DESIGN`` satisfies every constraint nominally, and fails the
-    top-dead-centre gap at three sigma -- which is what the post-hoc study said
-    and what a deterministic optimizer had no way to know while choosing.
+    Fixing the gap hands the problem to the stroke band, because the design
+    sits off-centre in a band that is itself narrower than the scatter it is
+    meant to represent.  A deterministic optimum has no way to see that.
     """
-    from exlink.robustness import robust_margins
+    from dataclasses import replace
 
-    margins = robust_margins(COUPLED_DESIGN, samples=CRANK)
-    assert margins["tdc_gap_margin_robust"] > 0.0
+    from exlink.constants import DEFAULT_TARGETS
+    from exlink.robustness import failure_probability, required_bound
 
-
-def test_a_looser_grade_makes_the_robust_margins_worse() -> None:
-    from exlink.robustness import robust_margins
-
-    tight = robust_margins(COUPLED_DESIGN, grade=6, samples=CRANK)
-    loose = robust_margins(COUPLED_DESIGN, grade=10, samples=CRANK)
-    assert loose["tdc_gap_margin_robust"] > tight["tdc_gap_margin_robust"]
-
-
-def test_zero_sigma_recovers_the_nominal_constraint() -> None:
-    from exlink.model import analyse, inequality_constraints
-    from exlink.robustness import robust_margins
-
-    margins = robust_margins(COUPLED_DESIGN, sigma_level=0.0, samples=CRANK)
-    nominal = inequality_constraints(analyse(COUPLED_DESIGN, samples=CRANK))
-    assert margins["rod_angle_margin_robust"] == pytest.approx(nominal[0])
-    assert margins["tdc_gap_margin_robust"] == pytest.approx(nominal[2])
+    relaxed = replace(
+        DEFAULT_TARGETS, max_tdc_gap=required_bound(COUPLED_DESIGN, "tdc_gap", samples=CRANK)
+    )
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK, targets=relaxed)
+    assert reliability is not None
+    assert reliability.binding() == "stroke_lower"
+    assert reliability.system > 0.1
 
 
-def test_the_robust_discipline_matches_the_function() -> None:
-    from exlink.robustness import ROBUST_NAMES, RobustMarginDiscipline, robust_margins
+def test_a_looser_grade_raises_the_failure_probability() -> None:
+    from exlink.robustness import failure_probability
 
-    discipline = RobustMarginDiscipline(samples=CRANK)
+    tight = failure_probability(COUPLED_DESIGN, grade=6, samples=CRANK)
+    loose = failure_probability(COUPLED_DESIGN, grade=10, samples=CRANK)
+    assert tight is not None and loose is not None
+    assert loose.system > tight.system
+
+
+def test_the_discipline_matches_the_function() -> None:
+    from exlink.robustness import FailureProbabilityDiscipline, failure_probability
+
+    discipline = FailureProbabilityDiscipline(samples=CRANK)
     output = discipline.execute(COUPLED_DESIGN.to_mapping())
-    values = robust_margins(COUPLED_DESIGN, samples=CRANK)
-    for name in ROBUST_NAMES:
-        assert float(output[name][0]) == pytest.approx(values[name])
+    reliability = failure_probability(COUPLED_DESIGN, samples=CRANK)
+    assert reliability is not None
+    # The orthant integral is randomised quasi-Monte Carlo, so two evaluations
+    # agree to about seven significant figures rather than exactly.
+    assert float(output["failure_probability"][0]) == pytest.approx(
+        reliability.system, rel=1.0e-4
+    )
 
 
-def test_an_unanalysable_design_is_penalised_not_raised() -> None:
-    from exlink.robustness import ROBUST_NAMES, robust_margins
+def test_an_unanalysable_design_is_certain_to_fail_not_an_error() -> None:
+    from exlink.robustness import FailureProbabilityDiscipline, failure_probability
 
     broken = COUPLED_DESIGN.replace(a=0.4 * COUPLED_DESIGN.a)
-    margins = robust_margins(broken, samples=CRANK)
-    assert all(margins[name] > 0.0 for name in ROBUST_NAMES)
+    assert failure_probability(broken, samples=CRANK) is None
+    output = FailureProbabilityDiscipline(samples=CRANK).execute(broken.to_mapping())
+    assert float(output["failure_probability"][0]) == pytest.approx(1.0)

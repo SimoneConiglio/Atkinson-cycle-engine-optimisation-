@@ -469,64 +469,90 @@ def required_grade(
     return (max(workable) if workable else None), factor_needed
 
 
-#: The constraints worth robustifying, and the Jacobian row that carries each.
-#: ``clearance`` is left out deliberately: its capability is above 400, so a
-#: robust margin on it would only add cost, and it is the one constraint here
+#: The constraints whose reliability is assessed, and the Jacobian row for each.
+#: ``clearance`` is left out deliberately: its capability is above 400, so its
+#: failure probability is numerically zero, and it is the one constraint here
 #: without an analytic gradient.
-ROBUST_SOURCES: dict[str, str] = {
-    "rod_angle_margin": "rod_angle_margin",
-    "compatibility_margin": "compatibility_margin",
-    "tdc_gap_margin": "tdc_gap_margin",
-    "side_load_margin": "side_load_margin",
-    "stroke_band_upper": "stroke_error",
-    "stroke_band_lower": "stroke_error",
-    "ratio_band_upper": "compression_ratio_error",
-    "ratio_band_lower": "compression_ratio_error",
+CONSTRAINT_ROWS_FOR_RELIABILITY: dict[str, str] = {
+    "rod_angle": "rod_angle_margin",
+    "compatibility": "compatibility_margin",
+    "tdc_gap": "tdc_gap_margin",
+    "side_load": "side_load_margin",
+    "stroke_upper": "stroke_error",
+    "stroke_lower": "stroke_error",
+    "ratio_upper": "compression_ratio_error",
+    "ratio_lower": "compression_ratio_error",
 }
 
-ROBUST_NAMES: tuple[str, ...] = tuple(f"{name}_robust" for name in ROBUST_SOURCES)
-"""The robust counterparts, each ``<= 0`` when the design is robustly feasible."""
+RELIABILITY_NAMES: tuple[str, ...] = tuple(CONSTRAINT_ROWS_FOR_RELIABILITY)
 
-DEFAULT_SIGMA_LEVEL = 3.0
-"""Standard deviations of margin the robust constraints hold.
+TARGET_FAILURE_PROBABILITY = 1.0e-3
+"""Default system probability of failure to design to.
 
-``g + k sigma_g <= 0`` at ``k = 3`` puts the nominal design three standard
-deviations inside the constraint, i.e. a one-sided process capability of 1.0.
-The usual industrial target is 1.33, which is ``k = 4``; that is available and
-is what a production drawing would ask for, but on this problem it is
-unreachable for the top-dead-centre gap at any geometry -- see
-:func:`required_grade`.
+A design target, not a fact about the parts: it says how often a
+nominally-conforming build may miss *any* of its requirements.  1e-3 corresponds
+to a reliability index of about 3.1 on a single constraint, which is the usual
+structural-design level.
 """
 
 
-def robust_margins(
+@dataclass(frozen=True)
+class ConstraintMoments:
+    """First-order moments of every constraint under manufacturing scatter."""
+
+    names: tuple[str, ...]
+    value: FloatArray
+    """Nominal constraint value; negative is satisfied."""
+
+    sigma: FloatArray
+    """Standard deviation induced by the tolerances."""
+
+    correlation: FloatArray
+    """Correlation between constraints, ``(n, n)``.
+
+    Non-trivial and the whole reason a system probability differs from the
+    product of the individual ones: every constraint is a function of the same
+    eleven dimensions, so their errors are strongly dependent.  The stroke and
+    compression-ratio residuals in particular move together.
+    """
+
+    @property
+    def beta(self) -> FloatArray:
+        """Reliability index ``-g / sigma`` of each constraint.
+
+        Large and positive is safe.  This is the first-order (FORM) index: the
+        distance, in standard deviations, from the nominal design to the
+        constraint surface along the direction the gradient says is steepest.
+        """
+        safe = np.where(self.sigma > 0.0, self.sigma, np.inf)
+        return -self.value / safe
+
+
+def constraint_moments(
     design: Design,
-    sigma_level: float = DEFAULT_SIGMA_LEVEL,
     grade: int = DEFAULT_GRADE,
     angular: float = ANGULAR_TOLERANCE,
     samples: int = 360,
     targets: DesignTargets = DEFAULT_TARGETS,
     spec: EngineSpec = DEFAULT_SPEC,
-) -> dict[str, float]:
-    """The robust counterpart of each geometric constraint.
+) -> ConstraintMoments | None:
+    """Constraint values, standard deviations and correlations, from the exact Jacobians.
 
-    Replaces ``g(X) <= 0`` by
+    First-order propagation: with ``Sigma`` the covariance of the dimensional
+    errors,
 
-    .. math:: g(X) + k \\sqrt{\\nabla g^\\top \\Sigma \\nabla g} \\le 0
+    .. math::
+        \\sigma_i = \\sqrt{\\nabla g_i^\\top \\Sigma \\nabla g_i}, \\qquad
+        \\rho_{ij} = \\frac{\\nabla g_i^\\top \\Sigma \\nabla g_j}
+                          {\\sigma_i \\sigma_j}
 
-    so the optimizer is required to hold the constraint not at the nominal
-    design but ``k`` standard deviations inside it, given the manufacturing
-    covariance of the parts.  This is what
-    :func:`tolerance_report` measures *after* the fact, moved into the
-    formulation so the optimizer has to pay for it while choosing.
-
-    Every gradient here is the exact one from :mod:`exlink.jacobian`, so the
-    robust margin costs one Jacobian evaluation on top of the analysis -- the
-    same observation that made the tolerance study cheap.
+    The correlation matters.  Every constraint here is a function of the same
+    eleven dimensions, so their scatter is strongly dependent, and treating them
+    as independent -- which is what applying a fixed margin to each one
+    separately amounts to -- overstates the chance that *some* constraint fails.
 
     Args:
         design: The design to assess.
-        sigma_level: ``k``, the standard deviations of margin required.
         grade: ISO 286 IT grade of the machined dimensions.
         angular: Angular assembly half-width [deg].
         samples: Crank angles per revolution.
@@ -534,16 +560,13 @@ def robust_margins(
         spec: Fixed engine data.
 
     Returns:
-        ``{name_robust: value}`` over :data:`ROBUST_NAMES`, each non-positive
-        when the design is robustly feasible.  A design that cannot be analysed
-        returns large positive values rather than raising, so an optimizer can
-        walk through it.
+        The moments, or ``None`` if the design cannot be analysed.
     """
     from .scenarios import DEFAULT_EQUALITY_TOLERANCE
 
     analysis = analyse(design, samples=samples, spec=spec)
     if not analysis.valid:
-        return dict.fromkeys(ROBUST_NAMES, 1.0e3)
+        return None
 
     kinematic = kinematic_jacobian(design, analysis.require_solved().kinematics, spec)
     rows = metric_jacobian(design, analysis, kinematic, spec)
@@ -552,82 +575,246 @@ def robust_margins(
     metrics = analysis.metrics
     stroke = metrics.expansion_stroke - targets.expansion_stroke
     ratio = metrics.compression_ratio - targets.compression_ratio
-    nominal = {
-        "rod_angle_margin": metrics.rod_angle - targets.max_rod_angle,
-        "compatibility_margin": metrics.compatibility - targets.max_transmission,
-        "tdc_gap_margin": metrics.tdc_gap - targets.max_tdc_gap,
-        "side_load_margin": metrics.side_load_ratio - targets.max_side_load,
-        "stroke_band_upper": stroke - DEFAULT_EQUALITY_TOLERANCE["stroke_error"],
-        "stroke_band_lower": -stroke - DEFAULT_EQUALITY_TOLERANCE["stroke_error"],
-        "ratio_band_upper": (ratio - DEFAULT_EQUALITY_TOLERANCE["compression_ratio_error"]),
-        "ratio_band_lower": (-ratio - DEFAULT_EQUALITY_TOLERANCE["compression_ratio_error"]),
+    band_stroke = DEFAULT_EQUALITY_TOLERANCE["stroke_error"]
+    band_ratio = DEFAULT_EQUALITY_TOLERANCE["compression_ratio_error"]
+
+    values = {
+        "rod_angle": metrics.rod_angle - targets.max_rod_angle,
+        "compatibility": metrics.compatibility - targets.max_transmission,
+        "tdc_gap": metrics.tdc_gap - targets.max_tdc_gap,
+        "side_load": metrics.side_load_ratio - targets.max_side_load,
+        "stroke_upper": stroke - band_stroke,
+        "stroke_lower": -stroke - band_stroke,
+        "ratio_upper": ratio - band_ratio,
+        "ratio_lower": -ratio - band_ratio,
     }
-
-    result: dict[str, float] = {}
-    for name, source in ROBUST_SOURCES.items():
+    gradients = []
+    for name, source in CONSTRAINT_ROWS_FOR_RELIABILITY.items():
         gradient = np.asarray(rows[source], dtype=float)
-        if name.endswith("_lower"):
-            gradient = -gradient
-        deviation = float(np.sqrt(max(gradient @ sigma_matrix @ gradient, 0.0)))
-        result[f"{name}_robust"] = float(nominal[name]) + sigma_level * deviation
-    return result
+        gradients.append(-gradient if name.endswith("_lower") else gradient)
+    jacobian = np.stack(gradients)
 
-
-def robust_report(
-    design: Design,
-    sigma_level: float = DEFAULT_SIGMA_LEVEL,
-    grade: int = DEFAULT_GRADE,
-    samples: int = 360,
-) -> str:
-    """Render the robust margins beside the nominal ones."""
-    from .model import analyse as _analyse
-
-    robust = robust_margins(design, sigma_level, grade, samples=samples)
-    analysis = _analyse(design, samples=samples)
-    title = f"robust margins at IT{grade}, k = {sigma_level:g}"
-    lines = [title, "=" * len(title), ""]
-    lines.append(f"  {'constraint':<24}{'nominal':>12}{'robust':>12}   holds")
-    nominal_rows = dict(
-        zip(
-            ("rod_angle_margin", "compatibility_margin", "tdc_gap_margin", "side_load_margin"),
-            inequality_constraints(analysis)[[0, 1, 2, 4]],
-            strict=True,
-        )
+    covariances = jacobian @ sigma_matrix @ jacobian.T
+    sigma = np.sqrt(np.clip(np.diag(covariances), 0.0, None))
+    outer = np.outer(sigma, sigma)
+    correlation = np.divide(covariances, outer, out=np.eye(sigma.size), where=outer > 0.0)
+    return ConstraintMoments(
+        names=RELIABILITY_NAMES,
+        value=np.array([values[name] for name in RELIABILITY_NAMES]),
+        sigma=sigma,
+        correlation=np.clip(correlation, -1.0, 1.0),
     )
-    for name in ROBUST_SOURCES:
-        value = robust[f"{name}_robust"]
-        shown = nominal_rows.get(name)
-        nominal = f"{shown:12.5f}" if shown is not None else " " * 12
-        lines.append(f"  {name:<24}{nominal}{value:>12.5f}   {'yes' if value <= 0 else 'NO'}")
-    return "\n".join(lines)
 
 
-class RobustMarginDiscipline(Discipline):
-    """The robust counterparts of the geometric constraints, as a GEMSEO discipline.
+@dataclass(frozen=True)
+class Reliability:
+    """Probability that a nominally-conforming build misses its requirements."""
 
-    Publishes ``g + k sigma_g`` for each constraint in :data:`ROBUST_SOURCES`,
-    so an optimizer can be *required* to hold every constraint ``k`` standard
-    deviations inside its bound given the manufacturing covariance -- rather
-    than being told afterwards that its answer does not survive tolerance.
+    moments: ConstraintMoments
+    per_constraint: dict[str, float]
+    """First-order failure probability of each constraint, ``Phi(-beta)``."""
 
-    Derivatives are finite differences, deliberately.  The exact route would
-    need second derivatives of ``g``: the robust margin contains
-    ``sqrt(grad g' Sigma grad g)``, whose gradient carries a Hessian this
-    package does not compute.  The usual first-order dodge is to hold ``sigma``
-    locally constant and reuse ``grad g``, but that discards precisely the term
-    that makes a robust optimum differ from a nominal one -- the pull towards
-    regions where the constraint is *less* sensitive.  Since the underlying
-    analysis is geometric and costs about ten milliseconds, differencing the
-    whole robust margin is affordable and keeps that term.
+    system: float
+    """Probability that *any* constraint fails, with the correlation kept."""
+
+    independent_bound: float
+    """The same quantity assuming the constraints are independent.
+
+    Reported beside :attr:`system` because the gap between them is the price of
+    the approximation a per-constraint margin makes.
+    """
+
+    @property
+    def system_beta(self) -> float:
+        """The system reliability index, ``-Phi^-1(P_f)``."""
+        from scipy.stats import norm
+
+        return float(norm.isf(min(max(self.system, 1e-16), 1.0 - 1e-16)))
+
+    def binding(self) -> str:
+        """The constraint contributing most of the failure probability."""
+        return max(self.per_constraint, key=lambda name: self.per_constraint[name])
+
+
+def failure_probability(
+    design: Design,
+    grade: int = DEFAULT_GRADE,
+    angular: float = ANGULAR_TOLERANCE,
+    samples: int = 360,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> Reliability | None:
+    """Probability of failure by FORM, with the constraint correlation kept.
+
+    This replaces the fixed-margin formulation ``g + k sigma <= 0`` that an
+    earlier version of this module used, and the reason is worth stating.
+
+    A margin of ``k`` standard deviations on *each* constraint separately is a
+    reliability statement only if the constraints are independent.  They are
+    emphatically not: every one of them is a function of the same eleven
+    dimensions, and :attr:`ConstraintMoments.correlation` measures pairs at
+    ``0.94`` and at exactly ``-1``.  Requiring all eight to hold at three sigma
+    simultaneously is therefore much stronger than requiring the *system* to be
+    reliable at three sigma, and it buys that strength by refusing designs that
+    are in fact acceptable.
+
+    What is computed instead is the thing actually wanted:
+
+    .. math::
+        P_f = 1 - \\Phi_n(\\beta; \\rho), \\qquad \\beta_i = -g_i / \\sigma_i
+
+    the probability that *any* constraint is missed, from the multivariate
+    normal orthant with the correlation in place.  ``Phi_n`` is evaluated by
+    SciPy's implementation of Genz's algorithm, which is randomised
+    quasi-Monte Carlo: repeated calls agree to about seven significant figures
+    rather than exactly, so anything comparing two evaluations should allow for
+    that.
+
+    First order means the constraint surfaces are linearised, which is the same
+    approximation the exact Jacobians already make cheap, and the same one
+    :func:`tolerance_report` checks against sampling.
 
     Args:
-        sigma_level: ``k``, the standard deviations of margin required.
+        design: The design to assess.
         grade: ISO 286 IT grade of the machined dimensions.
         angular: Angular assembly half-width [deg].
         samples: Crank angles per revolution.
         targets: Constraint right-hand sides.
         spec: Fixed engine data.
-        step: Relative finite-difference step.
+
+    Returns:
+        The reliability, or ``None`` if the design cannot be analysed.
+    """
+    from scipy.stats import multivariate_normal, norm
+
+    moments = constraint_moments(design, grade, angular, samples, targets, spec)
+    if moments is None:
+        return None
+
+    beta = moments.beta
+    per_constraint = {
+        name: float(norm.sf(value)) for name, value in zip(moments.names, beta, strict=True)
+    }
+    independent = float(1.0 - np.prod([1.0 - value for value in per_constraint.values()]))
+
+    finite = np.isfinite(beta)
+    if not np.any(finite):
+        return Reliability(moments, per_constraint, 0.0, independent)
+
+    # The correlation is singular by construction -- the two sides of each
+    # relaxed equality are perfectly anti-correlated -- so a ridge is added
+    # before the orthant integral.  It is small enough not to move the answer
+    # and large enough to keep the factorisation well posed.
+    reduced = moments.correlation[np.ix_(finite, finite)]
+    ridge = reduced + 1.0e-8 * np.eye(reduced.shape[0])
+    try:
+        safe = float(
+            multivariate_normal(mean=np.zeros(ridge.shape[0]), cov=ridge).cdf(beta[finite])
+        )
+    except Exception:  # a degenerate correlation falls back to the bound
+        safe = float(np.prod([1.0 - value for value in per_constraint.values()]))
+    system = float(min(max(1.0 - safe, 0.0), 1.0))
+    return Reliability(moments, per_constraint, system, independent)
+
+
+def format_reliability(
+    reliability: Reliability, target: float = TARGET_FAILURE_PROBABILITY
+) -> str:
+    """Render a :class:`Reliability` as an aligned table."""
+    lines = ["reliability", "===========", ""]
+    lines.append(f"  {'constraint':<16}{'g':>11}{'sigma':>11}{'beta':>8}{'P(fail)':>12}")
+    moments = reliability.moments
+    for name, value, sigma in zip(moments.names, moments.value, moments.sigma, strict=True):
+        beta = -value / sigma if sigma > 0 else float("inf")
+        lines.append(
+            f"  {name:<16}{value:>11.5f}{sigma:>11.5f}{beta:>8.2f}"
+            f"{reliability.per_constraint[name]:>12.3e}"
+        )
+    lines.append("")
+    lines.append(f"  system P(fail), correlation kept   {reliability.system:.4e}")
+    lines.append(f"  the same assuming independence     {reliability.independent_bound:.4e}")
+    lines.append(f"  system reliability index beta      {reliability.system_beta:.2f}")
+    lines.append(f"  target                             {target:.1e}")
+    lines.append(f"  binding constraint                 {reliability.binding()}")
+    return "\n".join(lines)
+
+
+def required_bound(
+    design: Design,
+    constraint: str = "tdc_gap",
+    target: float = TARGET_FAILURE_PROBABILITY,
+    grade: int = DEFAULT_GRADE,
+    samples: int = 360,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> float:
+    """The bound a constraint needs so its failure probability meets the target.
+
+    Inverts the first-order reliability relation: for a target ``p``, the
+    nominal value must sit ``beta = -Phi^-1(p)`` standard deviations inside the
+    bound, so the bound has to be at least ``current + beta * sigma`` above the
+    nominal quantity.
+
+    This answers the practical question the tolerance study raises and cannot
+    settle -- *how much* would the specification have to give? -- with a number
+    rather than "more".
+
+    Args:
+        design: The design to assess.
+        constraint: Which of :data:`RELIABILITY_NAMES` to invert.
+        target: Failure probability to design to.
+        grade: ISO 286 IT grade.
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+
+    Returns:
+        The required right-hand side, in the constraint's own units.
+
+    Raises:
+        ValueError: If the design cannot be analysed.
+    """
+    from scipy.stats import norm
+
+    moments = constraint_moments(design, grade, samples=samples, targets=targets, spec=spec)
+    if moments is None:
+        msg = "cannot assess a design that does not close"
+        raise ValueError(msg)
+
+    index = moments.names.index(constraint)
+    beta = float(norm.isf(target))
+    current = {
+        "tdc_gap": targets.max_tdc_gap,
+        "rod_angle": targets.max_rod_angle,
+        "compatibility": targets.max_transmission,
+        "side_load": targets.max_side_load,
+    }.get(constraint, 0.0)
+    # g = quantity - bound, so quantity = g + bound; the new bound must exceed
+    # that quantity by beta sigma.
+    quantity = moments.value[index] + current
+    return float(quantity + beta * moments.sigma[index])
+
+
+class FailureProbabilityDiscipline(Discipline):
+    """System probability of failure, as a GEMSEO constraint output.
+
+    Publishes the FORM estimate so an optimizer can be given
+    ``P_f <= target`` -- a single, correlation-aware reliability requirement --
+    instead of a fixed margin on each constraint separately.
+
+    First order is what makes this affordable inside an optimization: it costs
+    one Jacobian evaluation of a geometric analysis, so it can be evaluated at
+    every iteration.  Its error against sampling is real and is documented on
+    :func:`failure_probability`; the sampling estimate is the reference, not
+    this.
+
+    Args:
+        grade: ISO 286 IT grade of the machined dimensions.
+        angular: Angular assembly half-width [deg].
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+        step: Relative finite-difference step for the Jacobian.
         name: Discipline name.
     """
 
@@ -635,7 +822,6 @@ class RobustMarginDiscipline(Discipline):
 
     def __init__(
         self,
-        sigma_level: float = DEFAULT_SIGMA_LEVEL,
         grade: int = DEFAULT_GRADE,
         angular: float = ANGULAR_TOLERANCE,
         samples: int = 360,
@@ -647,7 +833,6 @@ class RobustMarginDiscipline(Discipline):
         from .reference import PUBLISHED_DESIGN
 
         super().__init__(name=name)
-        self.sigma_level = sigma_level
         self.grade = grade
         self.angular = angular
         self.samples = samples
@@ -655,23 +840,23 @@ class RobustMarginDiscipline(Discipline):
         self.spec = spec
         self.step = step
         self.input_grammar.update_from_names(VARIABLE_NAMES)
-        self.output_grammar.update_from_names(list(ROBUST_NAMES))
+        self.output_grammar.update_from_names(["failure_probability", "system_beta"])
         self.default_input_data = PUBLISHED_DESIGN.to_mapping()
 
-    def _margins(self, design: Design) -> dict[str, float]:
-        return robust_margins(
-            design,
-            self.sigma_level,
-            self.grade,
-            self.angular,
-            self.samples,
-            self.targets,
-            self.spec,
+    def _values(self, design: Design) -> tuple[float, float]:
+        reliability = failure_probability(
+            design, self.grade, self.angular, self.samples, self.targets, self.spec
         )
+        if reliability is None:
+            return 1.0, -10.0
+        return reliability.system, reliability.system_beta
 
     def _run(self, input_data: StrKeyMapping) -> StrKeyMapping:
-        values = self._margins(Design.from_mapping(dict(input_data)))
-        return {name: np.array([values[name]]) for name in ROBUST_NAMES}
+        probability, beta = self._values(Design.from_mapping(dict(input_data)))
+        return {
+            "failure_probability": np.array([probability]),
+            "system_beta": np.array([beta]),
+        }
 
     def _compute_jacobian(
         self,
@@ -680,19 +865,19 @@ class RobustMarginDiscipline(Discipline):
     ) -> None:
         self._init_jacobian(input_names, output_names)
         base = Design.from_mapping(dict(self.io.data)).to_array()
-        gradients: dict[str, list[float]] = {name: [] for name in ROBUST_NAMES}
+        rows: dict[str, list[float]] = {"failure_probability": [], "system_beta": []}
         for index, value in enumerate(base):
             delta = self.step * max(abs(float(value)), 1.0)
             ahead, behind = base.copy(), base.copy()
             ahead[index] += delta
             behind[index] -= delta
-            forward = self._margins(Design.from_array(ahead))
-            backward = self._margins(Design.from_array(behind))
-            for name in ROBUST_NAMES:
-                gradients[name].append((forward[name] - backward[name]) / (2.0 * delta))
-        for output in ROBUST_NAMES:
+            forward = self._values(Design.from_array(ahead))
+            backward = self._values(Design.from_array(behind))
+            rows["failure_probability"].append((forward[0] - backward[0]) / (2.0 * delta))
+            rows["system_beta"].append((forward[1] - backward[1]) / (2.0 * delta))
+        for output, values in rows.items():
             if output not in self.jac:
                 continue
             for index, variable in enumerate(VARIABLE_NAMES):
                 if variable in self.jac[output]:
-                    self.jac[output][variable] = np.array([[gradients[output][index]]])
+                    self.jac[output][variable] = np.array([[values[index]]])
