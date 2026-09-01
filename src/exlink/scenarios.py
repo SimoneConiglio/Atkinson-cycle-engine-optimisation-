@@ -1670,3 +1670,160 @@ def project_onto_equalities(
             return design
         current = Design.from_array(current.to_array() + step)
     return current
+
+
+@dataclass(frozen=True)
+class MultiStartOutcome:
+    """What a multi-start search found, and how varied its local optima were."""
+
+    design: Design
+    """The best feasible design found."""
+
+    value: float
+    """Its objective value."""
+
+    starts: int
+    feasible_starts: int
+    """How many restarts ended somewhere feasible."""
+
+    values: list[float] = field(default_factory=list)
+    """Objective at every feasible local solution found."""
+
+    seconds: float = 0.0
+
+    @property
+    def spread(self) -> float:
+        """Range of the feasible local optima, as a fraction of the best.
+
+        Near zero means every restart reached effectively the same point, which
+        is evidence -- not proof -- that the single-start answer was not merely
+        the nearest local optimum.
+        """
+        if len(self.values) < 2 or self.value == 0.0:
+            return 0.0
+        return (max(self.values) - min(self.values)) / abs(self.value)
+
+
+def multistart(
+    objective: str = "neg_efficiency",
+    initial: Design | None = None,
+    bounds: Bounds | None = None,
+    n_start: int = 10,
+    spread: float = 0.08,
+    max_iter: int = 60,
+    algorithm: str = DEFAULT_COUPLED_ALGORITHM,
+    samples: int = DEFAULT_SAMPLES,
+    seed: int = 0,
+    build: Any = None,
+    evaluate_value: Any = None,
+    **kwargs: Any,
+) -> MultiStartOutcome:
+    """Restart a gradient solve from perturbed points on the feasible manifold.
+
+    Why not GEMSEO's ``MultiStart``
+    --------------------------------
+    Because on this problem it cannot work, and the reason is structural rather
+    than a matter of budget.  ``MultiStart`` draws its restarts from an LHS over
+    the design box, and this feasible set contains two *equality* constraints --
+    ``STE = 74`` and ``epsilon = 16`` -- so it is a codimension-two manifold and
+    has measure zero.  Sampling it uniformly succeeds with probability zero, and
+    that is what happens: **no feasible point in 12 000 uniform samples**, not
+    even within 10 % of a design known to be feasible.  Only 5.8 % of the global
+    box is analysable at all.  Run anyway, ``MultiStart`` returns its starting
+    point unchanged.
+
+    What works instead
+    ------------------
+    Restart from points that are *on* the manifold.  Each restart perturbs the
+    incumbent, projects the perturbation back onto the two equalities with
+    :func:`project_onto_equalities` -- a deterministic Newton step from the
+    analytic Jacobians, so the start is feasible in the equalities by
+    construction -- and lets the optimizer restore the inequalities from there.
+
+    That is the standard treatment for an equality-constrained problem, and it
+    is what makes the question answerable at all: whether the single-start
+    answers this package reports are local optima or something better.
+
+    Args:
+        objective: Output to minimise.
+        initial: Incumbent to perturb around; the refined reference if omitted.
+        bounds: The design box.
+        n_start: Restarts, including the incumbent itself.
+        spread: Perturbation size, as a fraction of each variable's magnitude.
+        max_iter: Budget per restart.
+        algorithm: A single-objective GEMSEO optimizer.
+        samples: Crank angles per revolution.
+        seed: Random seed, so the search is reproducible.
+        build: Scenario builder taking ``(bounds, initial)``; the geometric
+            :func:`build_scenario` if omitted.
+        evaluate_value: Maps a design to its objective; reads the analysis if
+            omitted.
+        **kwargs: Forwarded to the builder.
+
+    Returns:
+        The best feasible design found, and the spread of the local optima.
+    """
+    import time
+
+    from .reference import REFINED_DESIGN
+
+    start = REFINED_DESIGN if initial is None else initial
+    box = Bounds.around(start, relative=0.35) if bounds is None else bounds
+    rng = np.random.default_rng(seed)
+    began = time.perf_counter()
+
+    def default_build(box_: Bounds, initial_: Design) -> BaseScenario:
+        return build_scenario(
+            objective,
+            bounds=box_,
+            initial=initial_,
+            samples=samples,
+            relax_equalities=True,
+            **kwargs,
+        )
+
+    def default_value(design: Design) -> float:
+        analysis = analyse(design, samples=samples)
+        return float(-analysis.metrics.efficiency)
+
+    builder = default_build if build is None else build
+    scorer = default_value if evaluate_value is None else evaluate_value
+
+    best_design, best_value = start, float("inf")
+    values: list[float] = []
+    feasible_starts = 0
+
+    for index in range(n_start):
+        if index == 0:
+            candidate = start
+        else:
+            base = start.to_array()
+            step = rng.normal(0.0, spread, size=base.size) * np.maximum(np.abs(base), 1.0)
+            moved = Design.from_array(np.clip(base + step, box.lower, box.upper))
+            # Put the restart back on the equality manifold; a perturbation off
+            # it starts the optimizer outside a set it may not re-enter.
+            candidate = project_onto_equalities(moved, samples=samples)
+
+        try:
+            scenario = builder(box, candidate)
+            scenario.execute(algo_name=algorithm, max_iter=max_iter)
+            found = _best_design(scenario, objective=objective, fallback=candidate)
+        except Exception:  # a restart that fails is data, not an error
+            continue
+
+        if not is_feasible(analyse(found, samples=samples)):
+            continue
+        feasible_starts += 1
+        value = scorer(found)
+        values.append(value)
+        if value < best_value:
+            best_design, best_value = found, value
+
+    return MultiStartOutcome(
+        design=best_design,
+        value=best_value,
+        starts=n_start,
+        feasible_starts=feasible_starts,
+        values=values,
+        seconds=time.perf_counter() - began,
+    )
