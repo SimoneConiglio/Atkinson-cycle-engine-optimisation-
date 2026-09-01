@@ -1,8 +1,12 @@
 name: Documentation
 
 on:
+  # Build on every branch so a docs change is checked wherever it is made; the
+  # deploy job below is what restricts *publication* to the default branch.
+  # Naming branches here would repeat the mistake the deploy gate had: this
+  # repository's default branch is not called main.
   push:
-    branches: ["main", "master"]
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
