@@ -187,13 +187,13 @@ taken across that switch does not approximate a derivative: measured at 25 %
 error on $\gamma$ at a $10^{-4}$ mm step, and it does not improve with step size.
 
 **The resolution.** The chain is closed form, so derivatives propagate forward
-alongside each intermediate. For an extremum attained at $\theta^\*$ the
+alongside each intermediate. For an extremum attained at $\theta^*$ the
 envelope theorem gives
 
 $$\frac{d}{dX}\Big[\max_{\theta} f(X,\theta)\Big]
-  = \frac{\partial f}{\partial X}\Big|_{\theta^\*}$$
+  = \frac{\partial f}{\partial X}\Big|_{\theta^*}$$
 
-because the term through $d\theta^\*/dX$ carries $\partial f/\partial\theta = 0$
+because the term through $d\theta^*/dX$ carries $\partial f/\partial\theta = 0$
 at the maximiser. The switching problem disappears rather than being mitigated.
 
 Through the fixed point of §3.2 the same idea applies twice more. The

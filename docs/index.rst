@@ -3,32 +3,53 @@ Range-optimal design of an extended-expansion engine linkage
 
 .. rubric:: Abstract
 
-An extended-expansion (Atkinson) engine linkage for a Shell Eco-marathon car is
-designed by multidisciplinary optimization with **range** -- distance on a given
-quantity of fuel -- as the objective. The formulation conventionally used for
-this mechanism maximises a lever-arm quality measure subject to envelope bounds;
-it prices nothing, its central quantity is not an efficiency, and it cannot see
-the parts. Range makes efficiency, envelope, torque ripple and structural mass
-commensurable at rates the physics fixes.
+Linkage design problems are conventionally posed as the maximisation of a
+kinematic quality measure subject to bounds on envelope dimensions, with
+performance requirements imposed as equality constraints. Applied to an
+extended-expansion (Atkinson) engine mechanism, that formulation is shown to be
+inadequate in three respects: it establishes no exchange rate between its
+competing objectives and so admits no solution, only a front; its objective is
+identically equal to the work done by the gas under the virtual-work identity
+and therefore quantifies no loss; and it determines no cross-section, so the
+inertia loads that govern the design at operating speed cannot be represented
+within it.
 
-Two structural properties then determine the methodology. The section sizes,
-the masses and the inertia loads form a fixed point, making the problem
-multidisciplinary in the strict sense, with a measured Gauss-Seidel contraction
-factor rising from 0 at rest to 0.68 at 1500 rpm. And the feasible set, as
-specified, has measure zero -- which rules out every sampling method, forces the
-two equality requirements into tolerance bands, and, because those bands are
-only 1.7 standard deviations wide against the scatter of the parts, obliges a
-reliability-based rather than a deterministic treatment.
+An alternative formulation is developed in which the objective is the
+application-level quantity of merit -- distance travelled per unit of fuel
+consumed -- and in which the competing geometric quantities are priced by the
+physical chain connecting them to it. The resulting problem is simultaneously
+multidisciplinary, mixed-integer, and, as specified, possessed of a feasible set
+of Lebesgue measure zero. Each property is shown to determine an element of the
+admissible solution method rather than merely to complicate it. The measure-zero
+feasible set, in particular, obliges the relaxation of the equality requirements
+into tolerance bands; those bands are then shown to be comparable in width with
+the manufacturing scatter of the components, so that a deterministic solution
+lying within a band is not a design that satisfies the requirement.
+Reliability-based optimization thereby arises as a consequence of the relaxation
+rather than as an addition to the problem.
 
-Three results follow. The design a quasi-static formulation prefers sits at the
-transmission-angle singularity, exactly where inertia is worst: it has no
-feasible structure above 1000 rpm, while a design backed off weighs half as much
-and goes further. The specified top-dead-centre bound of 0.01 mm cannot be held
-at any ISO grade, and the reference design has a 64.5 % probability of missing at
-least one requirement. And the linkage's 24 % range advantage over a
-slider-crank sized by identical code falls to 2.8 % once its one-revolution
-firing frequency is removed, so the advantage is firing frequency rather than
+Three quantitative results follow. The quasi-statically optimal geometry
+coincides with the transmission-angle singularity at which the inertia loads are
+largest, and admits no feasible structure above 1000 rev/min, whereas a geometry
+displaced from the singularity attains lower mass and greater range
+simultaneously. The specified top-dead-centre tolerance of 0.01 mm is
+unattainable at any ISO 286 machining grade, and the reference design exhibits a
+0.645 probability of violating at least one requirement. The 24 % range
+advantage of the mechanism over a conventional slider-crank, sized by identical
+structural and tribological models, reduces to 2.8 % when its firing-frequency
+difference is removed, locating the advantage in the cycle rate rather than in
 extended expansion.
+
+The methodological contribution is a demonstration, on a problem small enough to
+be verified throughout, that the choice of objective and the geometry of the
+feasible set determine both the design obtained and the class of algorithms that
+may legitimately be applied to obtain it.
+
+.. rubric:: Keywords
+
+Multidisciplinary design optimization; mixed-integer nonlinear programming;
+reliability-based design optimization; mechanism synthesis; analytic
+sensitivities; extended-expansion engine.
 
 .. rubric:: Contents
 

@@ -29,6 +29,22 @@ extensions = [
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
+# MyST parses no math by default, so `$...$` and `$$...$$` would render as
+# literal dollar signs.  ``dollarmath`` turns both into MathJax; ``amsmath``
+# additionally accepts bare LaTeX environments such as ``\begin{align}``.
+myst_enable_extensions = [
+    "dollarmath",
+    "amsmath",
+    "colon_fence",
+    "deflist",
+    "smartquotes",
+]
+# Allow a display equation to follow text on the same line, and permit digits
+# immediately after a closing ``$`` so that "$10^{-3}$ target" parses.
+myst_dmath_double_inline = True
+myst_dmath_allow_digits = True
+myst_heading_anchors = 3
+
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),

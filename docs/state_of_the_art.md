@@ -67,7 +67,7 @@ unless it is taught not to.
 
 **Analytic derivatives with the envelope theorem** are used here. The chain is
 closed form, so forward-mode propagation is direct; and for a maximum attained
-at $\theta^\*$ the derivative is the partial derivative evaluated there, because
+at $\theta^*$ the derivative is the partial derivative evaluated there, because
 the term through the moving maximiser carries $\partial f/\partial\theta = 0$.
 That removes the switching problem rather than mitigating it. §3.4 develops it.
 

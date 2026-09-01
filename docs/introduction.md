@@ -60,11 +60,14 @@ obliges a probabilistic treatment.
 
 ## 1.4 Scope and structure
 
-This document states the problem (§3), reviews the methods available for each of
-its features (§2), derives the methodology (§3), describes the implementation
-(§4), presents the use case (§5), reports and discusses the results (§6), and
-sets out what the framework cannot yet do (§7). Derivations are collected in the
-{doc}`theory` appendix; every module is documented in {doc}`api`.
+Section 2 reviews the methods available for each feature of the problem and
+identifies which are admissible. Section 3 states the formulation and derives
+each element of the methodology from a limitation of that formulation. Section 4
+describes the implementation and what is verified against independent results.
+Section 5 presents the use case and its parameters, Section 6 the results with
+their discussion, and Section 7 the limitations of the framework and the
+improvements they suggest. Derivations are collected in the {doc}`theory`
+appendix; the software is documented in {doc}`api`.
 
 Every quantity reported is computed by the code described in §4 and pinned by
 its test suite.
