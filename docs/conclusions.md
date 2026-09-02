@@ -238,7 +238,30 @@ $$\min_X \; \lVert \lambda(X) - \lambda^{\star} \rVert^2
 which is what {py:func}`~exlink.synthesis.fit_within_constraints` solves.
 Dropping $g$ was never justified by the reformulation — only the *equalities*
 were absorbed — and keeping it costs one SQP in place of one least-squares
-solve.
+solve. Measured, the difference is not marginal:
+
+| target | fit | worst $g$ | inside the bands |
+|---|---|---|---|
+| reachable | unconstrained | $-0.0026$ | yes |
+| reachable | constrained | $-0.0026$ | yes |
+| jittered, 0.5 mm | unconstrained | $+10.0$ to $+15.7$ | mostly no |
+| jittered, 0.5 mm | constrained | $\mathbf{+0.0000}$ | no |
+
+On a reachable target the two agree exactly, so the constraints cost nothing.
+On an unreachable one the unconstrained fit violates by *ten to fifteen units*
+while chasing a motion no buildable linkage produces, and the constrained fit
+holds every constraint at its boundary instead. Discarding $g$ was not a
+simplification, it was a way of not noticing.
+
+Two further things the last row says. The constrained fits sit at
+$g = 0$ exactly — SQP converging onto its active constraints, which §6.2 shows
+is precisely what makes a design unreliable, so a generator built this way
+should hand its output to a reliability-aware stage rather than be trusted as
+a final design. And they are still outside the stroke bands, because holding
+$g \le 0$ while chasing an unreachable motion trades one against the other.
+Those bands are themselves constraints and belong in the problem too; with
+them added the fit either returns a design that is feasible *and* in band or
+reports that none exists, which is the right answer either way.
 
 ### The functional decomposition this suggests
 

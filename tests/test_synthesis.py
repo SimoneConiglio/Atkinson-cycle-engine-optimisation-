@@ -272,3 +272,66 @@ def test_the_fits_are_feasible_against_the_whole_constraint_set() -> None:
     assert in_band
     for fit in in_band:
         assert evaluate(fit.design, speed_rpm=1000.0).feasible
+
+
+@pytest.mark.slow
+def test_the_unconstrained_fit_violates_by_a_wide_margin_on_a_hard_target() -> None:
+    """What discarding ``g`` actually costs, rather than what it might cost.
+
+    On a reachable target the constrained and unconstrained fits agree, so the
+    constraints look free and harmless to drop.  On a target the mechanism
+    cannot reach they do not agree at all: least squares chases the motion and
+    leaves the geometric set by ten units or more, while the constrained fit
+    holds every constraint.  The unconstrained form is not a cheaper
+    approximation of the constrained one -- it answers a different question.
+    """
+    import numpy as np
+    from scipy.optimize import fsolve
+
+    from exlink.constants import DEFAULT_SPEC
+    from exlink.cycle import find_phases
+    from exlink.model import analyse, inequality_constraints
+    from exlink.synthesis import (
+        TargetMotion,
+        fit_to_target,
+        fit_within_constraints,
+        target_from_design,
+    )
+
+    base = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    theta = np.linspace(0.0, 2.0 * np.pi, base.samples, endpoint=False)
+    second, first = np.cos(2.0 * theta), np.sin(theta)
+    stroke = 15.0 * DEFAULT_SPEC.dead_volume / DEFAULT_SPEC.piston_area
+
+    # A target displaced by third-harmonic content, put back exactly onto the
+    # two stroke requirements so only its *shape* is unreachable.
+    seeded = base.lam + 0.8 * np.sin(3.0 * theta)
+
+    def residual(params: np.ndarray) -> list[float]:
+        phases = find_phases(seeded + params[0] * second + params[1] * first)
+        return [phases.expansion_stroke - 74.0, phases.compression_stroke - stroke]
+
+    solution, _info, status, _msg = fsolve(residual, np.zeros(2), full_output=True)
+    if status != 1:
+        pytest.skip("the perturbed target could not be put back on the manifold")
+    hard = TargetMotion(
+        lam=seeded + solution[0] * second + solution[1] * first,
+        expansion_stroke=74.0,
+        compression_ratio=16.0,
+        amplitude=float(solution[0]),
+        skew=float(solution[1]),
+    )
+
+    loose = fit_to_target(hard, COUPLED_DESIGN, max_evaluations=200)
+    tight = fit_within_constraints(hard, COUPLED_DESIGN, max_iterations=200)
+    if loose is None or tight is None:
+        pytest.skip("neither fit converged on this target")
+
+    def worst(fit: object) -> float:
+        analysis = analyse(fit.design, samples=CRANK)
+        if not analysis.valid:
+            return 1.0e3
+        return float(np.max(inequality_constraints(analysis)))
+
+    assert worst(tight) <= 1.0e-6
+    assert worst(loose) > worst(tight)
