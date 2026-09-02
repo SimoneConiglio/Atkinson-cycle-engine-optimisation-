@@ -389,3 +389,49 @@ def test_the_probability_covers_the_dimension_only_constraints() -> None:
     sigma = covariance(COUPLED_DESIGN)
     assert sigma.shape == (11, 11)
     assert np.allclose(sigma, np.diag(np.diag(sigma)))
+
+
+@pytest.mark.slow
+def test_the_deterministic_optimum_is_dominated_on_reliability() -> None:
+    """§6.2's finding: most of the 0.645 is self-inflicted, not required.
+
+    A deterministic optimizer converges *onto* its active constraints, because
+    nothing in the formulation rewards standing off them -- and a design
+    sitting on ``g = 0`` fails about half the time.  Designs a few hundredths
+    of a millimetre away are both more reliable and no worse in range, so the
+    converged design is dominated rather than merely unreliable.
+
+    Sampled rather than optimised, because the point of §3.10 is that a
+    gradient method does not get there.
+    """
+    import numpy as np
+
+    from exlink.design import Design
+    from exlink.performance import evaluate
+    from exlink.robustness import failure_probability
+
+    reference = failure_probability(COUPLED_DESIGN)
+    baseline = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
+    assert baseline.feasible
+
+    base = COUPLED_DESIGN.to_array()
+    rng = np.random.default_rng(0)
+    scored = []
+    for scale in (0.0005, 0.001, 0.002):
+        for _ in range(150):
+            vector = base * (1.0 + scale * rng.normal(size=base.size))
+            candidate = Design.from_array(vector)
+            reliability = failure_probability(candidate)
+            if reliability is not None:
+                scored.append((reliability.system_beta, candidate))
+    scored.sort(key=lambda item: -item[0])
+    assert scored
+
+    # Only the best few are worth the coupled evaluation.
+    for beta, candidate in scored[:5]:
+        outcome = evaluate(candidate, speed_rpm=1000.0)
+        if not outcome.feasible:
+            continue
+        if beta > reference.system_beta and outcome.km_per_litre >= baseline.km_per_litre:
+            return
+    pytest.fail("no sampled design dominated the deterministic optimum")

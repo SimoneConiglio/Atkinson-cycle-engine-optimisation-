@@ -387,11 +387,31 @@ by the penalty fallback:
 | 0.10 and beyond | $-8.210$ | no |
 
 That better reliability is nevertheless available nearby is shown by sampling
-rather than by descent: a random cloud at 0.1 % relative scatter about the
-reference contains analysable designs reaching $\beta = +0.403$, well above the
-target the line search could not attain. Whether such a point also satisfies
-every inequality is a separate question from whether the reliability index can
-be improved, and only the second is claimed here.
+rather than by descent, and the margin is not small. Drawing 2500 designs at
+0.05 % to 1 % relative scatter about the reference, scoring each by $\beta$, and
+then checking the twenty-five best against the *full* constraint set:
+
+| | $\beta$ | $P_f$ | range |
+|---|---|---|---|
+| the reference design | $-0.373$ | 0.645 | 3338.3 km/L |
+| best sampled, fully feasible | $\mathbf{+0.502}$ | **0.308** | **3341.7 km/L** |
+
+All twenty-five are feasible. The probability of missing a requirement is more
+than halved, and it costs **nothing**: the best of them is 0.10 % *better* in
+range than the design it replaces.
+
+**The deterministic optimum is therefore dominated, not merely unreliable.**
+There is no reliability-against-range trade-off to negotiate here — a random
+cloud finds points that beat the converged design on both objectives at once.
+The reason is the one RBDO exists for: nothing in the deterministic problem
+rewards backing away from a constraint boundary, so SLSQP converges *onto*
+$g = 0$, where half the scatter falls outside. Retreating a few hundredths of a
+millimetre costs almost no range and buys most of the reliability back, and the
+deterministic formulation cannot see that because it prices only the nominal
+point.
+
+So the failure above is entirely algorithmic. It is not that the reliable
+region is expensive to reach; it is adjacent, feasible, and free.
 
 So closing the reliability loop is not a matter of attaching the discipline,
 which is easy, but of reaching the reliable region, which a gradient method

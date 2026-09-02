@@ -20,6 +20,9 @@ those bands are then only 1.7 standard deviations wide against the scatter of
 the parts. Treating that probabilistically is not an embellishment — it is the
 only way to know whether the relaxed requirement is met. It is not: 64.5 %
 chance of missing at least one requirement, and a gap bound no ISO grade holds.
+Worse, most of that is self-inflicted -- a deterministic optimizer converges
+onto its active constraints, and designs beside this one halve the probability
+at no cost in range (§6.2).
 
 **Decomposition buys structure, not speed.** Bi-level outer approximation halves
 the sub-solves against enumeration and lands 0.6 % short, on a bound that is not
@@ -84,12 +87,16 @@ In rough order of value per unit of effort:
    dimensional errors, which is why only seven of the twelve constraints can
    honestly carry a probability (§3.10). Widening it is what would let the
    bearing, saturation and vehicle constraints join.
-4. **A way to reach the reliable region.** The loop itself is now closed --
+4. **A way to reach the reliable region**, which is now known to be worth
+   reaching. The loop itself is closed --
    ``build_range_scenario(beta_target=...)`` constrains the reliability index
-   -- but SLSQP from the deterministic optimum does not move, while random
-   sampling near it finds strictly better $\beta$ (§3.10). What is missing is
-   not the constraint but a search able to cross the thin feasible region: a
-   restoration phase, a continuation in $\beta$ from a sampled start, or the
+   -- but SLSQP from the deterministic optimum does not move, while sampling
+   beside it finds fully feasible designs that halve $P_f$ at no cost in range
+   (§3.10, §6.2). The deterministic optimum is dominated, so this is the
+   cheapest improvement on the list in engineering terms and the most clearly
+   algorithmic in nature: what is missing is not the constraint, nor a
+   trade-off to negotiate, but a search able to cross a thin feasible region --
+   a restoration phase, a continuation in $\beta$ from a sampled start, or the
    prescribed-motion generator of §7.4 supplying starts already on the
    manifold.
 5. **Sampling-based reliability as an outer check.** The first-order constraint
@@ -263,6 +270,7 @@ not a small one.
 | advantage over it | +15.6 % |
 | the same with the firing-frequency advantage removed | **-4.3 %** |
 | probability the reference design misses a requirement | 64.5 % |
+| the same, for the best sampled design beside it | **30.8 %**, at +0.10 % range |
 | gap bound needed for a $10^{-3}$ target | 0.054 mm against 0.01 specified |
 
 ---

@@ -143,6 +143,35 @@ stroke band becomes binding at $\beta = 0.68$, because that band is itself only
 1.7 standard deviations wide and the design sits off-centre in it. Reaching
 $10^{-3}$ needs $\pm 0.09$ mm.
 
+### Most of this probability is avoidable, and free
+
+The 0.645 is not the price of the requirements. It is the price of *ignoring
+them while optimising*. Sampling 2500 designs about the reference and checking
+the best by reliability against the full constraint set (§3.10) gives:
+
+| | $\beta$ | $P_f$ | range |
+|---|---|---|---|
+| the reference design | $-0.373$ | 0.645 | 3338.3 km/L |
+| best sampled, fully feasible | $+0.502$ | **0.308** | 3341.7 km/L |
+
+The failure probability more than halves, every one of the twenty-five best
+candidates is feasible, and the range does not fall — the best is 0.10 % higher
+than the design it replaces. **The deterministic optimum is dominated on both
+objectives at once.**
+
+That is the standard argument for reliability-based design optimization,
+measured on this problem rather than asserted: a deterministic optimizer
+converges *onto* its active constraints, because nothing in the formulation
+rewards standing off them, and a design sitting exactly on $g = 0$ fails half
+the time. Backing off by a few hundredths of a millimetre is nearly free in
+range and buys most of the reliability back.
+
+Two things this does *not* say. It does not repair the specification — §6.2's
+0.01 mm gap bound is still unattainable at any ISO grade, and $P_f = 0.308$ is
+still far from a design target. And it is not a substitute for solving the
+reliability-constrained problem: sampling found these points, whereas SLSQP
+starting from the deterministic optimum could not move at all (§3.10).
+
 ### Discussion
 
 The estimator is first-order and its weakest point is exactly where the finding
