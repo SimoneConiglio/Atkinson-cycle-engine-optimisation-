@@ -325,15 +325,91 @@ a global method. §6 reports what it settles and §7 what it does not.
 
 $$
 \begin{aligned}
-\max_{X,\,y} \quad & R(X, y) \\
+\max_{X,\,y} \quad & R(X, y) && \text{range [km/L]} \\
 \text{s.t.}\quad
-& \Pr\big[\exists i : g_i(X + u,\, y) > 0\big] \le p_{\text{target}} \\
-& |STE(X) - 74| \le \delta_{STE},\quad |\varepsilon(X) - 16| \le \delta_\varepsilon \\
-& \text{sizing, bearing and vehicle constraints} \\
-& I = \tfrac32 m z,\quad m \in \text{ISO 54},\ z \in \mathbb{Z},\ z \ge 17 \\
+& g_i(X) \le 0, \quad i \in \{mra,\, W,\, g,\, d,\, \gamma\}
+  && \text{geometric} \\
+& |STE(X) - 74| \le \delta_{STE}, \quad |\varepsilon(X) - 16| \le \delta_\varepsilon
+  && \text{relaxed equalities (§3.4)} \\
+& s(X, y) \le 0,\; \ell(X, y) \le 0,\; b(X, y) \le 0
+  && \text{saturation, slenderness, bearing} \\
+& r(X, y) \ge 0, \quad h(X, y) \ge 0
+  && \text{engine runs, gears fit} \\
+& I = \tfrac32 m z, \quad m \in \text{ISO 54},\ z \in \mathbb{Z},\ z \ge 17
+  && \text{catalogue (§3.7)} \\
 & X \in [X_{lb}, X_{ub}] \subset \mathbb{R}^{11}
 \end{aligned}
 $$
+
+Twelve constraints, and $y$ is the converged MDA state of §3.6. Two details
+the code makes visible and the notation above does not: each two-sided band is
+attached as a pair of one-sided inequalities, so the scenario carries fourteen
+constraint *functions* for these twelve constraints; and $I$ is not a free
+variable but an output of the catalogue relation, leaving ten in the search.
+The envelope bounds $H$ and $B$ that §2.3 discusses are *not* among the
+constraints at all: once the objective prices size through mass, a separate
+limit on it is redundant, and the range problem attaches none.
+
+### What is deterministic here, and what is not
+
+This is a **deterministic** problem. The reliability analysis of §3.8 is applied
+*to its solution*, not inside it, and the distinction matters enough to state
+plainly rather than leave to be inferred:
+
+| | |
+|---|---|
+| solved by | SLSQP on the above, bands as ordinary inequalities |
+| $P_f$ in the constraint set | **no** |
+| $P_f$ reported | yes, post hoc, on the design that results |
+
+The machinery to close that loop exists and is tested
+({py:class}`exlink.robustness.FailureProbabilityDiscipline` reports $P_f$ as a
+discipline output), but no scenario in the package attaches it as a constraint.
+So §6.2's 0.645 is a *measurement of a design obtained without it*, and should
+be read as an audit rather than as a reliability target that was met or missed.
+Constraining $P_f$ during the search would move the design; how far is not
+established here.
+
+### Which constraints the probability covers
+
+The uncertainty model is $\Sigma = \operatorname{diag}(\sigma^2)$ over the
+eleven dimensions, from ISO 286 grades plus an angular clocking term
+({py:func}`exlink.robustness.covariance`). It contains no material, load or
+friction scatter. That fixes which constraints can honestly carry a probability:
+
+| constraint | in $P_f$ | why |
+|---|---|---|
+| $STE$, $\varepsilon$ bands | **yes** | closed form in $X$; $\Sigma$ is their *complete* uncertainty |
+| $mra$, $W$, $g$, $d$, $\gamma$ | **yes** | same |
+| bearing | no | variance dominated by material and load scatter, which $\Sigma$ omits |
+| saturation | no | a ceiling indicator: non-smooth, so the FORM linearisation carries no information at the kink |
+| slenderness | no | a *model-validity* guard, not a limit state — see below |
+| engine runs, gears fit | no | load-dependent, same omission as bearing |
+
+Seven of the twelve, and the seven are exactly those that are functions of the
+eleven dimensions alone. For them $\Sigma$ is the whole story and $\beta = -g/\sigma$
+means what it says.
+
+The exclusions are not one kind of thing. **Slenderness is a category error, not
+a gap**: it fires when a link grows thicker than a third of its length, at which
+point sizing it as a beam has stopped being credible. There is no probability
+that beam theory applies; a limit state is a statement about a part failing, and
+this is a statement about the model's domain. **Saturation is a genuine
+limitation** — FORM linearises $g$ at the design point, and at a ceiling that
+linearisation is meaningless; it needs sampling or a smoothed reformulation.
+**Bearing is the weakest exclusion**, and the gradient it would need is already
+available exactly
+({py:attr}`exlink.dynamics_jacobian.CoupledJacobian.peak_bearing_load`); what is
+missing is not the derivative but the uncertainty model behind it.
+
+That last point generalises, and it is the reason the answer here is seven
+rather than twelve. A probability of failure computed from an uncertainty model
+that omits the dominant source is *worse* than a deterministic margin, because
+it launders a partial variance into something that reads as a reliability
+statement — and it would then enter the system union of §3.8 and corrupt a
+number that is currently defensible. `bearing $\le 0$` with a safety factor is
+at least honest about being a margin. Widening $\Sigma$ to carry material and
+load scatter is the prerequisite for widening $P_f$, and §7.3 lists it as such.
 
 ---
 

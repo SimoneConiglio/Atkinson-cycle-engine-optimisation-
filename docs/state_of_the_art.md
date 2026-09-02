@@ -231,8 +231,10 @@ the correlated multivariate-normal orthant that the bounds approximate is
 computed directly by the transformation of {cite:t}`genz1992`. Tolerance
 classes are taken from {cite:p}`iso286`.
 
-§3.8 uses FORM with the full correlation matrix inside the optimization, and
-sampling as the reference.
+§3.8 uses FORM with the full correlation matrix, checked against sampling. It
+is applied as an audit of the solved design rather than as a constraint of the
+search, and over the seven constraints whose uncertainty the model actually
+carries rather than over all twelve; §3.10 states both restrictions and why.
 
 ## 2.9 Escaping local optima
 

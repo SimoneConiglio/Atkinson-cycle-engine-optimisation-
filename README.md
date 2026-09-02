@@ -26,7 +26,8 @@ weighs half as much and goes further.
 
 **A specified constraint cannot be manufactured.** The top-dead-centre gap is bounded at
 0.01 mm and the dimensions producing it scatter by more than that. No ISO grade holds it, and
-the reference design has a **64.5 %** probability of missing at least one requirement.
+the reference design has a **64.5 %** probability of missing at least one of its dimensional
+requirements.
 
 **The advantage is firing frequency, not extended expansion.** Against a conventional engine
 *optimised* under identical code the linkage wins 15.6 %; remove its one-revolution cycle and

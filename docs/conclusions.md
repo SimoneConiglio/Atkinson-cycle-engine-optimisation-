@@ -78,17 +78,28 @@ In rough order of value per unit of effort:
    the result most likely to be point-specific.
 2. **Tubular sections.** The largest single modelling conservatism, and it
    interacts directly with §6.1.
-3. **Sampling-based reliability as an outer check.** The first-order constraint
+3. **A widened uncertainty model**, carrying material, load and friction
+   scatter alongside the dimensional tolerances. This is the prerequisite for
+   everything else on the reliability side: $\Sigma$ currently holds only ISO 286
+   dimensional errors, which is why only seven of the twelve constraints can
+   honestly carry a probability (§3.10). Widening it is what would let the
+   bearing, saturation and vehicle constraints join.
+4. **Closing the reliability loop**, by attaching
+   {py:class}`exlink.robustness.FailureProbabilityDiscipline` as a constraint
+   rather than reporting $P_f$ after the fact. The discipline exists and is
+   tested; no scenario uses it, so every design in §6 was obtained
+   deterministically and audited afterwards.
+5. **Sampling-based reliability as an outer check.** The first-order constraint
    is what is affordable per iteration; `gemseo-umdo`'s `Probability` statistic
    would bound the error the linearisation makes.
-4. **A feasibility-restoration phase before each restart**, which is what would
+6. **A feasibility-restoration phase before each restart**, which is what would
    make the multistart of §3.9 conclusive on the range problem.
-5. **Second-order derivatives of the constraints**, which would make the
+7. **Second-order derivatives of the constraints**, which would make the
    reliability margin exactly differentiable and remove the one place where
    finite differences enter a tight constraint.
-6. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
-7. **A prescribed-motion sub-problem** as a feasible-point generator for the
-   multistart of item 4, and — more speculatively — as the basis of a
+8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
+9. **A prescribed-motion sub-problem** as a feasible-point generator for the
+   multistart of item 6, and — more speculatively — as the basis of a
    functional IDF. §7.4 sets both out, with the measurement that makes the
    second plausible.
 

@@ -121,8 +121,11 @@ Four independent routes agree:
 
 ### The reliability statement
 
-§3.7 constrains a probability rather than a margin. For the coupled reference
-design at IT8:
+§3.8 computes a probability rather than a margin, over the seven constraints
+whose uncertainty $\Sigma$ actually carries; it is evaluated *on* the solved
+design rather than constrained during the search, so what follows is an audit
+of that design and not a target it was held to (§3.10). For the coupled
+reference design at IT8:
 
 | | |
 |---|---|

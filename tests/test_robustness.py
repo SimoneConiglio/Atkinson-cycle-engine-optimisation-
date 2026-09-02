@@ -342,3 +342,50 @@ def test_an_unanalysable_design_is_certain_to_fail_not_an_error() -> None:
     assert failure_probability(broken, samples=CRANK) is None
     output = FailureProbabilityDiscipline(samples=CRANK).execute(broken.to_mapping())
     assert float(output["failure_probability"][0]) == pytest.approx(1.0)
+
+
+# -- what the reliability model does and does not cover ------------------------
+
+
+def test_the_probability_covers_the_dimension_only_constraints() -> None:
+    """§3.10's seven-of-twelve split, pinned so the documentation cannot drift.
+
+    ``Sigma`` carries ISO 286 dimensional tolerances and nothing else, so a
+    probability of failure is honest only for constraints that are functions of
+    the eleven dimensions alone.  Those are exactly the five geometric margins
+    and the two band residuals.  The load-dependent constraints stay
+    deterministic; giving them a ``P_f`` from this covariance would report the
+    dimensional variance and silently omit the larger one.
+    """
+    from exlink.robustness import CONSTRAINT_NAMES, covariance
+    from exlink.scenarios import (
+        COUPLED_INEQUALITY_OUTPUTS,
+        EQUALITY_OUTPUTS,
+        INEQUALITY_OUTPUTS,
+        RANGE_INEQUALITY_OUTPUTS,
+    )
+
+    covered = set(CONSTRAINT_NAMES)
+    assert len(covered) == 7
+
+    # The seven are the five geometric margins plus the two band residuals,
+    # matched by stem because the scenario names carry _margin/_error suffixes.
+    geometric = {name.removesuffix("_margin") for name in INEQUALITY_OUTPUTS}
+    assert geometric <= covered
+    assert len(geometric) == 5
+    assert len(EQUALITY_OUTPUTS) == 2
+
+    # The load-dependent ones are outside it, and must stay outside while the
+    # covariance carries dimensional scatter only.
+    deterministic = set(COUPLED_INEQUALITY_OUTPUTS) | set(RANGE_INEQUALITY_OUTPUTS)
+    assert len(deterministic) == 5
+    for name in deterministic:
+        assert name.removesuffix("_margin") not in covered
+
+    # Seven covered plus five deterministic is the twelve of §3.10.
+    assert len(covered) + len(deterministic) == 12
+
+    # The claim that makes the split necessary: Sigma is dimensional only.
+    sigma = covariance(COUPLED_DESIGN)
+    assert sigma.shape == (11, 11)
+    assert np.allclose(sigma, np.diag(np.diag(sigma)))
