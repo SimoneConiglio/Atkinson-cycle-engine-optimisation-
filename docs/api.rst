@@ -59,6 +59,7 @@ problem actually is, and whether the finding generalises past one linkage.
 .. automodule:: exlink.robustness
 .. automodule:: exlink.formulations
 .. automodule:: exlink.slidercrank
+.. automodule:: exlink.synthesis
 
 Mixed-integer design
 --------------------

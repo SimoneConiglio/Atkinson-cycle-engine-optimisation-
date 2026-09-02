@@ -1358,6 +1358,8 @@ def build_range_scenario(
     material: Material = DEFAULT_MATERIAL,
     safety: SafetyFactors = DEFAULT_SAFETY,
     relax_equalities: bool = True,
+    beta_target: float | None = None,
+    grade: int = 8,
     equality_tolerance: dict[str, float] | None = None,
     mda_name: str = DEFAULT_MDA,
     mda_settings: dict[str, Any] | None = None,
@@ -1419,6 +1421,14 @@ def build_range_scenario(
         mda_name: Inner MDA.
         mda_settings: Overrides for :data:`DEFAULT_MDA_SETTINGS`.
 
+        beta_target: When given, the search is reliability-constrained: a
+            :class:`~exlink.robustness.FailureProbabilityDiscipline` is added
+            and ``system_beta >= beta_target`` attached, so the optimizer must
+            hold a system reliability index rather than merely satisfy the
+            nominal constraints.  ``None`` leaves the problem deterministic.
+        grade: ISO 286 IT grade assumed for the machined dimensions when
+            ``beta_target`` is set.  Ignored otherwise.
+
     Returns:
         A scenario ready to execute, over ten continuous variables.
     """
@@ -1455,6 +1465,19 @@ def build_range_scenario(
             spec=spec,
         ),
     ]
+    if beta_target is not None:
+        from .robustness import FailureProbabilityDiscipline
+
+        # Reliability enters as one more discipline, not as a post-processing
+        # step: its output is a constraint the optimizer must hold at every
+        # iteration.  It depends on the design variables only, so it does not
+        # join the MDA -- the coupling is unchanged and §3.6's count still
+        # holds.
+        disciplines.append(
+            FailureProbabilityDiscipline(
+                grade=grade, samples=samples, targets=targets, spec=spec
+            )
+        )
     # ``I`` is not a design variable any more, so every discipline has to be
     # told its pinned value; they would otherwise fall back to the reference.
     for discipline in disciplines:
@@ -1487,6 +1510,17 @@ def build_range_scenario(
         scenario.add_constraint(name, constraint_type="ineq")
     for name in RANGE_INEQUALITY_OUTPUTS:
         scenario.add_constraint(name, constraint_type="ineq", positive=True)
+    if beta_target is not None:
+        # The reliability index, not the probability: P_f saturates towards 0
+        # and 1, where its gradient vanishes and the optimizer stalls, while
+        # beta = -Phi^-1(P_f) stays well scaled across the whole range.
+        scenario.add_constraint(
+            "system_beta",
+            constraint_type="ineq",
+            value=beta_target,
+            positive=True,
+            constraint_name="reliability",
+        )
     return scenario
 
 

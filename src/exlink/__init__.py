@@ -77,6 +77,7 @@ from .reference import (
 from .robustness import ToleranceReport, tolerance_report
 from .sizing import MemberSizing
 from .slidercrank import SliderCrank, evaluate_slidercrank, optimise_slidercrank
+from .synthesis import TargetMotion, fit_to_target, target_from_design, target_motion
 from .vehicle import RangeResult, Vehicle
 
 __all__ = [
@@ -122,6 +123,7 @@ __all__ = [
     "SafetyFactors",
     "SliderCrank",
     "SolvedAnalysis",
+    "TargetMotion",
     "Thermodynamics",
     "ToleranceReport",
     "Vehicle",
@@ -131,12 +133,15 @@ __all__ = [
     "coupling_strength",
     "evaluate",
     "evaluate_slidercrank",
+    "fit_to_target",
     "lattice_neighbours",
     "optimise_slidercrank",
     "size_pair",
     "solve_coupled",
     "solve_for_design",
     "speed_sweep",
+    "target_from_design",
+    "target_motion",
     "tolerance_report",
 ]
 
