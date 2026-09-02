@@ -108,12 +108,14 @@ In rough order of value per unit of effort:
    reliability margin exactly differentiable and remove the one place where
    finite differences enter a tight constraint.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
-9. **Prescribed-motion generation paired with feasibility restoration.** §7.4
-   measures that fitting to a *reachable* target reaches the equality manifold
-   where uniform sampling never does (22 of 30 against 0 of 12 000), and that
-   varying the target rather than the start is what yields distinct designs.
-   What it does not do is satisfy the inequalities, so it pairs with item 6
-   rather than replacing it. The functional IDF §7.4 also sets out is a larger
+9. **Prescribed-motion generation as the multistart source.** §7.4 measures
+   that fitting to a *reachable* target reaches the equality manifold where
+   uniform sampling never does (22 of 30 against 0 of 12 000), that the fits
+   are feasible against the complete constraint set, and that varying the
+   target rather than the start is what yields distinct designs. It needs no
+   separate restoration phase provided the inequalities are kept in the fit
+   ({py:func}`~exlink.synthesis.fit_within_constraints`) rather than discarded
+   with the equalities. The functional IDF §7.4 also sets out is a larger
    question and would need its own study.
 
 ## 7.4 A prescribed-motion formulation, measured
@@ -216,12 +218,27 @@ different linkages where varying the start gave one. Past about 2 mm of added
 harmonic content the target leaves the reachable set and no fit lands in band,
 which is the attainability limit measured from the other side.
 
-**One limitation, and it is not small.** None of the designs generated this way
-is feasible against the *full* constraint set — they satisfy the two equalities
-and then fail an inequality. The generator does the hard, measure-zero half of
-the problem and leaves the rest, which is exactly the feasibility-restoration
-phase §7.3 already lists. Prescribed-motion fitting plus restoration is a
-credible multistart; fitting alone is not.
+**Are these points usable, or only near the manifold?** Usable. Of 30 random
+starts fitted to the fixed reachable target, 26 produce a fit, all 26 land
+inside both bands, and **all 26 are feasible against the complete constraint
+set** — every inequality, coupled and vehicle constraints included. The
+generator does not merely approach the equality manifold; it lands on usable
+designs.
+
+That is a property of *this* target rather than of the method, and the
+distinction matters for the jittered targets below, whose unconstrained fits
+do sometimes leave the geometric set. The repair is not a separate restoration
+phase: it is to stop discarding the inequalities. Absorbing the equalities into
+the target removed the measure-zero part of the feasible set, so what remains is
+an ordinary box-and-inequality problem that SQP handles directly,
+
+$$\min_X \; \lVert \lambda(X) - \lambda^{\star} \rVert^2
+  \quad \text{s.t.} \quad g(X) \le 0, \; X \in [X_{lb}, X_{ub}] ,$$
+
+which is what {py:func}`~exlink.synthesis.fit_within_constraints` solves.
+Dropping $g$ was never justified by the reformulation — only the *equalities*
+were absorbed — and keeping it costs one SQP in place of one least-squares
+solve.
 
 ### The functional decomposition this suggests
 

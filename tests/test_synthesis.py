@@ -216,3 +216,59 @@ def test_fitting_beats_uniform_sampling_at_reaching_the_manifold() -> None:
     )
     in_band = [fit for fit in results if fit.stroke_error <= 0.05 and fit.ratio_error <= 0.05]
     assert len(in_band) >= 4
+
+
+@pytest.mark.slow
+def test_keeping_the_inequalities_in_the_fit_keeps_the_design_buildable() -> None:
+    """Why the reformulated problem should keep ``g <= 0``.
+
+    Absorbing the equalities into the target removes the measure-zero part of
+    the feasible set, and that is the only part the reformulation earns the
+    right to drop.  The inequalities define a full-dimensional set and cost one
+    SQP instead of one least-squares solve, so discarding them buys nothing and
+    can return a design that tracks the motion and is not buildable.
+
+    This asserts the constrained fit lands inside the geometric constraint set,
+    which is the property the unconstrained one does not guarantee.
+    """
+    from exlink.model import analyse, inequality_constraints
+    from exlink.synthesis import fit_within_constraints, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    fit = fit_within_constraints(target, COUPLED_DESIGN, max_iterations=40)
+    assert fit is not None
+
+    analysis = analyse(fit.design, samples=CRANK)
+    assert analysis.valid
+    violations = inequality_constraints(analysis)
+    assert float(np.max(violations)) <= 1.0e-6, f"violated: {violations}"
+
+    # And it is still a fit: the point is to keep the motion, not to abandon it.
+    assert fit.stroke_error <= 0.05
+    assert fit.ratio_error <= 0.05
+
+
+@pytest.mark.slow
+def test_the_fits_are_feasible_against_the_whole_constraint_set() -> None:
+    """The generator returns usable starts, not merely points near the manifold.
+
+    Corrects an earlier claim in §7.4 that none of these designs was feasible;
+    measured, every in-band fit from a reachable target satisfies the coupled
+    and vehicle constraints too.
+    """
+    from exlink.performance import evaluate
+    from exlink.synthesis import feasible_starts, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    results = feasible_starts(
+        target,
+        attempts=6,
+        seed=7,
+        reference=COUPLED_DESIGN,
+        scatter=0.10,
+        max_evaluations=150,
+    )
+    in_band = [f for f in results if f.stroke_error <= 0.05 and f.ratio_error <= 0.05]
+    assert in_band
+    for fit in in_band:
+        assert evaluate(fit.design, speed_rpm=1000.0).feasible

@@ -46,11 +46,11 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import fsolve, least_squares
 
-from .constants import DEFAULT_SPEC, EngineSpec
+from .constants import DEFAULT_SPEC, DEFAULT_TARGETS, DesignTargets, EngineSpec
 from .cycle import PhaseError, find_phases
 from .design import GLOBAL_BOUNDS, VARIABLE_NAMES, Bounds, Design
 from .materials import FloatArray
-from .model import analyse
+from .model import INEQUALITY_NAMES, analyse, inequality_constraints
 
 DEFAULT_TARGET_SAMPLES = 360
 """Crank angles used to represent a target motion."""
@@ -355,6 +355,94 @@ def fit_to_target(
         ratio_error=abs(measured["compression_ratio"] - target.compression_ratio),
         converged=bool(outcome.success),
         evaluations=calls,
+    )
+
+
+def fit_within_constraints(
+    target: TargetMotion,
+    start: Design,
+    bounds: Bounds = GLOBAL_BOUNDS,
+    max_iterations: int = 120,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> FitResult | None:
+    """Fit to a prescribed motion **subject to** the inequality constraints.
+
+    Why this is the right form of the reformulated problem
+    ------------------------------------------------------
+    :func:`fit_to_target` drops the constraints entirely, which is defensible
+    only because the equalities were absorbed into the target.  The
+    *inequalities* were never the difficulty -- they define a full-dimensional
+    set -- so discarding them buys nothing and can hand back a design that
+    tracks the motion beautifully and is not buildable.
+
+    Keeping them costs almost nothing.  The reformulation has already removed
+    the measure-zero part of the feasible set, so what remains is an ordinary
+    box-and-inequality NLP that SQP handles directly:
+
+    .. math::
+
+        \\min_X \\; \\lVert \\lambda(X) - \\lambda^\\star \\rVert^2
+        \\quad \\text{s.t.} \\quad g(X) \\le 0, \\; X \\in [X_{lb}, X_{ub}]
+
+    That is the difference between a generator of points *near the manifold*
+    and a generator of points that are actually usable as starts.
+
+    Args:
+        target: The motion to fit.
+        start: Initial design.
+        bounds: Box to search in.
+        max_iterations: SLSQP iteration budget.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+
+    Returns:
+        The fit, or ``None`` if the start is unanalysable or SLSQP fails to
+        return a design that is analysable at the end.
+    """
+    from scipy.optimize import minimize
+
+    if _residual(start, target, spec) is None:
+        return None
+
+    def objective(vector: FloatArray) -> float:
+        value = _residual(Design.from_array(vector), target, spec)
+        return 1.0e6 if value is None else float(np.sum(value**2))
+
+    def constraint(vector: FloatArray) -> FloatArray:
+        analysis = analyse(Design.from_array(vector), samples=target.samples, spec=spec)
+        if not analysis.valid:
+            # Unanalysable reads as deeply infeasible, which steers SLSQP back
+            # rather than letting it wander off the analysable set.
+            return np.full(len(INEQUALITY_NAMES), -1.0e3)
+        # SciPy wants ``>= 0`` where the package states ``<= 0``.
+        return -inequality_constraints(analysis, targets)
+
+    outcome = minimize(
+        objective,
+        np.clip(start.to_array(), bounds.lower, bounds.upper),
+        method="SLSQP",
+        bounds=list(zip(bounds.lower, bounds.upper, strict=True)),
+        constraints=[{"type": "ineq", "fun": constraint}],
+        options={"maxiter": int(max_iterations), "ftol": 1.0e-12},
+    )
+    design = Design.from_array(np.asarray(outcome.x, dtype=float))
+    final = _residual(design, target, spec)
+    if final is None:
+        return None
+    analysis = analyse(design, samples=target.samples, spec=spec)
+    if not analysis.valid:
+        return None
+    metrics = analysis.metrics
+    return FitResult(
+        design=design,
+        rms=float(np.sqrt(np.mean(final**2))),
+        expansion_stroke=float(metrics.expansion_stroke),
+        compression_ratio=float(metrics.compression_ratio),
+        stroke_error=abs(float(metrics.expansion_stroke) - target.expansion_stroke),
+        ratio_error=abs(float(metrics.compression_ratio) - target.compression_ratio),
+        converged=bool(outcome.success),
+        evaluations=int(outcome.nfev),
     )
 
 
