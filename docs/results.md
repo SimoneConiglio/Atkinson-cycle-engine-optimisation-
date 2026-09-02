@@ -4,6 +4,15 @@ Each result is stated, then supported, then discussed. Every number is computed
 by the code of §4 and pinned by a test; none is transcribed. §7 collects the
 limitations.
 
+![each formulation's final design, turning on a common scale](figures/formulations.gif)
+
+*What each objective converged to, from the same starting point, drawn at one
+scale and one crank angle. Left to right: the geometric objective under an
+augmented Lagrangian and under SLSQP with exact gradients, then minimum coupled
+mass, then maximum range. The two geometric optima are long-limbed and stand
+their cylinder high — §6.1 is about why — while the two that can see mass are
+visibly shorter and squatter. Regenerate with `exlink animate --formulations`.*
+
 ## 6.1 The quasi-static optimum is the worst place to be
 
 ### Result
@@ -142,50 +151,93 @@ so the conclusion is not fragile even though the estimator is approximate.
 This is a defect in the specification, not in any design meeting it, and it is
 the single most useful result here for anyone who would build the engine.
 
-## 6.3 The advantage is firing frequency, not extended expansion
+## 6.3 Against an optimised conventional engine the advantage is firing frequency alone
 
 ### Result
 
-Against a slider-crank at the same bore, clearance volume and compression ratio,
-sized by identical code:
+Both mechanisms are held to the same compression ratio, the same clearance
+volume and the same fuel per cycle, and both are sized by identical code. The
+conventional engine is then *optimised over the variables it has* -- the rod
+length, as the obliquity $r/l$, and the speed -- rather than given textbook
+proportions, because comparing an optimised EX-link against a hand-set
+slider-crank measures the optimization and not the topology.
 
-| | slider-crank (Otto) | EX-link (Atkinson) |
+| | slider-crank, hand-set | slider-crank, optimised | EX-link (Atkinson) |
+|---|---|---|---|
+| $r/l$, speed | 0.300, 2000 rpm | **0.195, 2151 rpm** | — , 1000 rpm |
+| members / journals | 2 / 3 | 2 / 3 | 7 / 7 |
+| indicated efficiency | 0.457 | 0.457 | 0.477 |
+| mechanical efficiency | 0.740 | 0.787 | 0.853 |
+| brake efficiency | 0.338 | 0.359 | 0.407 |
+| engine mass | 19.3 kg | 16.9 kg | 12.2 kg |
+| **range** | 2690 km/L | **2888 km/L** | **3338 km/L** |
+
+Optimising the baseline is worth 7.4 % on its own, and all of it is mechanical:
+the indicated efficiency is unchanged to four figures, because the compression
+ratio and the charge are fixed and the thermodynamics cannot move. What moves
+is the rod. A longer rod (obliquity 0.195 against 0.300) reduces the piston
+side load, and with it the liner friction, which is the largest single loss in
+the budget; the optimum is interior, because past about $r/l = 0.19$ the rod's
+own mass and the taller engine start costing more than the friction it saves.
+
+### The comparison, with and without the firing-frequency difference
+
+In this model the EX-link completes all four strokes in one crankshaft
+revolution -- that is what {py:func}`exlink.cycle.find_phases` requires of the
+piston motion -- while a conventional four-stroke needs two. Per unit of work
+the EX-link therefore accumulates half the journal rotation and half the piston
+sliding. Removing that advantage means doubling its friction *and* halving its
+power, since an engine that fires half as often makes half the power at the
+same speed; both are done, and the result is re-scored through the vehicle
+rather than compared as an efficiency, because halving the power changes the
+operating point the burn-and-coast strategy can use.
+
+| | vs hand-set baseline | vs optimised baseline |
 |---|---|---|
-| members / journals | 2 / 3 | 7 / 7 |
-| indicated efficiency | 0.457 | 0.477 |
-| mechanical efficiency | 0.740 | 0.853 |
-| brake efficiency | 0.338 | 0.407 |
-| engine mass | 19.3 kg @ 2000 rpm | 12.2 kg @ 1000 rpm |
-| **range** | **2690 km/L** | **3338 km/L** |
-
-### Why
-
-Only about a fifth of the 24 % advantage is extended expansion — indicated
-efficiency 0.477 against 0.457. Most is *mechanical* efficiency, 0.85 against
-0.74, despite the EX-link having seven journals to the slider-crank's three.
-
-The cause is firing frequency. In this model the EX-link completes four strokes
-in one crankshaft revolution (§5.1), so per unit of work it accumulates half the
-journal rotation and half the piston sliding of a four-stroke.
-
-Testing that directly, by re-running with the EX-link's friction doubled:
-
-| | range | advantage |
-|---|---|---|
-| slider-crank | 2690 km/L | — |
-| EX-link, as modelled | 3338 km/L | **+24.1 %** |
-| EX-link, as a four-stroke | 2765 km/L | **+2.8 %** |
+| EX-link, as modelled (3338 km/L) | +24.1 % | **+15.6 %** |
+| EX-link, as a four-stroke (2765 km/L) | +2.8 % | **−4.3 %** |
 
 ### Discussion
 
-The finding is therefore *conditional* on the one-revolution cycle, and is
-reported that way rather than as a property of extended expansion. If a built
-engine did not achieve it, extended expansion would very nearly fail to pay for
-the four extra journals and the gear train it costs.
+Against a hand-set baseline the reading was that extended expansion very nearly
+fails to pay for itself. Against an optimised one it does not pay for itself:
+**the sign changes**. An EX-link firing at conventional frequency is 4.3 %
+*worse* than a conventional engine optimised under the same models, because the
+two points of indicated efficiency that extended expansion buys do not cover
+four extra journals, a gear train, and the mass of both.
 
-The comparison is only meaningful because both mechanisms go through the same
-sizing, friction, mass-budget and vehicle code; only the kinematics, the
-equilibrium system and the cycle differ.
+So the +15.6 % that the mechanism does deliver is attributable to the
+one-revolution cycle, not to extended expansion. That is a real advantage and
+the reason to build the linkage — but it is a *cycle-rate* advantage, and it
+would survive any other means of achieving the same firing frequency. It is
+also the most fragile part of the result: it rests entirely on the phasing that
+`find_phases` extracts from the piston motion, and an engine that did not
+achieve it in practice would lose the whole margin and more.
+
+Two things this comparison is not. It is not a claim about extended-expansion
+engines in general: {cite:t}`watanabe2006` measure a 4-point indicated-efficiency
+gain on hardware, and this model reproduces 2 points, so if anything the
+thermodynamic side here is conservative. And it is not a statement that the
+optimised baseline is a good engine — it is the best engine *these models* can
+build with two degrees of freedom, and its 0.195 obliquity is longer-rodded
+than practice, which suggests the model prices rod length only through mass and
+not through the packaging that would really limit it.
+
+What makes the comparison worth anything at all is that both sides went through
+the same sizing, friction, mass-budget and vehicle code, and both were
+optimised; only the kinematics, the equilibrium system and the cycle differ.
+
+:::{note}
+The optimised baseline is found by Nelder-Mead restarts on a two-variable box
+({py:func}`exlink.slidercrank.optimise_slidercrank`). A derivative-free method
+is used here having been rejected in §2.6 for the EX-link, and the difference
+is the geometry of the feasible set, not a change of mind: the slider-crank's
+feasible set is a full-dimensional box in which every sampled point can be
+evaluated, while the EX-link's is a manifold of measure zero on which sampling
+finds nothing. The compression ratio is deliberately *not* a design variable —
+this model has no knock limit, so left free it would rise without bound and the
+comparison would measure a missing sub-model.
+:::
 
 ## 6.4 Supporting measurements
 

@@ -77,6 +77,20 @@ CONTACT_ALLOWABLE = 1100.0
 MAX_WIDTH_FACTOR = 12.0
 """Largest face width as a multiple of the module, for mesh alignment."""
 
+UTILISATION_TOLERANCE = 1.0e-9
+"""Slack on the strength checks, in units of utilisation.
+
+Not a safety allowance -- the safety factors are already in the allowables.
+:func:`size_pair` solves for the face width that makes the governing stress
+*equal* its allowable, so the governing utilisation of every automatically
+sized pair is 1 up to round-off.  Comparing that against exactly 1.0 makes
+feasibility depend on the last bit: the same pair evaluates to
+1.0000000000000002 on one platform and 0.9999999999999999 on another, and is
+declared unsafe on the first.  The tolerance decides that comparison on the
+physics rather than on the floating-point unit; it is nine orders of magnitude
+below any stress the model resolves.
+"""
+
 WEB_FRACTION = 0.35
 """Web thickness as a fraction of face width, for the blank mass model."""
 
@@ -220,7 +234,8 @@ class GearPair:
     def feasible(self) -> bool:
         """Whether the pair is both safe and within the face-width limit."""
         return (
-            max(self.bending_utilisation, self.contact_utilisation) <= 1.0
+            max(self.bending_utilisation, self.contact_utilisation)
+            <= 1.0 + UTILISATION_TOLERANCE
             and self.width_factor <= MAX_WIDTH_FACTOR + 1.0e-9
             and self.teeth_small >= MIN_TEETH
         )

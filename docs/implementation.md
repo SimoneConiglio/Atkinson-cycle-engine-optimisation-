@@ -40,6 +40,8 @@ exlink analyse                       # objectives and constraints of the referen
 exlink analyse --design published    # the historical baseline design (see Provenance)
 exlink plot -o figures               # motion, p-V cycle, torque, mechanism
 exlink animate -o figures/exlink.gif # animated mechanism + live cycle and torque
+exlink animate --formulations \
+  -o figures/formulations.gif        # each formulation's final design, side by side
 exlink refine --design published --save refined.json   # augmented Lagrangian
 exlink optimize --save best.json     # differential evolution over the full box
 exlink pareto --pop-size 200 --max-gen 60              # NSGA-II front
@@ -82,7 +84,8 @@ src/exlink/
   disciplines.py   GEMSEO Discipline wrappers
   scenarios.py     design space, constraints, and the five workflows
   plots.py         motion / p-V / torque / mechanism / Pareto figures
-  animation.py     animated mechanism, alone or with a live dashboard
+  animation.py     animated mechanism: alone, with a live dashboard, or one
+                   panel per formulation on a common scale
   cli.py           the `exlink` command
 
   derivatives.py   exact spectral d/dtheta and d2/dtheta2 of periodic histories
@@ -100,7 +103,8 @@ src/exlink/
   vehicle.py       burn-and-coast road load  ->  kilometres per litre
   performance.py   the full chain, from 11 dimensions to km/L
   robustness.py    ISO 286 tolerance, propagated first-order and by sampling
-  formulations.py  coupling strength from the MDA residuals; MDF vs IDF
+  formulations.py  coupling strength from the MDA residuals; MDF vs IDF, and
+                   the coupling recounted in a Fourier basis
   slidercrank.py   the second mechanism, on identical terms
 ```
 

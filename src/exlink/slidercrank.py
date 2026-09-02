@@ -22,6 +22,17 @@ in advance.  Extended expansion is worth a few points of indicated efficiency;
 four extra journals and a gear train are worth a few points of mechanical
 efficiency in the other direction, plus their mass.
 
+Both sides have to be optimised
+-------------------------------
+A comparison between an optimised EX-link and a slider-crank whose proportions
+were written down from a textbook measures the optimization, not the topology,
+and it flatters the side that was searched.  :func:`optimise_slidercrank`
+removes that asymmetry by maximising the conventional engine's range over the
+two degrees of freedom it has -- the rod length and the speed -- under the same
+models.  It is worth 7.4 % to the baseline, and it changes the *sign* of the
+study's headline comparison once the firing-frequency difference below is taken
+out.
+
 Modelling parity
 ----------------
 The comparison is only worth making if both mechanisms are treated identically,
@@ -727,6 +738,136 @@ def evaluate_slidercrank(
     )
 
 
+OBLIQUITY_BOUNDS = (0.12, 0.45)
+"""Search bounds on ``r / l`` for the optimised baseline.
+
+The upper end is where the rod is short enough that it approaches alignment
+with the crank -- the slider-crank's own transmission-angle singularity, and
+the same pathology :mod:`exlink.metrics` guards against with ``W``.  The lower
+end is where the rod is nearly four times the stroke: :func:`solve` still sizes
+it, but the engine is by then taller than the car, and the model prices rod
+length only through mass, not through the packaging that would really stop it.
+Practical engines occupy 0.25 to 0.33, comfortably inside.
+"""
+
+SPEED_BOUNDS = (800.0, 3200.0)
+"""Search bounds on crankshaft speed [rev/min] for the optimised baseline."""
+
+
+@dataclass(frozen=True)
+class OptimisedSliderCrank:
+    """The best conventional engine this model can build, and how it was found."""
+
+    mechanism: SliderCrank
+    speed_rpm: float
+    comparison: Comparison
+    evaluations: int
+    starts: int
+
+
+def optimise_slidercrank(
+    ratio: float = 16.0,
+    vehicle: Vehicle | None = None,
+    samples: int = 360,
+    spec: EngineSpec = DEFAULT_SPEC,
+    obliquity_bounds: tuple[float, float] = OBLIQUITY_BOUNDS,
+    speed_bounds: tuple[float, float] = SPEED_BOUNDS,
+    starts: int = 4,
+) -> OptimisedSliderCrank:
+    """Maximise a conventional engine's range over the variables it has.
+
+    Why this exists
+    ---------------
+    Comparing an *optimised* EX-link against a slider-crank whose proportions
+    were written down by hand does not measure the topology; it measures the
+    optimization.  The honest comparison is optimum against optimum, and this
+    is the other optimum.
+
+    What is free and what is not
+    ----------------------------
+    The compression ratio is held at the value the EX-link is *required* to
+    reach, so both engines trap the same charge in the same clearance volume
+    and burn the same fuel per cycle.  It is not made a design variable,
+    because this model has no knock limit: left free it would rise without
+    bound and the comparison would measure a missing sub-model rather than a
+    mechanism.  With the ratio fixed and the clearance volume fixed, the stroke
+    follows, and the slider-crank has exactly two degrees of freedom left --
+    the rod length, as the obliquity ``r / l``, and the speed it is run at.
+
+    Why a derivative-free method is admissible here, having been rejected there
+    ---------------------------------------------------------------------------
+    The EX-link's feasible set is a manifold of measure zero, which is what
+    excludes sampling methods from that problem.  This one is a box in two
+    variables: every point in it is feasible to evaluate, so Nelder-Mead is a
+    reasonable choice and no gradient has to be derived for a baseline.  The
+    restarts are there because the objective is not concave -- range rises with
+    speed through the vehicle's operating point and falls with it through
+    friction and the inertia loads that set the mass.
+
+    Args:
+        ratio: Compression ratio to hold, matching the EX-link's requirement.
+        vehicle: The car; a default Prototype-class entry if omitted.
+        samples: Crank angles per revolution.
+        spec: Fixed engine data.
+        obliquity_bounds: Search interval for ``r / l``.
+        speed_bounds: Search interval for the speed [rev/min].
+        starts: Nelder-Mead restarts, spread over the box.
+
+    Returns:
+        The best mechanism, its speed, and its scored row.
+
+    Raises:
+        RuntimeError: If no point in the box produced a feasible engine.
+    """
+    from scipy.optimize import minimize
+
+    car = vehicle if vehicle is not None else Vehicle()
+    calls = 0
+    best: tuple[float, SliderCrank, float, Comparison] | None = None
+
+    def score(vector: FloatArray) -> float:
+        nonlocal calls, best
+        calls += 1
+        obliquity = float(np.clip(vector[0], *obliquity_bounds))
+        speed = float(np.clip(vector[1], *speed_bounds))
+        mechanism = SliderCrank.for_compression_ratio(ratio, obliquity, spec=spec)
+        try:
+            row = evaluate_slidercrank(mechanism, speed, vehicle=car, samples=samples)
+        except (ValueError, FloatingPointError):
+            return 0.0
+        if not row.feasible:
+            return 0.0
+        if best is None or row.km_per_litre > best[0]:
+            best = (row.km_per_litre, mechanism, speed, row)
+        return row.km_per_litre
+
+    # Nelder-Mead has no bounds of its own in every SciPy it runs on here, so
+    # the objective clips and the simplex is started well inside.
+    low, high = obliquity_bounds
+    slow, fast = speed_bounds
+    for index in range(max(int(starts), 1)):
+        fraction = (index + 0.5) / max(int(starts), 1)
+        guess = np.array([low + fraction * (high - low), slow + fraction * (fast - slow)])
+        minimize(
+            lambda vector: -score(vector),
+            guess,
+            method="Nelder-Mead",
+            options={"xatol": 1.0e-4, "fatol": 1.0e-3, "maxiter": 200},
+        )
+
+    if best is None:
+        msg = "no feasible slider-crank in the search box"
+        raise RuntimeError(msg)
+    _range, mechanism, speed, row = best
+    return OptimisedSliderCrank(
+        mechanism=mechanism,
+        speed_rpm=speed,
+        comparison=row,
+        evaluations=calls,
+        starts=int(starts),
+    )
+
+
 def firing_frequency_sensitivity(
     performance: object,
     vehicle: Vehicle | None = None,
@@ -740,11 +881,18 @@ def firing_frequency_sensitivity(
     piston sliding distance -- and that, not extended expansion, turns out to
     be the larger part of its advantage.
 
-    So the comparison is re-run with the EX-link's friction doubled, which is
-    what it would be if the same linkage drove a conventional four-stroke gas
-    exchange.  If the advantage survives, it comes from the thermodynamics; if
-    it does not, it comes from the firing frequency, and the conclusion has to
-    be stated as being about firing frequency.
+    So the comparison is re-run as if the same linkage drove a conventional
+    four-stroke gas exchange: twice the friction per cycle, and half the power
+    at the same speed, since an engine that fires half as often makes half the
+    power.  Both are re-scored through the vehicle rather than compared as
+    efficiencies, because halving the power moves the operating point the
+    burn-and-coast strategy can use, and that is where the effect shows up.
+
+    If the advantage survives, it comes from the thermodynamics; if it does
+    not, it comes from the firing frequency, and the conclusion has to be
+    stated as being about firing frequency.  Measured against
+    :func:`optimise_slidercrank`'s baseline it does not survive -- it reverses
+    -- which is why that baseline has to be optimised rather than assumed.
 
     Args:
         performance: An :class:`~exlink.performance.Performance` to re-score.

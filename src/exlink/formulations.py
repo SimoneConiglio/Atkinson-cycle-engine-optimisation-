@@ -66,6 +66,7 @@ constraints are satisfied.  With MDF, every iterate is a real engine.
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import pairwise
 from typing import Any
@@ -352,6 +353,65 @@ def coupling_dimension(
     sizes["total"] = sum(sizes.values())
     sizes["design_variables"] = len(VARIABLE_NAMES)
     return sizes
+
+
+def motion_harmonics(
+    design: Design,
+    tolerances: Sequence[float] = (0.1, 0.01, 0.001),
+    samples: int = 720,
+) -> dict[float, int]:
+    """How many Fourier harmonics reproduce the piston motion, per RMS tolerance.
+
+    Why this is the interesting number
+    ----------------------------------
+    :func:`coupling_dimension` counts the coupling *pointwise* and concludes
+    that IDF is unavailable.  That conclusion is a property of the
+    parameterisation, not of the physics, and this function is the measurement
+    that shows it.
+
+    The linkage's eleven dimensions reach the rest of the model through exactly
+    one quantity: the piston motion ``lam(theta)``.  The cycle turns it into a
+    volume and a pressure, the dynamics differentiate it twice for the inertia
+    loads, the vehicle sees only the work that results.  So ``lam`` *is* the
+    coupling variable of the whole problem -- and it is smooth and periodic, so
+    counting it at 45 368 grid points overstates it by orders of magnitude.
+
+    In a Fourier basis the count is what this returns: of order twenty
+    coefficients to reproduce the motion more tightly than the part can be
+    machined.  A decomposition on that basis would carry tens of consistency
+    variables where the pointwise one carries tens of thousands.  See §7.4 of
+    the documentation.
+
+    Args:
+        design: The mechanism.
+        tolerances: RMS errors to report, in millimetres, largest first.
+        samples: Crank angles per revolution to analyse.
+
+    Returns:
+        ``{tolerance: harmonics}``: the fewest leading harmonics whose truncation
+        error is below that RMS, one entry per requested tolerance.
+
+    Raises:
+        ValueError: If the design cannot be analysed.
+    """
+    from .model import analyse
+
+    analysis = analyse(design, samples=samples)
+    if not analysis.valid:
+        msg = f"cannot analyse the motion of an unanalysable design: {analysis.metrics.reason}"
+        raise ValueError(msg)
+    lam = np.asarray(analysis.require_solved().kinematics.lam, dtype=float)
+    # Parseval: the power in harmonic k, with the one-sided factor of two on
+    # everything but the mean, sums to the mean square of ``lam``.
+    power = np.abs(np.fft.rfft(lam) / lam.size) ** 2
+    power[1:] *= 2.0
+    # Truncation error after keeping the first k harmonics.
+    residual = np.sqrt(np.maximum(power.sum() - np.cumsum(power), 0.0))
+    counts: dict[float, int] = {}
+    for tolerance in tolerances:
+        below = np.flatnonzero(residual < float(tolerance))
+        counts[float(tolerance)] = int(below[0]) if below.size else int(residual.size)
+    return counts
 
 
 def format_formulations(rows: list[FormulationResult]) -> str:

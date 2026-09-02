@@ -115,3 +115,40 @@ def test_idf_reports_its_own_refusal_rather_than_raising() -> None:
     assert rows[0].error
     rendered = format_formulations(rows)
     assert "coupling variables" in rendered
+
+
+# -- the coupling counted in a basis matched to its smoothness -----------------
+
+
+def test_the_piston_motion_needs_only_tens_of_harmonics() -> None:
+    """The measurement behind §7.4's correction to §3.6.
+
+    ``coupling_dimension`` counts the coupling pointwise and gets tens of
+    thousands, which is what rules IDF out.  But the linkage reaches the rest
+    of the model through ``lam(theta)`` alone, and ``lam`` is smooth: in a
+    Fourier basis the same coupling is of order twenty numbers.  The
+    conclusion "IDF is unavailable" is therefore a statement about the
+    parameterisation, and this pins the arithmetic that says so.
+    """
+    from exlink.formulations import coupling_dimension, motion_harmonics
+    from exlink.reference import COUPLED_DESIGN, GRADIENT_DESIGN
+
+    pointwise = coupling_dimension()["total"]
+    for design in (COUPLED_DESIGN, GRADIENT_DESIGN):
+        counts = motion_harmonics(design)
+        # Tighter than the 0.020 mm machining scatter on STE, so tighter than
+        # the part can be made.
+        assert counts[0.01] <= 25
+        # Monotone: a tighter tolerance never needs fewer harmonics.
+        assert counts[0.1] <= counts[0.01] <= counts[0.001]
+        # Three orders of magnitude, which is the whole point.
+        assert pointwise > 500 * counts[0.01]
+
+
+def test_harmonics_are_reported_for_every_tolerance_asked_for() -> None:
+    from exlink.formulations import motion_harmonics
+    from exlink.reference import COUPLED_DESIGN
+
+    counts = motion_harmonics(COUPLED_DESIGN, tolerances=(1.0, 0.5))
+    assert set(counts) == {1.0, 0.5}
+    assert counts[1.0] <= counts[0.5]

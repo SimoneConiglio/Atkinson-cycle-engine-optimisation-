@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -105,6 +107,33 @@ def test_gear_geometry_is_self_consistent() -> None:
     assert pair.radius_large == pytest.approx(2.0 * pair.radius_small)
     assert pair.inter_axle == pytest.approx(pair.radius_small + pair.radius_large)
     assert pair.inter_axle == pytest.approx(lattice_inter_axle(pair.module, pair.teeth_small))
+
+
+def test_a_pair_sized_to_its_allowable_is_feasible() -> None:
+    """Feasibility must not be decided by the last bit of the mantissa.
+
+    ``size_pair`` solves for the face width that makes the governing stress
+    *equal* its allowable, so the governing utilisation of an automatically
+    sized pair is 1 by construction and lands either side of it by round-off.
+    A pair whose utilisation is 1 + 2e-16 is the design the sizer was asked
+    for, not an unsafe one, and must not be rejected -- doing so made this
+    depend on the platform's floating-point rounding, and the same gear pair
+    was feasible on one CI interpreter and infeasible on another.
+
+    The case below is the one that failed: it is bending-governed, so the face
+    width comes straight from the bending equation and the utilisation is the
+    quotient of two numbers the sizer just made equal.
+    """
+    pair = size_pair(58.5, 1500.0, module=1.5, teeth=26)
+    assert pair.bending_utilisation >= 1.0
+    assert pair.bending_utilisation == pytest.approx(1.0, abs=1.0e-12)
+    assert pair.feasible
+
+    # And the tolerance must not have become a safety allowance: a pair that
+    # is genuinely overstressed is still rejected.
+    overloaded = size_pair(58.5, 1500.0, module=1.5, teeth=26)
+    strained = replace(overloaded, bending_utilisation=1.01)
+    assert not strained.feasible
 
 
 def test_automatic_module_choice_is_feasible_and_light() -> None:

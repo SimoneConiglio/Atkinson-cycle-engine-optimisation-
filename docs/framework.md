@@ -57,7 +57,7 @@ is deliberate:
 | clearance $d$ | difference | a minimum over both crank angle and three edges; far from active |
 | $\eta$, $H$, $B$ | difference | smooth, none tight |
 | the range chain | difference | one load solve, no fixed point; ~0.3 s, so 18 columns is affordable |
-| the reliability margin | difference | exact would need $\nabla^2 g$; see §7.1 |
+| the reliability margin | difference | exact would need $\nabla^2 g$; see §7.2 |
 
 ## 4.4 Verification
 

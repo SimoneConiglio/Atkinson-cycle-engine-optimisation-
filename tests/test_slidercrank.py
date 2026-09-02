@@ -15,6 +15,7 @@ from exlink.slidercrank import (
     friction_work,
     kinematics,
     mass_budget,
+    optimise_slidercrank,
     otto_cycle,
     solve,
 )
@@ -204,3 +205,56 @@ def test_a_slider_crank_reaches_the_right_order_of_range(mechanism: SliderCrank)
     assert outcome.feasible
     assert 1000.0 < outcome.km_per_litre < 5000.0
     assert outcome.joints == 3
+
+
+# -- the baseline has to be optimised too --------------------------------------
+
+
+def test_the_hand_set_baseline_is_not_the_best_conventional_engine() -> None:
+    """Why :func:`optimise_slidercrank` exists at all.
+
+    Comparing an optimised EX-link against a slider-crank whose obliquity was
+    written down from a textbook measures the optimization, not the topology.
+    If the hand-set proportions happened to be optimal there would be nothing
+    to fix; this asserts that they are not, so the comparison in §6.3 has to be
+    made optimum against optimum.
+    """
+    hand_set = evaluate_slidercrank(SliderCrank.for_compression_ratio(16.0), 2000.0)
+    best = optimise_slidercrank(starts=1)
+    assert best.comparison.feasible
+    assert best.comparison.km_per_litre > hand_set.km_per_litre
+
+
+def test_the_optimised_baseline_stays_inside_its_box() -> None:
+    """The optimum must be interior, not pinned to a bound.
+
+    A baseline sitting on its search bound is reporting the bound, not an
+    optimum, and the comparison would then be against an arbitrary number.
+    """
+    from exlink.slidercrank import OBLIQUITY_BOUNDS, SPEED_BOUNDS
+
+    best = optimise_slidercrank(starts=1)
+    low, high = OBLIQUITY_BOUNDS
+    slow, fast = SPEED_BOUNDS
+    assert low + 0.005 < best.mechanism.obliquity < high - 0.005
+    assert slow + 20.0 < best.speed_rpm < fast - 20.0
+
+
+@pytest.mark.slow
+def test_removing_the_firing_advantage_costs_the_ex_link_its_lead() -> None:
+    """The headline comparison, against a baseline that was also optimised.
+
+    Against a hand-set slider-crank the EX-link leads by about a quarter, and
+    still leads once its firing-frequency advantage is removed.  Against an
+    *optimised* one the second half of that is no longer true: with the
+    one-revolution cycle taken away the EX-link falls behind.  That is the
+    result, and it is only visible because both sides were optimised.
+    """
+    atkinson = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
+    sensitivity = firing_frequency_sensitivity(atkinson)
+    best = optimise_slidercrank(starts=3).comparison
+
+    as_modelled = sensitivity["km_per_litre"] / best.km_per_litre - 1.0
+    four_stroke = sensitivity["km_per_litre_four_stroke"] / best.km_per_litre - 1.0
+    assert as_modelled > 0.10
+    assert four_stroke < 0.0

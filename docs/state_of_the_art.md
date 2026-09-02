@@ -46,8 +46,9 @@ firing frequency. Not settled: what the linkage costs. None of these studies
 carries the linkage dimensions through to the mass of the parts that must
 carry the inertia loads at speed, so none can say whether the thermodynamic
 gain survives the mechanism that delivers it. §6.3 shows that the accounting
-matters: separating the cycle-rate effect from the extended-expansion effect
-reduces a 24 % range advantage to 2.8 %.
+decides the sign: against a conventional engine optimised under the same
+models, separating the cycle-rate effect from the extended-expansion effect
+turns a +15.6 % range advantage into a 4.3 % deficit.
 
 ## 2.3 Formulating a mechanism-synthesis problem
 
@@ -271,7 +272,9 @@ those strands rather than of extending any one of them.
    structural sizing and the vehicle model to distance per unit fuel supplies
    the exchange rate that §2.3 shows the conventional formulation lacks, and
    makes the extended-expansion benefit separable from the firing-frequency
-   effect that accompanies it in every geometric realisation (§6.3).
+   effect that accompanies it in every geometric realisation -- and, priced
+   against a conventional engine optimised under the same models rather than
+   one proportioned by hand, reverses its sign (§6.3).
 
 2. **A demonstration that the geometry of the feasible set selects the
    algorithm.** The measure-zero feasible set is not a nuisance to be

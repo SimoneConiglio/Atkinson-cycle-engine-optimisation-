@@ -19,6 +19,7 @@ from exlink.slidercrank import (
     SliderCrank,
     evaluate_slidercrank,
     firing_frequency_sensitivity,
+    optimise_slidercrank,
 )
 
 
@@ -66,17 +67,20 @@ def main() -> None:
     print()
     print("Is the linkage worth seven members?")
     print("=" * 35)
-    otto = max(
-        (
-            evaluate_slidercrank(SliderCrank.for_compression_ratio(16.0), rpm)
-            for rpm in (1500.0, 2000.0, 2500.0, 3000.0)
-        ),
-        key=lambda item: item.km_per_litre,
-    )
+    # The baseline has to be optimised too, or the comparison measures the
+    # optimization rather than the topology -- and the sign depends on it.
+    hand_set = evaluate_slidercrank(SliderCrank.for_compression_ratio(16.0), 2000.0)
+    best = optimise_slidercrank()
+    otto = best.comparison
     sensitivity = firing_frequency_sensitivity(outcome)
     print(f"  {'mechanism':<38}{'eta_i':>8}{'eta_m':>8}{'km/L':>9}")
     print(
-        f"  {'slider-crank (Otto, 4-stroke)':<38}"
+        f"  {'slider-crank, hand-set (r/l = 0.30)':<38}"
+        f"{hand_set.indicated_efficiency:>8.3f}{hand_set.mechanical_efficiency:>8.3f}"
+        f"{hand_set.km_per_litre:>9.0f}"
+    )
+    print(
+        f"  {f'slider-crank, optimised (r/l = {best.mechanism.obliquity:.2f})':<38}"
         f"{otto.indicated_efficiency:>8.3f}{otto.mechanical_efficiency:>8.3f}"
         f"{otto.km_per_litre:>9.0f}"
     )
@@ -94,12 +98,17 @@ def main() -> None:
         f"{doubled:>8.3f}{sensitivity['km_per_litre_four_stroke']:>9.0f}"
     )
     print()
-    as_modelled = 100.0 * (sensitivity["km_per_litre"] / otto.km_per_litre - 1.0)
-    four_stroke = 100.0 * (sensitivity["km_per_litre_four_stroke"] / otto.km_per_litre - 1.0)
-    print(f"  advantage as modelled:            {as_modelled:+.1f} %")
-    print(f"  advantage if it were a 4-stroke:  {four_stroke:+.1f} %")
+    print(f"  {'against':<38}{'as modelled':>14}{'as a 4-stroke':>16}")
+    for label, baseline in (
+        ("the hand-set baseline", hand_set.km_per_litre),
+        ("the optimised baseline", otto.km_per_litre),
+    ):
+        modelled = 100.0 * (sensitivity["km_per_litre"] / baseline - 1.0)
+        four_stroke = 100.0 * (sensitivity["km_per_litre_four_stroke"] / baseline - 1.0)
+        print(f"  {label:<38}{modelled:>13.1f} %{four_stroke:>15.1f} %")
     print()
-    print("  So the advantage is firing frequency, not extended expansion.")
+    print("  So the advantage is firing frequency, not extended expansion --")
+    print("  and against a baseline that was optimised too, the sign changes.")
 
 
 if __name__ == "__main__":

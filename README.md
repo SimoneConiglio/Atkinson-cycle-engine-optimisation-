@@ -28,9 +28,9 @@ weighs half as much and goes further.
 0.01 mm and the dimensions producing it scatter by more than that. No ISO grade holds it, and
 the reference design has a **64.5 %** probability of missing at least one requirement.
 
-**The advantage is firing frequency, not extended expansion.** Against a slider-crank sized by
-identical code the linkage wins 24 %; remove its one-revolution cycle and that falls to
-**2.8 %**.
+**The advantage is firing frequency, not extended expansion.** Against a conventional engine
+*optimised* under identical code the linkage wins 15.6 %; remove its one-revolution cycle and
+it loses by **4.3 %**.
 
 ## The study
 

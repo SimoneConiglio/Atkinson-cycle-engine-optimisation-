@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 from exlink import analyse
-from exlink.animation import animate_dashboard, save
+from exlink.animation import animate_dashboard, animate_formulations, save
 from exlink.plots import (
     plot_cycle,
     plot_mechanism,
@@ -43,6 +43,10 @@ def main() -> None:
 
     animation = animate_dashboard(design, frames=120)
     print(f"written: {save(animation, OUTDIR / 'exlink.gif', fps=25, dpi=90)}")
+
+    # What each objective converged to, side by side on one scale.
+    panels = animate_formulations(frames=90)
+    print(f"written: {save(panels, OUTDIR / 'formulations.gif', fps=20, dpi=80)}")
 
 
 if __name__ == "__main__":

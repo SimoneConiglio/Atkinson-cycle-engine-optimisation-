@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 matplotlib.use("Agg")
 
 from exlink import PUBLISHED_DESIGN
-from exlink.animation import animate, animate_dashboard, save
+from exlink.animation import animate, animate_dashboard, animate_formulations, save
 from exlink.plots import (
     plot_cycle,
     plot_mechanism,
@@ -77,6 +77,39 @@ def test_the_dashboard_animation_builds() -> None:
     animation = animate_dashboard(REFINED_DESIGN, frames=24)
     assert len(animation._fig.axes) >= 4
     plt.close(animation._fig)
+
+
+def test_the_formulation_panels_share_one_scale() -> None:
+    """The comparison is only readable if the panels are not each rescaled.
+
+    A design that fills less of its frame is a smaller mechanism; scaling each
+    panel to its own contents would erase exactly the difference the figure
+    exists to show.
+    """
+    animation = animate_formulations(frames=12)
+    axes = animation._fig.axes
+    assert len(axes) == 4
+    limits = {(ax.get_xlim(), ax.get_ylim()) for ax in axes}
+    assert len(limits) == 1
+    plt.close(animation._fig)
+
+
+def test_the_formulation_panels_show_different_designs() -> None:
+    """Four panels of the same mechanism would be a bug, not a comparison."""
+    from exlink.reference import COUPLED_DESIGN, REFINED_DESIGN
+
+    animation = animate_formulations(
+        designs={"a": REFINED_DESIGN, "b": COUPLED_DESIGN}, frames=12
+    )
+    axes = animation._fig.axes
+    assert len(axes) == 2
+    assert [ax.get_title() for ax in axes] == ["a", "b"]
+    plt.close(animation._fig)
+
+
+def test_animating_no_formulations_raises() -> None:
+    with pytest.raises(ValueError, match="no designs"):
+        animate_formulations(designs={}, frames=12)
 
 
 def test_animating_an_unanalysable_design_raises() -> None:

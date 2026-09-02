@@ -15,6 +15,7 @@ written by ``--save``, so the commands chain::
     exlink optimize --save best.json
     exlink refine --design best.json --save final.json
     exlink animate --design final.json -o final.gif
+    exlink animate --formulations -o formulations.gif
 """
 
 from __future__ import annotations
@@ -98,11 +99,17 @@ def _cmd_analyse(args: argparse.Namespace) -> int:
 
 
 def _cmd_animate(args: argparse.Namespace) -> int:
-    from .animation import animate, animate_dashboard, save
+    from .animation import animate, animate_dashboard, animate_formulations, save
 
-    design = load_design(args.design)
-    builder = animate if args.plain else animate_dashboard
-    animation = builder(design, frames=args.frames, interval=int(1000 / args.fps))
+    interval = int(1000 / args.fps)
+    if args.formulations:
+        # Every formulation's own result, so --design would have nothing to
+        # select; the designs come from exlink.reference.
+        animation = animate_formulations(frames=args.frames, interval=interval)
+    else:
+        design = load_design(args.design)
+        builder = animate if args.plain else animate_dashboard
+        animation = builder(design, frames=args.frames, interval=interval)
     path = save(animation, args.output, fps=args.fps, dpi=args.dpi)
     print(f"written: {path}")
     return 0
@@ -275,6 +282,11 @@ def build_parser() -> argparse.ArgumentParser:
     animate_parser.add_argument("--dpi", type=int, default=110)
     animate_parser.add_argument(
         "--plain", action="store_true", help="mechanism only, without the side plots"
+    )
+    animate_parser.add_argument(
+        "--formulations",
+        action="store_true",
+        help="each formulation's final design side by side (ignores --design)",
     )
     animate_parser.set_defaults(func=_cmd_animate)
 

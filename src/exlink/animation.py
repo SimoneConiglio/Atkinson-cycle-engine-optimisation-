@@ -5,7 +5,7 @@ explain -- that the piston
 reaches top dead centre *twice* per crankshaft revolution, and that the two
 bottom dead centres differ, which is the whole point of the Atkinson linkage.
 
-Two entry points:
+Three entry points:
 
 :func:`animate`
     The mechanism alone.
@@ -14,6 +14,13 @@ Two entry points:
     The mechanism beside the piston motion, the p-V diagram and the torque
     curve, with a marker tracking the current crank angle on each -- the view
     that makes the link between geometry and thermodynamics obvious.
+
+:func:`animate_formulations`
+    Every formulation's final design, turning side by side on a common scale.
+    Each panel is what a different objective converged to from the same
+    starting point, so the panels differ only in what was asked of them --
+    which makes the proportions readable as a consequence of the objective
+    rather than as four unrelated mechanisms.
 """
 
 from __future__ import annotations
@@ -311,6 +318,121 @@ def animate_dashboard(
         return (*artists, *markers)
 
     n_frames = kinematics.theta_1.size
+    return FuncAnimation(
+        figure, update, frames=n_frames, interval=interval, blit=True, repeat=True
+    )
+
+
+def animate_formulations(
+    designs: dict[str, Design] | None = None,
+    frames: int = 120,
+    interval: int = 40,
+    spec: EngineSpec = DEFAULT_SPEC,
+    panel_size: tuple[float, float] = (3.2, 4.3),
+    common_scale: bool = True,
+) -> FuncAnimation:
+    """Animate each formulation's final design, side by side.
+
+    The three static views of a converged design -- a table of metrics, a
+    mechanism sketch, a mass budget -- all answer "what did it reach?".  None
+    of them answers "what does the objective *do* to the mechanism?", which is
+    the question this study is actually about.  Four linkages turning together
+    answer it directly: the geometric optimum is visibly long-limbed and close
+    to alignment, the coupled optimum visibly shorter and squatter, and the
+    difference is the inertia loading that only the second formulation could
+    see.
+
+    All panels share one set of axis limits by default, because the point is
+    that the designs are *different sizes*; scaling each to fit its own frame
+    would hide exactly the effect being shown.
+
+    Args:
+        designs: Label to design, in the order the panels should appear.
+            Defaults to the four results of :mod:`exlink.reference`, each
+            labelled with its formulation and its headline number.
+        frames: Crank angles in the animation.
+        interval: Delay between frames [ms].
+        spec: Fixed engine data.
+        panel_size: Size of one panel [in].
+        common_scale: Share one set of axis limits across the panels.  Set
+            ``False`` only to inspect a single mechanism's detail.
+
+    Returns:
+        The animation.  Keep a reference to it, or matplotlib will garbage
+        collect it; :func:`save` handles that.
+
+    Raises:
+        ValueError: If a design cannot be analysed, or none is given.
+    """
+    from .reference import COUPLED_DESIGN, GRADIENT_DESIGN, RANGE_DESIGN, REFINED_DESIGN
+
+    chosen = (
+        designs
+        if designs is not None
+        else {
+            "geometric, augmented Lagrangian\n$\\eta$ = 27.9 %": REFINED_DESIGN,
+            "geometric, SLSQP + exact gradients\n$\\eta$ = 30.8 %": GRADIENT_DESIGN,
+            "coupled, minimum mass\n0.234 kg at 1000 rpm": COUPLED_DESIGN,
+            "vehicle-level, maximum range\n3388 km/L": RANGE_DESIGN,
+        }
+    )
+    if not chosen:
+        msg = "no designs to animate"
+        raise ValueError(msg)
+
+    solved = {
+        label: _solved(analyse(design, samples=frames, spec=spec))
+        for label, design in chosen.items()
+    }
+
+    limits = [_mechanism_limits(analysis, spec) for analysis in solved.values()]
+    if common_scale:
+        # The union of the individual boxes: the smallest window that holds
+        # every mechanism.  It is deliberately *not* padded out to a square --
+        # each panel then wastes the same space, and a mechanism that fills
+        # less of the frame is one that is genuinely smaller.
+        shared = (
+            (min(x[0] for x, _y in limits), max(x[1] for x, _y in limits)),
+            (min(y[0] for _x, y in limits), max(y[1] for _x, y in limits)),
+        )
+        limits = [shared] * len(limits)
+
+    count = len(solved)
+    with plt.style.context(STYLE):
+        figure, axes = plt.subplots(
+            1,
+            count,
+            figsize=(panel_size[0] * count, panel_size[1]),
+            squeeze=False,
+        )
+        updaters = []
+        for ax, (label, analysis), (xlim, ylim) in zip(
+            axes[0], solved.items(), limits, strict=True
+        ):
+            ax.set_aspect("equal")
+            ax.set_xlim(*xlim)
+            ax.set_ylim(*ylim)
+            ax.set_title(label, fontsize=9)
+            ax.set_xlabel("x [mm]")
+            ax.tick_params(labelsize=8)
+            _draw_static(ax, analysis, spec)
+            updaters.append(_make_frame_updater(ax, analysis, spec))
+        axes[0][0].set_ylabel("y [mm]")
+        for ax in axes[0][1:]:
+            ax.set_yticklabels([])
+        figure.suptitle(
+            "the same mechanism under four objectives, at the same crank angle",
+            fontsize=11,
+        )
+        figure.tight_layout(rect=(0.0, 0.02, 1.0, 0.94))
+
+    def update(index: int):
+        artists: list[Any] = []
+        for updater in updaters:
+            artists.extend(updater(index))
+        return tuple(artists)
+
+    n_frames = min(a.kinematics.theta_1.size for a in solved.values())
     return FuncAnimation(
         figure, update, frames=n_frames, interval=interval, blit=True, repeat=True
     )

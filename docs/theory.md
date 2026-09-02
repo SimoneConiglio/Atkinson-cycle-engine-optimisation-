@@ -946,10 +946,13 @@ $3\times10^{-5}$.
 
 ### 16.1 The advantage is firing frequency
 
-The EX-link wins on range, 3338 against 2690 km/L. Decomposed, only about a
-fifth of that is extended expansion: indicated efficiency 0.477 against 0.457.
-Most of it is *mechanical* efficiency, 0.85 against 0.74 — and the EX-link has
-seven journals to the slider-crank's three.
+The EX-link wins on range, 3338 against 2888 km/L for a conventional engine
+optimised over its own two degrees of freedom under the same models (rod
+obliquity and speed; the hand-proportioned baseline it replaces reaches only
+2690). Decomposed, only about a fifth of that is extended expansion: indicated
+efficiency 0.477 against 0.457. Most of it is *mechanical* efficiency, 0.85
+against 0.79 — and the EX-link has seven journals to the slider-crank's
+three.
 
 That inversion needs explaining rather than celebrating. As §1 notes, the roles
 of the crankshaft and eccentric shaft are exchanged so that the whole four-stroke
@@ -959,13 +962,14 @@ the journal rotation and half the piston sliding.
 
 That assumption is too load-bearing to leave untested, so the comparison is
 re-run with it removed — the same linkage driving a conventional four-stroke gas
-exchange, hence twice the friction per cycle. The advantage falls from +24.1 %
-to **+2.8 %**.
+exchange, hence twice the friction and half the power per cycle. The advantage
+falls from +15.6 % to **-4.3 %**.
 
 The honest statement of the result is therefore that the extended-expansion
-linkage's benefit in this model comes overwhelmingly from firing frequency, and
-that extended expansion alone very nearly fails to pay for the four extra
-journals and the gear train it costs.
+linkage's benefit in this model comes entirely from firing frequency, and that
+extended expansion alone does *not* pay for the four extra journals and the
+gear train it costs: at conventional firing frequency the linkage is worse than
+the conventional engine it replaces.
 
 ### 16.2 Conditioning decides the sign of the inertia effect
 

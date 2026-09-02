@@ -76,7 +76,7 @@ from .reference import (
 )
 from .robustness import ToleranceReport, tolerance_report
 from .sizing import MemberSizing
-from .slidercrank import SliderCrank, evaluate_slidercrank
+from .slidercrank import SliderCrank, evaluate_slidercrank, optimise_slidercrank
 from .vehicle import RangeResult, Vehicle
 
 __all__ = [
@@ -132,6 +132,7 @@ __all__ = [
     "evaluate",
     "evaluate_slidercrank",
     "lattice_neighbours",
+    "optimise_slidercrank",
     "size_pair",
     "solve_coupled",
     "solve_for_design",

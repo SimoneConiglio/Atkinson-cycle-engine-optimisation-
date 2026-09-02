@@ -16,11 +16,10 @@ dimensions to optimise; and the roles of the crankshaft and eccentric shaft are
 exchanged, so the four strokes complete in **one** turn of the output shaft.
 
 That last change is not incidental. It doubles the firing frequency for a given
-displacement and speed, and §6.3 shows it accounts for most of the mechanism's
-measured advantage. It is a property of *this* topology, not of extended
-expansion, and every result below is conditional on it.
-
-![the mechanism through one revolution](figures/exlink.gif)
+displacement and speed, and §6.3 shows that against a conventional engine
+optimised under the same models it accounts for the mechanism's entire measured
+advantage. It is a property of *this* topology, not of extended expansion, and
+every result below is conditional on it.
 
 ## 5.2 Specification
 
