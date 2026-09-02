@@ -352,23 +352,53 @@ limit on it is redundant, and the range problem attaches none.
 
 ### What is deterministic here, and what is not
 
-This is a **deterministic** problem. The reliability analysis of §3.8 is applied
-*to its solution*, not inside it, and the distinction matters enough to state
-plainly rather than leave to be inferred:
+As written above this is a **deterministic** problem, and every design reported
+in §6 was obtained from it. The reliability analysis of §3.8 is applied *to its
+solution*, so §6.2's 0.645 is an audit of a design obtained without it rather
+than a target that was met or missed.
 
-| | |
-|---|---|
-| solved by | SLSQP on the above, bands as ordinary inequalities |
-| $P_f$ in the constraint set | **no** |
-| $P_f$ reported | yes, post hoc, on the design that results |
+The loop can be closed:
+{py:func}`~exlink.scenarios.build_range_scenario` takes a ``beta_target``, which
+attaches {py:class}`~exlink.robustness.FailureProbabilityDiscipline` and adds
 
-The machinery to close that loop exists and is tested
-({py:class}`exlink.robustness.FailureProbabilityDiscipline` reports $P_f$ as a
-discipline output), but no scenario in the package attaches it as a constraint.
-So §6.2's 0.645 is a *measurement of a design obtained without it*, and should
-be read as an audit rather than as a reliability target that was met or missed.
-Constraining $P_f$ during the search would move the design; how far is not
-established here.
+$$\beta_{\text{sys}}(X) \;=\; -\Phi^{-1}\bigl(P_f(X)\bigr) \;\ge\; \beta_{\text{target}}$$
+
+as a thirteenth constraint. The index and not the probability: $P_f$ saturates
+towards 0 and 1, where its gradient vanishes and the optimizer stalls, while
+$\beta$ stays well scaled throughout. The discipline depends on the design
+variables only, so it does not join the MDA and §3.6's coupling count is
+unchanged.
+
+**Running it does not produce a more reliable design, and the reason is
+instructive.** From the coupled reference design at $\beta = -0.373$, SLSQP
+returns its starting point unchanged — not only for a demanding target but for
+$\beta \ge -0.2$, a step of 0.17 — reporting a positive directional derivative
+for the line search. The reliability gradient is not at fault: central
+differences on $\beta$ are smooth in all eleven variables at this point, with no
+discontinuity. What defeats the line search is the same thinness §3.4 measures
+elsewhere. A step of 0.05 mm along the normalised $\nabla\beta$ leaves the
+geometric constraint set entirely, at which point $\beta$ is reported as $-8.2$
+by the penalty fallback:
+
+| step along $\nabla\beta$ [mm] | $\beta$ | nominally feasible |
+|---|---|---|
+| 0.00 | $-0.373$ | yes |
+| 0.05 | $-2.570$ | no |
+| 0.10 and beyond | $-8.210$ | no |
+
+That better reliability is nevertheless available nearby is shown by sampling
+rather than by descent: a random cloud at 0.1 % relative scatter about the
+reference contains analysable designs reaching $\beta = +0.403$, well above the
+target the line search could not attain. Whether such a point also satisfies
+every inequality is a separate question from whether the reliability index can
+be improved, and only the second is claimed here.
+
+So closing the reliability loop is not a matter of attaching the discipline,
+which is easy, but of reaching the reliable region, which a gradient method
+starting from the deterministic optimum does not do. §7.3 lists what that needs.
+The deterministic problem above therefore remains the one this study solves, and
+the reliability numbers of §6.2 remain an audit — but now by a measured
+limitation rather than an unexamined omission.
 
 ### Which constraints the probability covers
 

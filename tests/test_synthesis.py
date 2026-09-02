@@ -157,3 +157,62 @@ def test_the_residual_ignores_the_mean_height() -> None:
     here = _residual(COUPLED_DESIGN, target, DEFAULT_SPEC)
     assert here is not None
     assert float(np.mean(here)) == pytest.approx(0.0, abs=1.0e-9)
+
+
+# -- what the generator is and is not good for ---------------------------------
+
+
+@pytest.mark.slow
+def test_the_fit_is_a_contraction_onto_one_design() -> None:
+    """Why prescribed-motion fitting does not, by itself, give multistart.
+
+    Fitting to a *fixed* target converges to the same linkage whatever start it
+    is given -- measured at one distinct design from every scatter between 10 %
+    and 80 %.  That is not a defect of the optimizer: the motion very nearly
+    determines the mechanism, which is the same property that would make a
+    functional decomposition well posed.  Diversity has to come from varying
+    the target instead.
+    """
+    from exlink.synthesis import feasible_starts, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    results = feasible_starts(
+        target,
+        attempts=8,
+        seed=3,
+        reference=COUPLED_DESIGN,
+        scatter=0.25,
+        max_evaluations=150,
+    )
+    assert results, "the fit should succeed from at least some starts"
+
+    distinct: list[np.ndarray] = []
+    for fit in results:
+        vector = fit.design.to_array()
+        if all(float(np.linalg.norm(vector - kept)) > 1.0 for kept in distinct):
+            distinct.append(vector)
+    assert len(distinct) == 1
+
+
+@pytest.mark.slow
+def test_fitting_beats_uniform_sampling_at_reaching_the_manifold() -> None:
+    """The one thing the generator does solve, and the measure that says so.
+
+    Uniform sampling of the design box finds a design satisfying the two
+    equalities in 0 of 12 000 draws, because the manifold has measure zero.
+    Sampling *and then fitting* is a different operation, and most fits land
+    inside the tolerance bands.
+    """
+    from exlink.synthesis import feasible_starts, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    results = feasible_starts(
+        target,
+        attempts=8,
+        seed=5,
+        reference=COUPLED_DESIGN,
+        scatter=0.10,
+        max_evaluations=150,
+    )
+    in_band = [fit for fit in results if fit.stroke_error <= 0.05 and fit.ratio_error <= 0.05]
+    assert len(in_band) >= 4

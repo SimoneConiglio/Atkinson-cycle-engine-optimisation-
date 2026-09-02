@@ -156,7 +156,7 @@ def target_from_design(
     """Build a target by correcting a real mechanism's motion onto the manifold.
 
     Why this exists, and why :func:`target_motion` is not enough
-    -----------------------------------------------------------
+    ------------------------------------------------------------
     A two-harmonic target satisfies both equalities exactly but is not
     *reachable*: measured, the closest a seven-bar linkage gets to one is
     1.16 mm RMS, and that residual carries the fitted design outside both
