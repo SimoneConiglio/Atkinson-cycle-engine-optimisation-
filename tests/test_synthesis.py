@@ -335,3 +335,56 @@ def test_the_unconstrained_fit_violates_by_a_wide_margin_on_a_hard_target() -> N
 
     assert worst(tight) <= 1.0e-6
     assert worst(loose) > worst(tight)
+
+
+@pytest.mark.slow
+def test_holding_the_bands_as_constraints_keeps_the_fit_in_band() -> None:
+    """The argument for keeping ``g`` applies to the bands as well.
+
+    Against a target the mechanism cannot reach, holding ``g <= 0`` while
+    chasing the motion pushes the strokes out of tolerance -- so the bands are
+    checked afterwards and found violated.  They are constraints, so they
+    belong in the problem: ``hold_bands`` puts them there, and the solve then
+    either returns something in band or reports that it found nothing.
+    """
+    import numpy as np
+    from scipy.optimize import fsolve
+
+    from exlink.constants import DEFAULT_SPEC
+    from exlink.cycle import find_phases
+    from exlink.model import analyse, inequality_constraints
+    from exlink.synthesis import TargetMotion, fit_within_constraints, target_from_design
+
+    base = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    theta = np.linspace(0.0, 2.0 * np.pi, base.samples, endpoint=False)
+    second, first = np.cos(2.0 * theta), np.sin(theta)
+    stroke = 15.0 * DEFAULT_SPEC.dead_volume / DEFAULT_SPEC.piston_area
+    seeded = base.lam + 0.8 * np.sin(3.0 * theta)
+
+    def residual(params: np.ndarray) -> list[float]:
+        phases = find_phases(seeded + params[0] * second + params[1] * first)
+        return [phases.expansion_stroke - 74.0, phases.compression_stroke - stroke]
+
+    solution, _info, status, _msg = fsolve(residual, np.zeros(2), full_output=True)
+    if status != 1:
+        pytest.skip("the perturbed target could not be put back on the manifold")
+    hard = TargetMotion(
+        lam=seeded + solution[0] * second + solution[1] * first,
+        expansion_stroke=74.0,
+        compression_ratio=16.0,
+        amplitude=float(solution[0]),
+        skew=float(solution[1]),
+    )
+
+    held = fit_within_constraints(
+        hard, COUPLED_DESIGN, max_iterations=250, hold_bands=True, band=0.05
+    )
+    if held is None:
+        pytest.skip("the constrained solve returned no analysable design")
+
+    analysis = analyse(held.design, samples=CRANK)
+    assert analysis.valid
+    assert float(np.max(inequality_constraints(analysis))) <= 1.0e-6
+    # The bands are constraints now, so they hold to solver tolerance.
+    assert held.stroke_error <= 0.05 + 1.0e-6
+    assert held.ratio_error <= 0.05 + 1.0e-6

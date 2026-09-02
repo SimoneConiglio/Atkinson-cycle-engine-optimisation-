@@ -363,6 +363,8 @@ def fit_within_constraints(
     start: Design,
     bounds: Bounds = GLOBAL_BOUNDS,
     max_iterations: int = 120,
+    hold_bands: bool = False,
+    band: float = 0.05,
     targets: DesignTargets = DEFAULT_TARGETS,
     spec: EngineSpec = DEFAULT_SPEC,
 ) -> FitResult | None:
@@ -388,11 +390,27 @@ def fit_within_constraints(
     That is the difference between a generator of points *near the manifold*
     and a generator of points that are actually usable as starts.
 
+    ``hold_bands`` carries the same argument one step further.  Against a target
+    the mechanism cannot reach, holding ``g <= 0`` and chasing the motion trade
+    against each other, and the strokes drift out of the tolerance bands of
+    §3.4.  Those bands are constraints too, so they belong in the problem rather
+    than being checked afterwards: with them added the solve either returns a
+    design that is feasible *and* in band, or reports that it found none, which
+    is the useful answer in both cases.
+
+    The same reasoning does not stop there.  A fit that satisfies the geometric
+    inequalities and the bands can still fail the coupled and vehicle
+    constraints, which are not included here because each evaluation would then
+    carry an MDA.  Where that matters, they are the next constraints to add.
+
     Args:
         target: The motion to fit.
         start: Initial design.
         bounds: Box to search in.
         max_iterations: SLSQP iteration budget.
+        hold_bands: Also require ``|STE - target| <= band`` and
+            ``|epsilon - target| <= band`` rather than checking them after.
+        band: Half-width for those two, when ``hold_bands`` is set.
         targets: Constraint right-hand sides.
         spec: Fixed engine data.
 
@@ -409,14 +427,24 @@ def fit_within_constraints(
         value = _residual(Design.from_array(vector), target, spec)
         return 1.0e6 if value is None else float(np.sum(value**2))
 
+    width = len(INEQUALITY_NAMES) + (4 if hold_bands else 0)
+
     def constraint(vector: FloatArray) -> FloatArray:
         analysis = analyse(Design.from_array(vector), samples=target.samples, spec=spec)
         if not analysis.valid:
             # Unanalysable reads as deeply infeasible, which steers SLSQP back
             # rather than letting it wander off the analysable set.
-            return np.full(len(INEQUALITY_NAMES), -1.0e3)
+            return np.full(width, -1.0e3)
         # SciPy wants ``>= 0`` where the package states ``<= 0``.
-        return -inequality_constraints(analysis, targets)
+        rows = -inequality_constraints(analysis, targets)
+        if not hold_bands:
+            return rows
+        metrics = analysis.metrics
+        stroke = float(metrics.expansion_stroke) - target.expansion_stroke
+        ratio = float(metrics.compression_ratio) - target.compression_ratio
+        return np.concatenate(
+            [rows, [band - stroke, band + stroke, band - ratio, band + ratio]]
+        )
 
     outcome = minimize(
         objective,

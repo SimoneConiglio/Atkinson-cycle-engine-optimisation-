@@ -112,11 +112,12 @@ In rough order of value per unit of effort:
    that fitting to a *reachable* target reaches the equality manifold where
    uniform sampling never does (22 of 30 against 0 of 12 000), that the fits
    are feasible against the complete constraint set, and that varying the
-   target rather than the start is what yields distinct designs. It needs no
-   separate restoration phase provided the inequalities are kept in the fit
-   ({py:func}`~exlink.synthesis.fit_within_constraints`) rather than discarded
-   with the equalities. The functional IDF §7.4 also sets out is a larger
-   question and would need its own study.
+   target rather than the start yields distinct designs. It needs no separate
+   restoration phase: every constraint kept *in* the fit is a constraint the
+   fit then satisfies, and the remaining failures are the coupled and vehicle
+   constraints, which are the next ones to add
+   ({py:func}`~exlink.synthesis.fit_within_constraints`). The functional IDF
+   §7.4 also sets out is a larger question and would need its own study.
 
 ## 7.4 A prescribed-motion formulation, measured
 
@@ -199,8 +200,9 @@ different operation, and most fits land inside both bands:
 The last column is the finding. Every fit converges to the *same* linkage,
 whatever start it is given. That is not a defect of the optimizer: the motion
 very nearly determines the mechanism, so fitting to one target yields one
-design. **Prescribed-motion fitting solves the feasibility problem and not the
-multistart problem.**
+design. **Fitting to a single target solves the feasibility problem and not the
+multistart problem**; diversity has to be asked for separately, and the rest of
+this section is about how.
 
 Diversity therefore has to come from varying the *target*. Perturbing it with
 third-to-fifth-harmonic content and re-solving the two stroke harmonics — so the
@@ -253,15 +255,39 @@ while chasing a motion no buildable linkage produces, and the constrained fit
 holds every constraint at its boundary instead. Discarding $g$ was not a
 simplification, it was a way of not noticing.
 
-Two further things the last row says. The constrained fits sit at
-$g = 0$ exactly — SQP converging onto its active constraints, which §6.2 shows
-is precisely what makes a design unreliable, so a generator built this way
-should hand its output to a reliability-aware stage rather than be trusted as
-a final design. And they are still outside the stroke bands, because holding
-$g \le 0$ while chasing an unreachable motion trades one against the other.
-Those bands are themselves constraints and belong in the problem too; with
-them added the fit either returns a design that is feasible *and* in band or
-reports that none exists, which is the right answer either way.
+The last row also shows the constrained fits still outside the stroke bands,
+because holding $g \le 0$ while chasing an unreachable motion trades one
+against the other. But the bands are constraints too, and the same argument
+puts them in the problem rather than in a check afterwards
+({py:func}`~exlink.synthesis.fit_within_constraints` with ``hold_bands``).
+Doing so on six jittered targets:
+
+| | |
+|---|---|
+| constraints held ($\max g$) | $+0.0000$ on all six |
+| inside both bands | six of six, at the boundary |
+| feasible against the *whole* set | **two** |
+| distinct designs among those | **two** |
+
+So the diversity route does work, and the earlier reading that it is limited by
+reachability was premature. Reachability limits how closely the motion can be
+tracked; it does not prevent the solve from returning usable designs, because
+the constrained problem simply trades motion accuracy for feasibility and still
+lands somewhere buildable.
+
+The four that remain infeasible are instructive in the same way as everything
+above: they satisfy every constraint that was *given* to them — $\max g = 0$,
+both bands held — and fail the coupled and vehicle constraints, which are not
+in the fit. The pattern has now repeated three times. Each apparent limitation
+of the reformulation turned out to be a constraint that had been left out of
+it, and adding the constraint fixed it. Those two are the next to add; they are
+excluded here only because each evaluation would then carry an MDA.
+
+One caution that does not dissolve this way. Every one of these fits sits at
+$g = 0$ exactly — SQP converging onto its active constraints — and §6.2 shows
+that sitting on active constraints is precisely what makes a design unreliable.
+A generator built this way should hand its output to a reliability-aware stage
+rather than be trusted as a final design.
 
 ### The functional decomposition this suggests
 
