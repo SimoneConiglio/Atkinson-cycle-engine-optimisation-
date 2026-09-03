@@ -868,6 +868,139 @@ def optimise_slidercrank(
     )
 
 
+def optimise_slidercrank_constrained(
+    ratio: float = 16.0,
+    vehicle: Vehicle | None = None,
+    samples: int = 360,
+    spec: EngineSpec = DEFAULT_SPEC,
+    obliquity_bounds: tuple[float, float] = OBLIQUITY_BOUNDS,
+    speed_bounds: tuple[float, float] = SPEED_BOUNDS,
+    max_iterations: int = 80,
+) -> OptimisedSliderCrank:
+    """The same baseline, optimised the way the EX-link now is.
+
+    Why this exists alongside :func:`optimise_slidercrank`
+    ------------------------------------------------------
+    A comparison is only worth making if both sides get the same treatment, and
+    that has to include the *method*, not only the models.  The EX-link's best
+    design comes from an SQP that holds every constraint at every step (§3.10);
+    scoring the baseline with a derivative-free search that simply rejects
+    infeasible points would leave the comparison measuring the optimizer again,
+    which is the error :func:`optimise_slidercrank` was written to remove one
+    level up.
+
+    So this poses the baseline the same way: maximise range subject to the
+    constraints as constraints, by SLSQP.  The slider-crank has two of them --
+    the engine must produce net work, and the vehicle must meet the average
+    speed rule -- against the EX-link's fourteen, because a slider-crank has
+    one dead centre, no transmission angle to lose and no gear train.
+
+    What is *not* matched, and cannot be here
+    ------------------------------------------
+    The EX-link's final formulation also constrains a system reliability index
+    over its eleven dimensions (§3.10).  There is no equivalent for the
+    slider-crank in this package: :mod:`exlink.robustness` builds its
+    covariance and its constraint Jacobians for the EX-link's design vector
+    specifically.  Constructing the analogue for a two-variable mechanism is
+    tractable but is not the same model, and asserting a reliability comparison
+    across two different uncertainty models would be worse than declining one.
+    The comparison in §6.3 is therefore between two *nominally* optimised
+    engines, and says so.
+
+    Args:
+        ratio: Compression ratio to hold, matching the EX-link's requirement.
+        vehicle: The car; a default Prototype-class entry if omitted.
+        samples: Crank angles per revolution.
+        spec: Fixed engine data.
+        obliquity_bounds: Search interval for ``r / l``.
+        speed_bounds: Search interval for the speed [rev/min].
+        max_iterations: SLSQP iteration budget.
+
+    Returns:
+        The best mechanism, its speed, and its scored row.
+
+    Raises:
+        RuntimeError: If no point in the box produced a feasible engine.
+    """
+    from scipy.optimize import minimize
+
+    car = vehicle if vehicle is not None else Vehicle()
+    calls = 0
+    best: tuple[float, SliderCrank, float, Comparison] | None = None
+
+    cache: dict[bytes, tuple[SliderCrank, float, Comparison, float] | None] = {}
+
+    def state(vector: FloatArray) -> tuple[SliderCrank, float, Comparison, float] | None:
+        """Mechanism, speed, scored row and average road speed at one point."""
+        key = np.ascontiguousarray(vector, dtype=float).tobytes()
+        if key in cache:
+            return cache[key]
+        obliquity = float(np.clip(vector[0], *obliquity_bounds))
+        speed = float(np.clip(vector[1], *speed_bounds))
+        mechanism = SliderCrank.for_compression_ratio(ratio, obliquity, spec=spec)
+        try:
+            row = evaluate_slidercrank(mechanism, speed, vehicle=car, samples=samples)
+            result = solve(mechanism, speed, samples=samples)
+            loss = friction_work(result)
+            brake = result.indicated_work - loss
+            budget = mass_budget(result)
+            outcome = best_strategy(
+                car,
+                budget.total_kg,
+                brake / 1000.0 * (speed / 60.0) / 2.0,
+                brake_efficiency(brake, result.heat_release),
+            )
+            answer = (mechanism, speed, row, outcome.average_speed)
+        except (ValueError, FloatingPointError):
+            answer = None
+        cache.clear()
+        cache[key] = answer
+        return answer
+
+    def objective(vector: FloatArray) -> float:
+        nonlocal calls, best
+        calls += 1
+        found = state(vector)
+        if found is None:
+            return 0.0
+        mechanism, speed, row, _average = found
+        if row.feasible and (best is None or row.km_per_litre > best[0]):
+            best = (row.km_per_litre, mechanism, speed, row)
+        return -row.km_per_litre
+
+    def constraint(vector: FloatArray) -> FloatArray:
+        found = state(vector)
+        if found is None:
+            return np.full(2, -1.0e3)
+        _mechanism, _speed, row, average = found
+        # The two things ``Comparison.feasible`` folds into a bool: the engine
+        # must make net work, and the car must hold the average-speed rule.
+        return np.array([row.brake_power, average - car.minimum_average_speed])
+
+    low, high = obliquity_bounds
+    slow, fast = speed_bounds
+    outcome = minimize(
+        objective,
+        np.array([0.5 * (low + high), 0.5 * (slow + fast)]),
+        method="SLSQP",
+        bounds=[(low, high), (slow, fast)],
+        constraints=[{"type": "ineq", "fun": constraint}],
+        options={"maxiter": int(max_iterations), "ftol": 1.0e-9},
+    )
+    del outcome
+    if best is None:
+        msg = "no feasible slider-crank in the search box"
+        raise RuntimeError(msg)
+    _range, mechanism, speed, row = best
+    return OptimisedSliderCrank(
+        mechanism=mechanism,
+        speed_rpm=speed,
+        comparison=row,
+        evaluations=calls,
+        starts=1,
+    )
+
+
 def firing_frequency_sensitivity(
     performance: object,
     vehicle: Vehicle | None = None,

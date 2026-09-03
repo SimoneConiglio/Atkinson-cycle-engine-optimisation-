@@ -45,9 +45,42 @@ Grouped by what would have to change to remove them.
 |---|---|
 | solid round bars for every member | mass falls perhaps 30 % with tubes; changes the mass/inertia balance driving §6.1 |
 | Coulomb friction with constant coefficients | absolute FMEP uncertain by ~30 %; rankings robust, since comparisons are at equal coefficients |
-| instantaneous combustion, no heat transfer or gas exchange | indicated efficiency optimistic by several points, equally for both mechanisms |
+| instantaneous combustion, no heat transfer | indicated efficiency optimistic by several points, equally for both mechanisms |
+| **no gas exchange** | optimistic for both, but **not equally** — see below; it flatters the conventional engine and understates §6.3 |
 | constant crankshaft speed | the flywheel sizing already prices the fluctuation this assumes away |
 | pin-jointed trigonal link | small; it is a stiff triangle either way |
+
+#### Neglecting gas exchange is not a neutral simplification
+
+Both cycles hold the intake and exhaust strokes at plenum pressure, so the
+gauge pressure is zero across them and **neither engine pays any pumping
+work**. Stated that way it sounds even-handed. It is not, and the direction
+matters for §6.3.
+
+An over-expanded engine opens its exhaust valve later, on a charge that has
+expanded further and therefore sits closer to ambient. Measured on the two
+mechanisms this study compares, at the same compression ratio:
+
+| | expansion ratio | $p$ at exhaust-valve-open | $p/p_0$ |
+|---|---|---|---|
+| EX-link | 20.8 | 0.1475 | **1.23** |
+| slider-crank | 16.0 | 0.2040 | **1.70** |
+
+The work still recoverable from that charge — expanding it isentropically to
+ambient, which is the theoretical maximum and not an achievable figure — is
+9.5 % of indicated work for the EX-link and 26.4 % for the slider-crank. The
+model discards both.
+
+So the simplification removes a loss that is roughly two and a half times
+larger for the conventional engine, and **§6.3's comparison is conservative
+against the EX-link by some margin**. How large a margin is not established
+here: a real engine recovers a fraction of the theoretical maximum, and that
+fraction depends on valve timing and port design the model does not represent.
+What can be said is the sign, and that the sign runs the opposite way to the
+firing-frequency effect §6.3 spends most of its length removing.
+
+Modelling it properly needs a valve-timing model and a pumping loop, which is a
+larger change than any other item in this table.
 
 ### Method
 

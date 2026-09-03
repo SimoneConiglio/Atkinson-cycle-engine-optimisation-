@@ -611,6 +611,8 @@ def maximise_range_from_target(
     bounds: Bounds = GLOBAL_BOUNDS,
     max_iterations: int = 120,
     band: float = 0.05,
+    beta_target: float | None = None,
+    grade: int = 8,
     module: float | None = None,
     teeth: int | None = None,
     targets: DesignTargets = DEFAULT_TARGETS,
@@ -666,6 +668,11 @@ def maximise_range_from_target(
         bounds: Box to search in.
         max_iterations: SLSQP iteration budget.
         band: Half-width on the two stroke requirements.
+        beta_target: When given, the system reliability index is constrained to
+            ``>= beta_target``, making this the reliability-based form of the
+            problem.  ``None`` leaves it deterministic.
+        grade: ISO 286 IT grade assumed for the dimensions when ``beta_target``
+            is set; ignored otherwise.
         module: Gear module to pin, or ``None`` to let the sizer choose.
         teeth: Teeth on the small gear, or ``None``.
         targets: Constraint right-hand sides.
@@ -677,6 +684,7 @@ def maximise_range_from_target(
     from scipy.optimize import minimize
 
     from .performance import evaluate
+    from .robustness import failure_probability
 
     calls = {"n": 0, "fallback": 0, "broken": 0}
     # SLSQP asks for the objective and the constraints at the same point, one
@@ -728,7 +736,23 @@ def maximise_range_from_target(
         return RANGE_UNAVAILABLE + MOTION_WEIGHT * motion
 
     def constraint(vector: FloatArray) -> FloatArray:
-        return _range_constraints(score(vector), target, band, targets)
+        rows = _range_constraints(score(vector), target, band, targets)
+        if beta_target is None:
+            return rows
+        # The reliability index as one more row, on the same >= 0 convention.
+        # It is evaluated against the *relaxed* bands this solve is using, not
+        # the specified ones: a probability is only meaningful against the
+        # bound actually being held.
+        reliability = failure_probability(
+            Design.from_array(vector),
+            grade=grade,
+            samples=target.samples,
+            targets=targets,
+            spec=spec,
+            band={"expansion_stroke": band, "compression_ratio": band},
+        )
+        index = -10.0 if reliability is None else reliability.system_beta
+        return np.concatenate([rows, [index - beta_target]])
 
     outcome = minimize(
         objective,

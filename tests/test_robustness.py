@@ -435,3 +435,45 @@ def test_the_deterministic_optimum_is_dominated_on_reliability() -> None:
         if beta > reference.system_beta and outcome.km_per_litre >= baseline.km_per_litre:
             return
     pytest.fail("no sampled design dominated the deterministic optimum")
+
+
+def test_the_tolerance_band_can_be_relaxed() -> None:
+    """§6.2 asks what bound a design would need; that needs a bound it can vary.
+
+    The band was a module constant, so the reliability of a design could only
+    ever be scored against the *specified* tolerance -- which makes the
+    question "what relaxation would make this design reliable?" unanswerable
+    from the public API.  Widening it must move the probability, and in the
+    obvious direction.
+    """
+    from exlink.robustness import failure_probability
+
+    tight = failure_probability(
+        COUPLED_DESIGN,
+        band={"expansion_stroke": 0.05, "compression_ratio": 0.05},
+    )
+    loose = failure_probability(
+        COUPLED_DESIGN,
+        band={"expansion_stroke": 0.15, "compression_ratio": 0.15},
+    )
+    assert tight is not None and loose is not None
+    assert loose.system < tight.system
+    assert loose.system_beta > tight.system_beta
+
+
+def test_the_default_band_is_the_specified_one() -> None:
+    """Omitting the band must not silently change what is being scored.
+
+    Not asserted to machine precision: the system probability is a
+    multivariate-normal orthant evaluated by Genz's quasi-Monte-Carlo
+    transformation, so two calls at the same design differ in the seventh
+    figure.  That is a property of the estimator, not of the band, and a
+    tolerance tighter than its own accuracy would test the random number
+    stream instead of the code.
+    """
+    from exlink.robustness import EQUALITY_BAND, failure_probability
+
+    default = failure_probability(COUPLED_DESIGN)
+    explicit = failure_probability(COUPLED_DESIGN, band=dict(EQUALITY_BAND))
+    assert default is not None and explicit is not None
+    assert default.system == pytest.approx(explicit.system, rel=1.0e-4)

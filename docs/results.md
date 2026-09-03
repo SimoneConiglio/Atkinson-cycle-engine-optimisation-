@@ -246,6 +246,38 @@ also the most fragile part of the result: it rests entirely on the phasing that
 `find_phases` extracts from the piston motion, and an engine that did not
 achieve it in practice would lose the whole margin and more.
 
+### Both sides, optimised the same way
+
+§6.4 finds that imposing constraints during the search rather than checking
+them afterwards is worth 4.9 % to the EX-link. If that were a property of the
+method it would apply to the baseline too, and this comparison would be unfair
+until the baseline got the same treatment. It is not:
+
+| baseline, optimised by | $r/l$ | speed | range | evaluations |
+|---|---|---|---|---|
+| Nelder-Mead, infeasible points rejected | 0.195 | 2151 rpm | 2887.7 km/L | 393 |
+| SLSQP, both constraints imposed | 0.195 | 2141 rpm | **2887.7 km/L** | **100** |
+
+The same optimum, to the tenth of a km/L, four times cheaper. The comparison
+above is therefore unaffected by which method produced the baseline.
+
+The reason is the one §6.4 turns on, seen from the other side: **imposing a
+constraint helps only where the constraint binds**. The slider-crank has two
+degrees of freedom and two constraints, and at its optimum neither is active —
+the peak in $r/l$ is interior, set by rod mass against piston side load, not by
+a bound. There is nothing for constraint-handling to buy. The EX-link's
+optimum sits on several active constraints at once, which is why the same
+change is worth 4.9 % there and nothing here. The 4.9 % is not a general
+property of the method.
+
+One conservatism worth naming before the caveats, because it runs the other
+way. Neither cycle models gas exchange, so neither engine pays any pumping
+work — and that is *not* even-handed. The EX-link opens its exhaust valve on a
+charge expanded to $1.23\,p_0$ against the slider-crank's $1.70\,p_0$, so the
+loss the model discards is about two and a half times larger for the
+conventional engine (§7.2). The advantage reported here is therefore
+conservative against the EX-link by an amount this model cannot quantify.
+
 Two things this comparison is not. It is not a claim about extended-expansion
 engines in general: {cite:t}`watanabe2006` measure a 4-point indicated-efficiency
 gain on hardware, and this model reproduces 2 points, so if anything the

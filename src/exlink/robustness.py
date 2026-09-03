@@ -171,21 +171,34 @@ def covariance(
     return np.diag(sigma**2)
 
 
+def _band_widths(band: dict[str, float] | None) -> FloatArray:
+    """Half-widths of the two relaxed equalities, defaulting to the specified ones."""
+    widths = dict(EQUALITY_BAND)
+    if band:
+        widths.update(band)
+    return np.array([widths["expansion_stroke"], widths["compression_ratio"]])
+
+
 def _constraint_vector(
     design: Design,
     samples: int,
     targets: DesignTargets,
     spec: EngineSpec,
+    band: dict[str, float] | None = None,
 ) -> FloatArray | None:
-    """All seven constraints as one vector, negative meaning satisfied."""
+    """All seven constraints as one vector, negative meaning satisfied.
+
+    ``band`` widens the two relaxed equalities.  It has to be a parameter
+    rather than a constant, because §6.2's question -- what bound would this
+    design need in order to be reliable? -- cannot be asked of a formulation
+    whose bounds are fixed.
+    """
     analysis = analyse(design, samples=samples, spec=spec)
     if not analysis.valid:
         return None
     equality = equality_constraints(analysis, targets)
     inequality = inequality_constraints(analysis, targets)
-    banded = np.abs(equality) - np.array(
-        [EQUALITY_BAND["expansion_stroke"], EQUALITY_BAND["compression_ratio"]]
-    )
+    banded = np.abs(equality) - _band_widths(band)
     return np.concatenate([banded, inequality])
 
 
@@ -535,6 +548,7 @@ def constraint_moments(
     samples: int = 360,
     targets: DesignTargets = DEFAULT_TARGETS,
     spec: EngineSpec = DEFAULT_SPEC,
+    band: dict[str, float] | None = None,
 ) -> ConstraintMoments | None:
     """Constraint values, standard deviations and correlations, from the exact Jacobians.
 
@@ -562,8 +576,6 @@ def constraint_moments(
     Returns:
         The moments, or ``None`` if the design cannot be analysed.
     """
-    from .scenarios import DEFAULT_EQUALITY_TOLERANCE
-
     analysis = analyse(design, samples=samples, spec=spec)
     if not analysis.valid:
         return None
@@ -575,8 +587,7 @@ def constraint_moments(
     metrics = analysis.metrics
     stroke = metrics.expansion_stroke - targets.expansion_stroke
     ratio = metrics.compression_ratio - targets.compression_ratio
-    band_stroke = DEFAULT_EQUALITY_TOLERANCE["stroke_error"]
-    band_ratio = DEFAULT_EQUALITY_TOLERANCE["compression_ratio_error"]
+    band_stroke, band_ratio = (float(width) for width in _band_widths(band))
 
     values = {
         "rod_angle": metrics.rod_angle - targets.max_rod_angle,
@@ -643,6 +654,7 @@ def failure_probability(
     samples: int = 360,
     targets: DesignTargets = DEFAULT_TARGETS,
     spec: EngineSpec = DEFAULT_SPEC,
+    band: dict[str, float] | None = None,
 ) -> Reliability | None:
     """Probability of failure by FORM, with the constraint correlation kept.
 
@@ -687,7 +699,7 @@ def failure_probability(
     """
     from scipy.stats import multivariate_normal, norm
 
-    moments = constraint_moments(design, grade, angular, samples, targets, spec)
+    moments = constraint_moments(design, grade, angular, samples, targets, spec, band)
     if moments is None:
         return None
 

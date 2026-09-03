@@ -258,3 +258,22 @@ def test_removing_the_firing_advantage_costs_the_ex_link_its_lead() -> None:
     four_stroke = sensitivity["km_per_litre_four_stroke"] / best.km_per_litre - 1.0
     assert as_modelled > 0.10
     assert four_stroke < 0.0
+
+
+def test_the_constrained_baseline_imposes_its_constraints() -> None:
+    """Both sides of §6.3 must be optimised the same way, method included.
+
+    The EX-link's best design comes from an SQP holding every constraint at
+    every step.  Scoring the baseline with a search that merely rejects
+    infeasible points would leave the comparison measuring the optimizer --
+    the error ``optimise_slidercrank`` was written to remove one level up, and
+    it returns at the next level if the methods differ.
+    """
+    from exlink.slidercrank import OBLIQUITY_BOUNDS, optimise_slidercrank_constrained
+
+    best = optimise_slidercrank_constrained(max_iterations=12)
+    assert best.comparison.feasible
+    assert best.comparison.km_per_litre > 0.0
+    # The optimum must be interior, or it reports a bound rather than a design.
+    low, high = OBLIQUITY_BOUNDS
+    assert low < best.mechanism.obliquity < high
