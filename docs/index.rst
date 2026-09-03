@@ -28,7 +28,7 @@ lying within a band is not a design that satisfies the requirement.
 Reliability-based optimization thereby arises as a consequence of the relaxation
 rather than as an addition to the problem.
 
-Three quantitative results follow. The quasi-statically optimal geometry
+Four quantitative results follow. The quasi-statically optimal geometry
 coincides with the transmission-angle singularity at which the inertia loads are
 largest, and admits no feasible structure above 1000 rev/min, whereas a geometry
 displaced from the singularity attains lower mass and greater range
@@ -39,7 +39,11 @@ advantage of the mechanism over a conventional slider-crank -- sized by
 identical structural and tribological models, and optimised over its own
 degrees of freedom rather than proportioned by hand -- becomes a 4.3 % deficit
 when its firing-frequency difference is removed, locating the advantage in the
-cycle rate rather than in extended expansion and reversing its sign.
+cycle rate rather than in extended expansion and reversing its sign. Finally,
+imposing the coupled and structural constraints throughout the search rather
+than verifying them on its result is shown to be worth 4.9 % of the objective,
+under an identical algorithm -- a difference of formulation rather than of
+method.
 
 The methodological contribution is a demonstration, on a problem small enough to
 be verified throughout, that the choice of objective and the geometry of the

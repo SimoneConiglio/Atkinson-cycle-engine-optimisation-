@@ -17,7 +17,7 @@ the parts where finite differences are not merely inaccurate but wrong.
 
 ![the mechanism through one revolution](docs/figures/exlink.gif)
 
-## Three results
+## Four results
 
 **The quasi-static optimum is the worst place to be.** Maximising efficiency without inertia
 drives the linkage to its transmission-angle singularity — exactly where the accelerations and
@@ -32,6 +32,11 @@ requirements.
 **The advantage is firing frequency, not extended expansion.** Against a conventional engine
 *optimised* under identical code the linkage wins 15.6 %; remove its one-revolution cycle and
 it loses by **4.3 %**.
+
+**Imposing a constraint and checking it are different searches.** Holding every coupled and
+structural constraint *during* the search, rather than verifying them on the design it
+returns, reaches **3501 km/L** against 3338 — **+4.9 %** from the same optimizer on a
+better-posed problem.
 
 ## The study
 

@@ -271,7 +271,76 @@ this model has no knock limit, so left free it would rise without bound and the
 comparison would measure a missing sub-model.
 :::
 
-## 6.4 Supporting measurements
+## 6.4 Imposing every constraint is worth 5 % of the objective
+
+### Result
+
+The problem of §3.10 checks the coupled and vehicle constraints on the design
+the search returns; the second form in §3.10 *imposes* all fourteen
+during the search, with the prescribed motion as a fallback objective. Run from
+the same starting design, at the same speed, with the same pinned gear pair:
+
+| | range | worst constraint | strictly feasible |
+|---|---|---|---|
+| start (`COUPLED_DESIGN`) | 3338 km/L | — | **yes** |
+| §3.10, bound only at the end (`RANGE_DESIGN`) | 3388 km/L | — | no, by $1.5\times10^{-4}$ |
+| **§3.10, imposed throughout** | **3501 km/L** | $+1.6\times10^{-4}$ | no, by $2\times10^{-4}$ |
+
+**+4.9 % over the strictly feasible reference, and +3.4 % over the previous
+best.** 836 evaluations, 78 minutes, the iteration cap reached rather than a
+convergence test met — so the figure is a lower bound on what the formulation
+reaches, not its optimum.
+
+### Why
+
+Imposing a constraint and checking it are not the same search. A constraint
+that is only checked at the end lets the optimizer spend its whole trajectory
+in a region it will later be told it cannot use; imposing it makes every step
+legal, and the steps that remain are the ones that pay. The gain is not a
+better algorithm — it is the same SLSQP — but a better-posed problem.
+
+### The fallback earns its place only where it is needed
+
+Two measurements say what the prescribed motion contributes, and they point in
+opposite directions on purpose:
+
+| start | evaluations that fell back | outcome |
+|---|---|---|
+| `COUPLED_DESIGN` (runs) | **0 of 836** | pure range maximisation |
+| `REFINED_DESIGN` at 1250 rpm (does **not** run) | **26 of 103** | 0 km/L $\to$ 3336 km/L |
+
+From a start that already runs, the ladder never fires and costs nothing. From
+one where the engine will not run — friction exceeding indicated work, so km/L
+simply does not exist — a quarter of the search is conducted on the target, and
+the solve climbs out to a working engine. That is what a fallback should do,
+and it is the case a constant penalty cannot handle: there is no gradient in a
+constant.
+
+The complementary measurement is the motion residual, which ends at **5.53 mm**
+— far from the target. Once the range is computable everywhere the optimizer
+abandons the prescribed motion entirely and pursues the objective. If the target
+were pulling on the answer this number would be small; it is not, which is how
+one tells a fallback from a constraint.
+
+### Discussion
+
+This design is **not reported as feasible**, for the same reason `RANGE_DESIGN`
+is not: it ends $2\times10^{-4}$ outside the compression-ratio band. That is
+SLSQP stopping within its own tolerance of a bound whose width is itself an
+approximation, and §6.2 puts the machining scatter on $STE$ a hundred times
+higher. No built engine would tell it from a design exactly on the band.
+
+The study declines to call it feasible anyway, and the reason is worth stating
+plainly: the alternative is deciding case by case which violations are small
+enough to ignore, which is precisely the judgement §6.2 exists to take away from
+the optimizer. A design 0.0002 outside a band is either inside the
+specification or it is not, and the specification says not.
+
+What this does not do is repair §6.2. The 0.01 mm gap bound remains unattainable
+at any ISO grade, and imposing more constraints during the search does not
+create feasibility where the specification admits none.
+
+## 6.5 Supporting measurements
 
 ### How coupled the problem is
 

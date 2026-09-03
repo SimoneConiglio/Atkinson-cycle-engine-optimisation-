@@ -2,6 +2,11 @@
 
 ## 7.1 What the study establishes
 
+**Imposing a constraint and checking it are different searches.** The same
+SLSQP, on the same problem, reaches 4.9 % further when the coupled and vehicle
+constraints are held during the search rather than verified at the end (§6.4).
+Nothing about the algorithm changed; the problem was posed better.
+
 **The objective matters more than the algorithm.** The conventional formulation
 prices nothing, its central quantity is not an efficiency, and it cannot see the
 parts. Replacing it with range changes the answer qualitatively — not by a few
@@ -108,16 +113,13 @@ In rough order of value per unit of effort:
    reliability margin exactly differentiable and remove the one place where
    finite differences enter a tight constraint.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
-9. **Converging the range-with-target formulation.** §7.4 states the whole
-   problem once -- range under all fourteen constraints, the prescribed motion
-   standing in wherever the range does not exist
-   ({py:func}`~exlink.synthesis.maximise_range_from_target`) -- and reaches
-   3501 km/L, the best figure in this study, at $1.6 \times 10^{-4}$ outside
-   its constraints. That run stopped at its iteration cap rather than at a
-   convergence test, so the figure is a lower bound. Running it to convergence,
-   and from several targets, is the work; the duplicate-evaluation fix has
-   since halved what each iteration costs. The functional IDF §7.4 also sets
-   out is a larger question again and would need its own study.
+9. **Converging the imposed form of §3.10.** The formulation behind §6.4's 3501 km/L
+   stopped at its iteration cap, not at a convergence test, so that figure is a
+   lower bound on what it reaches. Running it to convergence, and from several
+   starts, is the cheapest remaining gain in the study; the
+   duplicate-evaluation fix has since halved what each iteration costs. The
+   functional IDF §7.4 sets out is a larger question again and would need its
+   own study.
 
 ## 7.4 A prescribed-motion formulation, measured
 
@@ -289,92 +291,30 @@ that sitting on active constraints is precisely what makes a design unreliable.
 A generator built this way should hand its output to a reliability-aware stage
 rather than be trusted as a final design.
 
-### The endpoint: range under every constraint, target as the fallback
+### Where it ended up
 
-The argument that took the inequalities and then the bands into the problem
-does not stop there, and the natural endpoint is not a synthesis problem at
-all. If every constraint belongs in the fit, and the fit is only a means of
-reaching a good design, then the objective should be the one the application
-scores. {py:func}`~exlink.synthesis.maximise_range_from_target` solves
+The argument that took the inequalities and then the bands into the fit does not
+stop there, and its endpoint is not a synthesis problem at all: if every
+constraint belongs in the problem, and the fit is only a means of reaching a
+good design, then the objective should be the one the application scores. That
+formulation is the second form in §3.10, its result is §6.4, and it is the best design this study
+produces. What remains here is what the prescribed motion taught on the way,
+which is not the same thing as what it achieved.
 
-$$\max_X \; R(X) \quad \text{s.t.} \quad g(X) \le 0, \;
-  |STE - 74| \le \delta, \; |\varepsilon - 16| \le \delta, \;
-  X \in [X_{lb}, X_{ub}]$$
+**The lesson that generalises.** Four times in this exercise a limitation was
+reported — a restoration phase is needed, the route is limited by reachability,
+none of these designs is feasible, the fit cannot give diverse starts — and four
+times it turned out to be a constraint that had been left out of the problem.
+Adding the constraint fixed it each time. The habit worth keeping is to ask,
+of any apparent limitation of a reformulation, whether it is a property of the
+problem or of what was omitted from it; here it was never the former.
 
-with $g$ carrying all fourteen rows — five geometric, four band sides, three
-coupled, two vehicle — which is §3.10's problem entire.
-
-**Where the target survives.** $R$ is not computable everywhere. A design whose
-kinematics closes can still fail to size, fail to run, or fail to produce a
-four-stroke motion at all, and there the objective has no value for a line
-search to descend. A constant penalty leaves a flat region with no gradient,
-which is precisely why the reliability constraint stalled in §3.10. So the
-objective is a ladder, and the prescribed motion holds its middle rung:
-
-| the design | scores |
-|---|---|
-| range computable | $-R(X)$, the real objective |
-| analysable, no range | a floor plus the motion residual — *the target takes over* |
-| motion is not a four-stroke cycle | a larger constant |
-
-Each rung is strictly worse than the one above, so the search is always pushed
-back towards designs that run, and on the middle rung it still has something to
-follow.
-
-**Measured, from a start where the objective does not exist.** The refined
-design at 1250 rpm is analysable and produces **no range at all** — its
-friction exceeds its indicated work, so the engine will not run:
-
-| | |
-|---|---|
-| start | 0.0 km/L, "the engine will not run" |
-| evaluations that fell back to the target | **26 of 103** |
-| evaluations on a broken cycle | 2 |
-| result after 8 iterations | **3335.6 km/L**, $\lvert\Delta STE\rvert = 0.013$ mm |
-
-A quarter of the search was conducted on the target rather than on the range,
-and the solve climbed from an engine that does not run to one making 3336 km/L.
-From the coupled reference design, by contrast, the ladder never fires at all —
-every point visited has a computable range — so the fallback is insurance that
-costs nothing when it is not needed and supplies the whole gradient when it is.
-
-**Run at length, from the coupled reference design.** 836 evaluations, 78
-minutes, the 60-iteration cap reached rather than a convergence test met:
-
-| | |
-|---|---|
-| start | 3337.2 km/L |
-| result | **3501.2 km/L**, $+4.9\,\%$ |
-| worst constraint | $+1.64 \times 10^{-4}$ |
-| $\lvert\Delta STE\rvert$ | 0.0497 mm, inside the 0.05 band |
-| $\lvert\Delta\varepsilon\rvert$ | 0.0502, outside by $2 \times 10^{-4}$ |
-| evaluations that fell back | **0 of 836** |
-
-This is the best design the study has produced — 3.4 % beyond the 3387.5 km/L
-of :data:`~exlink.reference.RANGE_DESIGN` and 4.9 % beyond the strictly
-feasible reference — and it is *not* reported as feasible, for the same reason
-`RANGE_DESIGN` is not: it finishes $2 \times 10^{-4}$ outside the
-compression-ratio band, which is SLSQP stopping within its own tolerance of a
-constraint whose width is itself an approximation. §6.2 puts the machining
-scatter on $STE$ at 0.020 mm, a hundred times that gap. No built engine would
-distinguish this design from one exactly on the band, and the study still
-declines to call it feasible, because the alternative is to decide case by case
-which violations are small enough to ignore.
-
-**Two things the run settles about the formulation.** The fallback never fired
-— 0 of 836 — so from a start that already runs, the ladder costs nothing and
-the search is pure range maximisation; it earns its place only from starts like
-the one above, where it supplied a quarter of the evaluations. And the motion
-residual ends at 5.53 mm, far from the target: once the range is computable
-everywhere the optimizer abandons the prescribed motion entirely and pursues
-the objective, which is exactly right. The target is a fallback, not a
-constraint, and this is the measurement that shows it behaves as one.
-
-**What is still open.** The cap was reached, not a convergence criterion, so
-3501 km/L is a lower bound on what this formulation reaches rather than its
-optimum. Each evaluation is a converged MDA; this run predates the fix that
-stopped SLSQP paying for two of them per point, so the same budget now buys
-twice the iterations.
+**What the target is, precisely.** It is a fallback objective, not a
+constraint, and §6.4 measures both halves of that claim: it fires for a quarter
+of the search from a start where the range does not exist, and not at all from
+one where it does, ending 5.53 mm from a motion it was free to abandon. A
+constant penalty cannot do the first — there is no gradient in a constant — and
+a constraint would have prevented the second.
 
 ### The functional decomposition this suggests
 
@@ -417,8 +357,9 @@ not a small one.
 
 | | |
 |---|---|
-| range of the coupled reference design | 3338 km/L |
-| engine mass at that design | 12.2 kg |
+| best strictly feasible design | 3338 km/L, 12.2 kg |
+| best design overall (§6.4), $2\times10^{-4}$ outside one band | **3501 km/L** |
+| what imposing every constraint during the search is worth | **+4.9 %** |
 | range of an optimised conventional engine, identical code | 2888 km/L |
 | advantage over it | +15.6 % |
 | the same with the firing-frequency advantage removed | **-4.3 %** |

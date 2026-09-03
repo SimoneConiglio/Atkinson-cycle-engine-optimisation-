@@ -350,12 +350,62 @@ The envelope bounds $H$ and $B$ that §2.3 discusses are *not* among the
 constraints at all: once the objective prices size through mass, a separate
 limit on it is redundant, and the range problem attaches none.
 
-### What is deterministic here, and what is not
+### Imposed, or merely checked
 
-As written above this is a **deterministic** problem, and every design reported
-in §6 was obtained from it. The reliability analysis of §3.8 is applied *to its
-solution*, so §6.2's 0.645 is an audit of a design obtained without it rather
-than a target that was met or missed.
+The statement above is the problem. Whether an optimizer is made to *hold* it
+is a separate question, and the study answers it both ways:
+
+| | the coupled and vehicle rows | results |
+|---|---|---|
+| {py:func}`~exlink.scenarios.build_range_scenario` | attached, but the search is free to leave them and they bind only at the end | §6.1 – §6.3 |
+| {py:func}`~exlink.synthesis.maximise_range_from_target` | imposed at every step, with a fallback objective where $R$ does not exist | §6.4 |
+
+The difference is not academic: the same SLSQP on the same problem reaches
+4.9 % further under the second (§6.4). A constraint that binds only at the end
+lets the search spend its whole trajectory in a region it will later be told it
+cannot use.
+
+The second form needs one thing the first does not, and it is the subject of the
+rest of this section.
+
+### Why the objective needs a fallback
+
+$R$ is not computable everywhere. A design whose kinematics closes can still
+fail to size, fail to run, or fail to produce a four-stroke motion at all, and
+at such a point the objective has no value for a line search to descend. A
+constant penalty there leaves a flat region with no gradient — which is exactly
+the failure the reliability constraint hits below, and the reason that search
+could not move.
+
+So the objective is a ladder, and a prescribed motion $\lambda^{\star}$ holds its
+middle rung:
+
+| the design | scores |
+|---|---|
+| range computable | $-R(X)$, the real objective |
+| analysable, no range | a floor plus $\lVert\lambda(X) - \lambda^{\star}\rVert^2$ — the target takes over |
+| motion is not a four-stroke cycle | a larger constant |
+
+Each rung is strictly worse than the one above, so the search is pushed back
+towards designs that run; and on the middle rung it still has something to
+follow, because tracking $\lambda^{\star}$ is a proxy for returning to a working
+cycle.
+
+The target is a *fallback*, not a constraint. It is constructed to satisfy both
+equality requirements exactly — they are functionals of $\lambda$ alone, so a
+motion with the right two strokes meets them before any linkage exists — and it
+is abandoned the moment the range becomes computable. §6.4 measures both halves
+of that: the residual it ends at, and how often it fires.
+
+§7.4 collects what the prescribed motion taught along the way, including the
+attainability limit that decides whether a target is usable at all.
+
+### Reliability: audited, not imposed
+
+Under either form above this is a **deterministic** problem, and every design
+reported in §6 came from one of them. The reliability analysis of §3.8 is
+applied *to the solution*, so §6.2's 0.645 is an audit of a design obtained
+without it rather than a target that was met or missed.
 
 The loop can be closed:
 {py:func}`~exlink.scenarios.build_range_scenario` takes a ``beta_target``, which
@@ -460,6 +510,7 @@ statement — and it would then enter the system union of §3.8 and corrupt a
 number that is currently defensible. `bearing $\le 0$` with a safety factor is
 at least honest about being a margin. Widening $\Sigma$ to carry material and
 load scatter is the prerequisite for widening $P_f$, and §7.3 lists it as such.
+
 
 ---
 
