@@ -141,7 +141,10 @@ largest contributors are *anti*-correlated, so the system probability comes out
 Relaxing the gap to 0.054 mm moves the problem rather than removing it — the
 stroke band becomes binding at $\beta = 0.68$, because that band is itself only
 1.7 standard deviations wide and the design sits off-centre in it. Reaching
-$10^{-3}$ needs $\pm 0.09$ mm.
+$10^{-3}$ *on that constraint* needs $\pm 0.09$ mm — but the **system**
+probability at those bounds is $2\times10^{-2}$, and $10^{-3}$ for the system
+needs $\pm 0.15$ mm. §6.4 tabulates the difference and solves the problem at
+the wider bound.
 
 ### Most of this probability is avoidable, and free
 
@@ -303,33 +306,95 @@ this model has no knock limit, so left free it would rise without bound and the
 comparison would measure a missing sub-model.
 :::
 
-## 6.4 Imposing every constraint is worth 5 % of the objective
+## 6.4 The announced problem, solved
 
 ### Result
 
-The problem of §3.10 checks the coupled and vehicle constraints on the design
-the search returns; the second form in §3.10 *imposes* all fourteen
-during the search, with the prescribed motion as a fallback objective. Run from
-the same starting design, at the same speed, with the same pinned gear pair:
+§3.10 states a problem: maximise range, hold every constraint, and constrain a
+system probability of failure. Solving *that* problem rather than a
+deterministic subset of it needs the bounds relaxed first, because §6.2 shows
+the specification as written admits no reliable design at all. With the gap at
+the 0.054 mm §6.2 derives and both bands at $\pm 0.15$:
 
-| | range | worst constraint | strictly feasible |
+| | start (`COUPLED_DESIGN`) | result |
+|---|---|---|
+| range | 3337.2 km/L | **3394.9 km/L** |
+| system $P_f$ | $1.03\times10^{-3}$ | $1.34\times10^{-3}$ |
+| system $\beta$ | 3.082 | **3.001**, against a target of 3.0 |
+| engine mass | 12.17 kg | 12.94 kg |
+| worst constraint | — | $-2.2\times10^{-7}$ |
+
+**+1.7 %, every constraint satisfied, and the reliability target held on its
+boundary.** 1352 evaluations, 61 minutes, the iteration cap reached rather than
+a convergence test met.
+
+### Why the gain is small, and why that is the result
+
+Three solves of the same objective, differing only in what is imposed:
+
+| | range | reliability | feasible as specified |
 |---|---|---|---|
-| start (`COUPLED_DESIGN`) | 3338 km/L | — | **yes** |
-| §3.10, bound only at the end (`RANGE_DESIGN`) | 3388 km/L | — | no, by $1.5\times10^{-4}$ |
-| **§3.10, imposed throughout** | **3501 km/L** | $+1.6\times10^{-4}$ | no, by $2\times10^{-4}$ |
+| constraints bind only at the end (`RANGE_DESIGN`) | 3388 km/L | audited: $P_f = 0.79$ | no, by $1.5\times10^{-4}$ |
+| constraints imposed throughout | **3501 km/L** | audited, not constrained | no, by $2\times10^{-4}$ |
+| the same, plus $\beta \ge 3$, bounds relaxed | 3394.9 km/L | **constrained: $P_f = 1.3\times10^{-3}$** | no — relaxed bounds |
 
-**+4.9 % over the strictly feasible reference, and +3.4 % over the previous
-best.** 836 evaluations, 78 minutes, the iteration cap reached rather than a
-convergence test met — so the figure is a lower bound on what the formulation
-reaches, not its optimum.
+Imposing the constraints *without* the reliability requirement reaches
+3501 km/L — 3 % more than with it. It gets there by converging onto its active
+constraints,
+which is precisely what §6.2 shows destroys reliability: a design sitting on
+$g = 0$ misses its requirements about half the time. The reliability
+constraint forbids that, and the 3 % is what standing off the boundary costs.
 
-### Why
+The two figures are therefore not competing estimates of one quantity.
+3501 km/L is the best *nominal* design; 3394.9 km/L is the best design that
+also survives its own manufacturing scatter at $P_f \approx 10^{-3}$. Which
+one is the answer depends on whether the engine is built once or built.
 
-Imposing a constraint and checking it are not the same search. A constraint
-that is only checked at the end lets the optimizer spend its whole trajectory
-in a region it will later be told it cannot use; imposing it makes every step
-legal, and the steps that remain are the ones that pay. The gain is not a
-better algorithm — it is the same SLSQP — but a better-posed problem.
+### The relaxation it needed, and a correction to §6.2
+
+§6.2 reports that a $10^{-3}$ target needs the gap at 0.054 mm and the stroke
+band at $\pm 0.09$ mm. That second figure is per-constraint reasoning, and the
+*system* probability at those bounds is $2\times10^{-2}$:
+
+| gap | band | system $P_f$ | $\beta$ |
+|---|---|---|---|
+| 0.010 | 0.05, as specified | 0.645 | $-0.373$ |
+| 0.054 | 0.09, §6.2's figures | 0.021 | $+2.037$ |
+| **0.054** | **0.15** | **0.00103** | **$+3.082$** |
+
+The system is likelier to fail than any one of its constraints, so a bound
+giving one constraint a $10^{-3}$ margin does not give the system one.
+
+This design is consequently **not feasible against the specification as
+written** — under the specified 0.01 mm gap and $\pm 0.05$ bands it is not
+close. It is the best design under a specification relaxed until a reliable
+design exists at all, which is the only form in which §6.2's question has an
+answer.
+
+### What it cost to make the problem solvable
+
+Three defects stood between the formulation and a usable answer, and each was
+invisible in the aggregates the runs reported:
+
+| | symptom | cause |
+|---|---|---|
+| centre distance free while the gear pair was pinned | $I = 85.1$ against the 57.6 the pair realises | §3.7's catalogue relation makes $I$ an output; the search treated it as a variable |
+| reliability index saturating | $\beta$ pinned at $-8.2095$ to fifteen digits in two runs | the orthant integrates to exactly 1 outside the band, so the index goes flat and its difference quotient is meaningless |
+| evaluation cache too small | ~2× the necessary MDA calls | SLSQP differences the objective and the constraints over the same stencil in separate passes |
+
+The second is the one worth carrying away. **A probability makes a poor
+constraint wherever it saturates**: outside the band it carries no information
+about how far outside, and a finite-difference probe straddling the band sees
+an eleven-unit fall over a $10^{-5}$ step. The search is steered on
+$\min_i \beta_i = \min_i (-g_i/\sigma_i)$, which is smooth through the band,
+and the system probability is *reported* at the solution rather than assumed
+from the target. That is weaker than constraining the system index — §3.8 says
+why — and it is what makes the problem solvable at all.
+
+This is the third place in the study where a flat region defeats a gradient
+method, after §3.10's reliability stall and the objective ladder's middle rung.
+Each time the repair is the same in shape: supply something that still varies
+where the quantity of interest does not.
 
 ### The fallback earns its place only where it is needed
 
@@ -353,24 +418,6 @@ The complementary measurement is the motion residual, which ends at **5.53 mm**
 abandons the prescribed motion entirely and pursues the objective. If the target
 were pulling on the answer this number would be small; it is not, which is how
 one tells a fallback from a constraint.
-
-### Discussion
-
-This design is **not reported as feasible**, for the same reason `RANGE_DESIGN`
-is not: it ends $2\times10^{-4}$ outside the compression-ratio band. That is
-SLSQP stopping within its own tolerance of a bound whose width is itself an
-approximation, and §6.2 puts the machining scatter on $STE$ a hundred times
-higher. No built engine would tell it from a design exactly on the band.
-
-The study declines to call it feasible anyway, and the reason is worth stating
-plainly: the alternative is deciding case by case which violations are small
-enough to ignore, which is precisely the judgement §6.2 exists to take away from
-the optimizer. A design 0.0002 outside a band is either inside the
-specification or it is not, and the specification says not.
-
-What this does not do is repair §6.2. The 0.01 mm gap bound remains unattainable
-at any ISO grade, and imposing more constraints during the search does not
-create feasibility where the specification admits none.
 
 ## 6.5 Supporting measurements
 

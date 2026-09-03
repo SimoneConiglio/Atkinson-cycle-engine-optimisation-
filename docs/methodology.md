@@ -355,13 +355,16 @@ limit on it is redundant, and the range problem attaches none.
 The statement above is the problem. Whether an optimizer is made to *hold* it
 is a separate question, and the study answers it both ways:
 
-| | the coupled and vehicle rows | results |
-|---|---|---|
-| {py:func}`~exlink.scenarios.build_range_scenario` | attached, but the search is free to leave them and they bind only at the end | §6.1 – §6.3 |
-| {py:func}`~exlink.synthesis.maximise_range_from_target` | imposed at every step, with a fallback objective where $R$ does not exist | §6.4 |
+| | the coupled and vehicle rows | reliability | results |
+|---|---|---|---|
+| {py:func}`~exlink.scenarios.build_range_scenario` | bind only at the end | audited after | §6.1 – §6.3 |
+| {py:func}`~exlink.synthesis.maximise_range_from_target` | imposed at every step | audited after | §6.4 |
+| the same, with ``beta_target`` | imposed at every step | **constrained** | **§6.4** |
 
 The difference is not academic: the same SLSQP on the same problem reaches
-4.9 % further under the second (§6.4). A constraint that binds only at the end
+4.9 % further under the second, and 1.7 % under the third, which also holds a
+reliability target the other two only measure (§6.4). A constraint that binds
+only at the end
 lets the search spend its whole trajectory in a region it will later be told it
 cannot use.
 

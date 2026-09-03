@@ -41,9 +41,11 @@ degrees of freedom rather than proportioned by hand -- becomes a 4.3 % deficit
 when its firing-frequency difference is removed, locating the advantage in the
 cycle rate rather than in extended expansion and reversing its sign. Finally,
 imposing the coupled and structural constraints throughout the search rather
-than verifying them on its result is shown to be worth 4.9 % of the objective,
+than verifying them on its result is shown to be worth 4.9 % of the objective
 under an identical algorithm -- a difference of formulation rather than of
-method.
+method -- and constraining a system probability of failure in addition returns
+3 % of that in exchange for a design that meets its requirements with
+probability 0.999 rather than nominally.
 
 The methodological contribution is a demonstration, on a problem small enough to
 be verified throughout, that the choice of objective and the geometry of the

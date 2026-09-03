@@ -4,7 +4,9 @@
 
 **Imposing a constraint and checking it are different searches.** The same
 SLSQP, on the same problem, reaches 4.9 % further when the coupled and vehicle
-constraints are held during the search rather than verified at the end (§6.4).
+constraints are held during the search rather than verified at the end, and
+1.7 % further again when a reliability target is held too, which is a different
+and better design rather than a smaller number (§6.4).
 Nothing about the algorithm changed; the problem was posed better.
 
 **The objective matters more than the algorithm.** The conventional formulation
@@ -146,13 +148,11 @@ In rough order of value per unit of effort:
    reliability margin exactly differentiable and remove the one place where
    finite differences enter a tight constraint.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
-9. **Converging the imposed form of §3.10.** The formulation behind §6.4's 3501 km/L
-   stopped at its iteration cap, not at a convergence test, so that figure is a
-   lower bound on what it reaches. Running it to convergence, and from several
-   starts, is the cheapest remaining gain in the study; the
-   duplicate-evaluation fix has since halved what each iteration costs. The
-   functional IDF §7.4 sets out is a larger question again and would need its
-   own study.
+9. **Converging §6.4.** Both solves there stopped at their iteration cap, not
+   at a convergence test, so 3394.9 km/L and 3501 km/L are lower bounds on what
+   the formulation reaches. Running them to convergence, and from several
+   starts, is the cheapest remaining gain in the study. The functional IDF §7.4
+   sets out is a larger question again and would need its own study.
 
 ## 7.4 A prescribed-motion formulation, measured
 
@@ -330,8 +330,9 @@ The argument that took the inequalities and then the bands into the fit does not
 stop there, and its endpoint is not a synthesis problem at all: if every
 constraint belongs in the problem, and the fit is only a means of reaching a
 good design, then the objective should be the one the application scores. That
-formulation is the second form in §3.10, its result is §6.4, and it is the best design this study
-produces. What remains here is what the prescribed motion taught on the way,
+formulation is the second and third forms in §3.10, and its results are §6.4's:
+the best nominal design this study produces, and the best one that also holds a
+reliability target. What remains here is what the prescribed motion taught on the way,
 which is not the same thing as what it achieved.
 
 **The lesson that generalises.** Four times in this exercise a limitation was
@@ -390,9 +391,10 @@ not a small one.
 
 | | |
 |---|---|
-| best strictly feasible design | 3338 km/L, 12.2 kg |
-| best design overall (§6.4), $2\times10^{-4}$ outside one band | **3501 km/L** |
-| what imposing every constraint during the search is worth | **+4.9 %** |
+| best strictly feasible design, specification as written | 3338 km/L, 12.2 kg |
+| best design under a relaxed specification, reliability constrained (§6.4) | **3395 km/L** at $P_f = 1.3\times10^{-3}$ |
+| the same without the reliability constraint | 3501 km/L, nominal only |
+| what the reliability requirement costs | **-3 %** |
 | range of an optimised conventional engine, identical code | 2888 km/L |
 | advantage over it | +15.6 % |
 | the same with the firing-frequency advantage removed | **-4.3 %** |

@@ -34,9 +34,10 @@ requirements.
 it loses by **4.3 %**.
 
 **Imposing a constraint and checking it are different searches.** Holding every coupled and
-structural constraint *during* the search, rather than verifying them on the design it
-returns, reaches **3501 km/L** against 3338 — **+4.9 %** from the same optimizer on a
-better-posed problem.
+structural constraint *during* the search, rather than verifying them on the design it returns,
+reaches **3501 km/L** against 3338 — **+4.9 %** from the same optimizer on a better-posed
+problem. Adding a reliability target on top gives **3395 km/L at a 10⁻³ probability of missing
+a requirement**: 3 % less range, for a design that survives its own manufacturing scatter.
 
 ## The study
 
