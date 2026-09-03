@@ -663,13 +663,21 @@ def maximise_range_from_target(
     from .performance import evaluate
 
     calls = {"n": 0, "fallback": 0, "broken": 0}
+    # SLSQP asks for the objective and the constraints at the same point, one
+    # after the other, and each evaluation here is a converged MDA.  Without
+    # this the solve pays for every point twice.
+    cache: dict[bytes, Performance] = {}
 
     def score(vector: FloatArray) -> Performance:
+        key = np.ascontiguousarray(vector, dtype=float).tobytes()
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
         # ``targets`` is deliberately not forwarded: ``evaluate`` passes its
         # extra keywords down to the sizing solve, which does not take them,
         # and the constraint bounds are applied by ``_range_constraints``
         # against the analysis rather than inside it.
-        return evaluate(
+        performance = evaluate(
             Design.from_array(vector),
             speed_rpm=speed_rpm,
             samples=target.samples,
@@ -677,6 +685,11 @@ def maximise_range_from_target(
             teeth=teeth,
             spec=spec,
         )
+        # Only the current point is worth keeping: SLSQP moves on and never
+        # asks again, so an unbounded cache would only hold memory.
+        cache.clear()
+        cache[key] = performance
+        return performance
 
     def objective(vector: FloatArray) -> float:
         calls["n"] += 1
