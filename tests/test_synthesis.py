@@ -441,3 +441,34 @@ def test_the_objective_ladder_is_ordered() -> None:
 
     assert worst_real_range < RANGE_UNAVAILABLE
     assert worst_fallback < CYCLE_PENALTY
+
+
+@pytest.mark.slow
+def test_the_target_takes_over_when_the_range_does_not_exist() -> None:
+    """The middle rung of the ladder, exercised rather than assumed.
+
+    Started from a design that is analysable but produces no range -- the
+    friction exceeds the indicated work, so the engine does not run and km/L
+    has no value -- the objective has nothing to descend.  A constant penalty
+    would leave a flat region; the motion residual gives the search a gradient
+    back towards a cycle that works.
+
+    So this asserts the fallback actually fires (``fell_back > 0``) from such a
+    start, which is the only thing that distinguishes the ladder from a plain
+    penalty.
+    """
+    from exlink.performance import evaluate
+    from exlink.reference import REFINED_DESIGN
+    from exlink.synthesis import maximise_range_from_target, target_from_design
+
+    speed = 1250.0
+    start = evaluate(REFINED_DESIGN, speed_rpm=speed, module=0.8, teeth=48, samples=120)
+    assert start.analysis.valid, "the start must be analysable for this to be the right case"
+    assert start.km_per_litre == 0.0, "the start must produce no range"
+
+    target = target_from_design(COUPLED_DESIGN, samples=120)
+    fit = maximise_range_from_target(
+        target, REFINED_DESIGN, speed_rpm=speed, module=0.8, teeth=48, max_iterations=3
+    )
+    assert fit is not None
+    assert fit.fell_back > 0, "the target never stood in for the missing range"

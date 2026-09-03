@@ -289,6 +289,63 @@ that sitting on active constraints is precisely what makes a design unreliable.
 A generator built this way should hand its output to a reliability-aware stage
 rather than be trusted as a final design.
 
+### The endpoint: range under every constraint, target as the fallback
+
+The argument that took the inequalities and then the bands into the problem
+does not stop there, and the natural endpoint is not a synthesis problem at
+all. If every constraint belongs in the fit, and the fit is only a means of
+reaching a good design, then the objective should be the one the application
+scores. {py:func}`~exlink.synthesis.maximise_range_from_target` solves
+
+$$\max_X \; R(X) \quad \text{s.t.} \quad g(X) \le 0, \;
+  |STE - 74| \le \delta, \; |\varepsilon - 16| \le \delta, \;
+  X \in [X_{lb}, X_{ub}]$$
+
+with $g$ carrying all fourteen rows — five geometric, four band sides, three
+coupled, two vehicle — which is §3.10's problem entire.
+
+**Where the target survives.** $R$ is not computable everywhere. A design whose
+kinematics closes can still fail to size, fail to run, or fail to produce a
+four-stroke motion at all, and there the objective has no value for a line
+search to descend. A constant penalty leaves a flat region with no gradient,
+which is precisely why the reliability constraint stalled in §3.10. So the
+objective is a ladder, and the prescribed motion holds its middle rung:
+
+| the design | scores |
+|---|---|
+| range computable | $-R(X)$, the real objective |
+| analysable, no range | a floor plus the motion residual — *the target takes over* |
+| motion is not a four-stroke cycle | a larger constant |
+
+Each rung is strictly worse than the one above, so the search is always pushed
+back towards designs that run, and on the middle rung it still has something to
+follow.
+
+**Measured, from a start where the objective does not exist.** The refined
+design at 1250 rpm is analysable and produces **no range at all** — its
+friction exceeds its indicated work, so the engine will not run:
+
+| | |
+|---|---|
+| start | 0.0 km/L, "the engine will not run" |
+| evaluations that fell back to the target | **26 of 103** |
+| evaluations on a broken cycle | 2 |
+| result after 8 iterations | **3335.6 km/L**, $\lvert\Delta STE\rvert = 0.013$ mm |
+
+A quarter of the search was conducted on the target rather than on the range,
+and the solve climbed from an engine that does not run to one making 3336 km/L.
+From the coupled reference design, by contrast, the ladder never fires at all —
+every point visited has a computable range — so the fallback is insurance that
+costs nothing when it is not needed and supplies the whole gradient when it is.
+
+**What this does not yet do.** Eight iterations is not convergence: that run
+ends 0.0155 outside its constraints, and a six-iteration run from the reference
+design reaches 3412 km/L while violating by 1.59 — reported as infeasible
+rather than presented as a result, which is the distinction §6.2 exists to
+make. Each evaluation is a converged MDA, so a properly converged solve is tens
+of minutes even after removing the duplicate evaluation SLSQP was paying for.
+The formulation is right; the budget to run it to convergence is the open item.
+
 ### The functional decomposition this suggests
 
 $\lambda(\theta)$ is the *only* quantity the linkage sends downstream: the cycle
