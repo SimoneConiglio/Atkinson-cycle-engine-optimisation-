@@ -13,6 +13,36 @@ mass, then maximum range. The two geometric optima are long-limbed and stand
 their cylinder high — §6.1 is about why — while the two that can see mass are
 visibly shorter and squatter. Regenerate with `exlink animate --formulations`.*
 
+## 6.0 Every design in one place
+
+Nine designs appear below. They differ in what was optimised, what was
+imposed and what specification was applied, and quoting them apart is how a
+document ends up contradicting itself — so they are collected here once and
+referred to rather than restated.
+
+| design | range | what it was | feasible as specified |
+|---|---|---|---|
+| `PUBLISHED_DESIGN` | — | the historical baseline | no, five constraints |
+| `REFINED_DESIGN` | — | geometric objective, augmented Lagrangian | yes |
+| `GRADIENT_DESIGN` | — | geometric objective, SLSQP | yes |
+| `COUPLED_DESIGN` | 3338 km/L | minimum coupled mass; the strictly feasible reference | **yes** |
+| `RANGE_DESIGN` | 3388 km/L | range, constraints bound at the end | no, by $1.5\times10^{-4}$ |
+| range, constraints imposed | 3501 km/L | §3.10's second form, nominal only | no, by $2\times10^{-4}$ |
+| **range + reliability, relaxed bounds** | **3395 km/L** | **§3.10's third form; $P_f = 1.3\times10^{-3}$** | no — relaxed spec |
+| slider-crank, optimised | 2888 km/L | baseline, its own limits only | n/a — misses the EX-link's |
+| slider-crank, same specification | 2372 km/L | baseline, held to the EX-link's limits | yes |
+
+Two advantage figures follow from the last two rows, and both are quoted in
+this document because they answer different questions:
+
+| question | figure |
+|---|---|
+| against a conventional engine optimised as such | **+15.6 %** |
+| against one held to the same specification | **+43 %** |
+
+Figures are given to four significant digits once, here, and rounded
+elsewhere.
+
 ## 6.1 The quasi-static optimum is the worst place to be
 
 ### Result
@@ -154,8 +184,8 @@ the best by reliability against the full constraint set (§3.10) gives:
 
 | | $\beta$ | $P_f$ | range |
 |---|---|---|---|
-| the reference design | $-0.373$ | 0.645 | 3338.3 km/L |
-| best sampled, fully feasible | $+0.502$ | **0.308** | 3341.7 km/L |
+| the reference design | $-0.373$ | 0.645 | 3338 km/L |
+| best sampled, fully feasible | $+0.502$ | **0.308** | 3342 km/L |
 
 The failure probability more than halves, every one of the twenty-five best
 candidates is feasible, and the range does not fall — the best is 0.10 % higher
@@ -190,238 +220,126 @@ the single most useful result here for anyone who would build the engine.
 
 ### Result
 
-Both mechanisms are held to the same compression ratio, the same clearance
-volume and the same fuel per cycle, and both are sized by identical code. The
-conventional engine is then *optimised over the variables it has* -- the rod
-length, as the obliquity $r/l$, and the speed -- rather than given textbook
-proportions, because comparing an optimised EX-link against a hand-set
-slider-crank measures the optimization and not the topology.
+Both engines at the same compression ratio, clearance volume and fuel per
+cycle, sized by identical code, and both optimised — the baseline over the two
+freedoms it has, rod obliquity and speed.
 
-| | slider-crank, hand-set | slider-crank, optimised | EX-link (Atkinson) |
+| | slider-crank, its own limits | slider-crank, same specification | EX-link |
 |---|---|---|---|
-| $r/l$, speed | 0.300, 2000 rpm | **0.195, 2151 rpm** | — , 1000 rpm |
-| members / journals | 2 / 3 | 2 / 3 | 7 / 7 |
-| indicated efficiency | 0.457 | 0.457 | 0.477 |
-| mechanical efficiency | 0.740 | 0.787 | 0.853 |
-| brake efficiency | 0.338 | 0.359 | 0.407 |
-| engine mass | 19.3 kg | 16.9 kg | 12.2 kg |
-| **range** | 2690 km/L | **2888 km/L** | **3338 km/L** |
+| $r/l$, speed | 0.195, 2151 rpm | 0.095, 1500 rpm | — , 1000 rpm |
+| rod angle / $\gamma$ | 11.2° / 0.039 | 5.5° / 0.020 | within 10° / 0.02 |
+| brake efficiency | 0.359 | — | 0.407 |
+| range | 2888 km/L | 2372 km/L | 3395 km/L |
+| $P_f$ at IT8 | — | $\approx 0$ ($\beta = 8.2$) | $1.3\times10^{-3}$ ($\beta = 3.0$) |
 
-Optimising the baseline is worth 7.4 % on its own, and all of it is mechanical:
-the indicated efficiency is unchanged to four figures, because the compression
-ratio and the charge are fixed and the thermodynamics cannot move. What moves
-is the rod. A longer rod (obliquity 0.195 against 0.300) reduces the piston
-side load, and with it the liner friction, which is the largest single loss in
-the budget; the optimum is interior, because past about $r/l = 0.19$ the rod's
-own mass and the taller engine start costing more than the friction it saves.
+### Three findings, and they do not agree
 
-### The comparison, with and without the firing-frequency difference
+**Firing frequency, not extended expansion.** The EX-link completes four
+strokes per crankshaft revolution where a four-stroke needs two, so per unit of
+work it accumulates half the journal rotation and half the piston sliding.
+Removing that — doubling its friction and halving its power, then re-scoring
+through the vehicle — takes the advantage over the *own-limits* baseline from
++15.6 % to **−4.3 %**. Extended expansion alone does not pay for four extra
+journals and a gear train.
 
-In this model the EX-link completes all four strokes in one crankshaft
-revolution -- that is what {py:func}`exlink.cycle.find_phases` requires of the
-piston motion -- while a conventional four-stroke needs two. Per unit of work
-the EX-link therefore accumulates half the journal rotation and half the piston
-sliding. Removing that advantage means doubling its friction *and* halving its
-power, since an engine that fires half as often makes half the power at the
-same speed; both are done, and the result is re-scored through the vehicle
-rather than compared as an efficiency, because halving the power changes the
-operating point the burn-and-coast strategy can use.
+**But that baseline meets neither of the EX-link's limits.**
+`evaluate_slidercrank` tests convergence, net work and the speed rule, never
+the 10° rod angle or the 0.02 side-load ratio. Its optimum sits at 11.2° and
+0.039 — roughly twice the cap. Held to the same specification, the side-load
+limit binds and needs a connecting rod five times the stroke; the baseline
+loses 18 % of its range and the advantage becomes **+43 %**.
 
-| | vs hand-set baseline | vs optimised baseline |
-|---|---|---|
-| EX-link, as modelled (3338 km/L) | +24.1 % | **+15.6 %** |
-| EX-link, as a four-stroke (2765 km/L) | +2.8 % | **−4.3 %** |
+**And the baseline is far more reliable**, at $\beta = 8.2$ against 3.0. Not
+because it is better designed: it has two toleranced lengths against eleven, so
+it has fewer ways to be wrong. Its binding constraint is a function of $r/l$,
+and machining error on a 28 mm crank and a 295 mm rod moves that ratio by about
+a tenth of a percent.
 
 ### Discussion
 
-Against a hand-set baseline the reading was that extended expansion very nearly
-fails to pay for itself. Against an optimised one it does not pay for itself:
-**the sign changes**. An EX-link firing at conventional frequency is 4.3 %
-*worse* than a conventional engine optimised under the same models, because the
-two points of indicated efficiency that extended expansion buys do not cover
-four extra journals, a gear train, and the mass of both.
+The three point different ways on purpose, and the useful statement is their
+conjunction: **the linkage buys range by adding degrees of freedom, and pays
+for them in the probability that all of them land in tolerance at once.** That
+trade is invisible to any comparison scoring only the nominal design, and it is
+the counterweight to §6.1's argument that more freedom buys a better optimum.
 
-So the +15.6 % that the mechanism does deliver is attributable to the
-one-revolution cycle, not to extended expansion. That is a real advantage and
-the reason to build the linkage — but it is a *cycle-rate* advantage, and it
-would survive any other means of achieving the same firing frequency. It is
-also the most fragile part of the result: it rests entirely on the phasing that
-`find_phases` extracts from the piston motion, and an engine that did not
-achieve it in practice would lose the whole margin and more.
+Which range figure is *the* answer depends on a judgement this study does not
+make. The 10° and 0.02 limits come from the EX-link's brief; practical
+slider-cranks run 14–19° routinely, so holding one to 5.5° may be imposing an
+alien specification. Both figures are therefore reported, with what each
+assumes. What is not defensible is the earlier state of this section, where one
+engine was held to limits the other was silently exempt from.
 
-### Both sides, held to the same specification
-
-The comparison above optimises both engines and scores both by range, which
-makes it fair in method. It is not fair in *specification*, and finishing the
-reliability study exposed why.
-
-The EX-link is held to a maximum rod angle of 10° and a side-load ratio of
-0.02. `evaluate_slidercrank` applied neither: its feasibility test is
-convergence, net work and the speed rule. So the optimised baseline was scored
-while meeting neither limit — at $r/l = 0.195$ its rod angle is 11.2° and its
-side-load ratio about 0.039, roughly twice the cap. **The 15.6 % advantage was
-measured against an engine held to fewer constraints than the one it was
-compared with.**
-
-Holding the baseline to the same two limits changes what it can reach:
-
-| $r/l$ | rod angle | $\gamma$ | rod length | best range | meets both |
-|---|---|---|---|---|---|
-| 0.300 (textbook) | 17.5° | 0.058 | 93 mm | 2693 km/L | no |
-| 0.195 (its optimum) | 11.2° | 0.039 | 143 mm | 2888 km/L | no |
-| 0.174 | 10.0° | 0.035 | 161 mm | 2871 km/L | no — $\gamma$ |
-| 0.100 | 5.7° | 0.021 | 280 mm | 2447 km/L | no — just |
-| **0.095** | **5.5°** | **0.020** | **295 mm** | **2372 km/L** | **yes** |
-
-The side-load cap, not the rod angle, is what binds: meeting it needs a
-connecting rod five times the stroke, and the engine loses 18 % of its range
-getting there.
-
-### The comparison with reliability on both sides
-
-{py:func}`~exlink.slidercrank.slidercrank_reliability` applies the method of
-§3.8 to the baseline — the same IT grade, the same
-$\sigma = \text{half-width}/3$, the same correlated orthant — over the four
-requirements a slider-crank has. It has four rather than seven because it has
-one dead centre, no transmission angle to lose, and equal strokes by
-construction; those are properties of the mechanism, not of the treatment.
-
-| | range | $P_f$ | $\beta$ | toleranced dimensions |
-|---|---|---|---|---|
-| EX-link, reliability constrained | **3394.9 km/L** | $1.3\times10^{-3}$ | +3.00 | 11 |
-| slider-crank, same specification | 2372.4 km/L | $\approx 0$ | **+8.22** | 2 |
-
-Two findings, pulling opposite ways, and both are the answer.
-
-**On range the EX-link's advantage is larger than reported, not smaller:
-+43 %**, once the baseline is held to the specification the EX-link is held to.
-The +15.6 % of the previous section understates it because it let the baseline
-violate two limits.
-
-**On reliability the slider-crank is far ahead**, and for a reason that has
-nothing to do with either engine being better designed: it has two toleranced
-lengths against eleven, so it has fewer ways to be wrong. Its binding
-constraint is a function of the ratio $r/l$, and machining error on a 28 mm
-crank and a 295 mm rod moves that ratio by about a tenth of a percent. **A
-mechanism pays for its degrees of freedom twice — once in the parts, and again
-in the probability that all of them land inside their tolerances at once.**
-
-That second finding is the one worth carrying past this study. It is invisible
-to any comparison that scores only the nominal design, and it is the
-counterweight to §6.1's argument that more freedom buys a better optimum.
+Two conservatisms run against the EX-link and are not quantified here: no
+gas exchange is modelled, and the loss that omits is about 2.5× larger for the
+conventional engine (§7.2); and the reliability columns compare mechanisms of
+different dimensionality, which is a real difference rather than an artefact
+but is not like-for-like the way the range columns are.
 
 ## 6.4 The announced problem, solved
 
 ### Result
 
-§3.10 states a problem: maximise range, hold every constraint, and constrain a
-system probability of failure. Solving *that* problem rather than a
-deterministic subset of it needs the bounds relaxed first, because §6.2 shows
-the specification as written admits no reliable design at all. With the gap at
-the 0.054 mm §6.2 derives and both bands at $\pm 0.15$:
+§3.10 states a problem: maximise range, hold every constraint, constrain a
+system probability of failure. Solving *that* needs the bounds relaxed first,
+because §6.2 shows the specification as written admits no reliable design. With
+the gap at 0.054 mm and both bands at $\pm 0.15$:
 
 | | start (`COUPLED_DESIGN`) | result |
 |---|---|---|
-| range | 3337.2 km/L | **3394.9 km/L** |
-| system $P_f$ | $1.03\times10^{-3}$ | $1.34\times10^{-3}$ |
-| system $\beta$ | 3.082 | **3.001**, against a target of 3.0 |
-| engine mass | 12.17 kg | 12.94 kg |
+| range | 3338 km/L | **3395 km/L** |
+| system $P_f$ | $1.0\times10^{-3}$ | $1.3\times10^{-3}$ |
+| system $\beta$ | 3.08 | **3.00**, on its target |
 | worst constraint | — | $-2.2\times10^{-7}$ |
 
-**+1.7 %, every constraint satisfied, and the reliability target held on its
-boundary.** 1352 evaluations, 61 minutes, the iteration cap reached rather than
-a convergence test met.
+1352 evaluations, 61 minutes, the iteration cap reached rather than a
+convergence test — so this is a lower bound.
 
-### Why the gain is small, and why that is the result
+### What the reliability requirement costs
 
-Three solves of the same objective, differing only in what is imposed:
+Imposing the constraints *without* it reaches 3501 km/L, 3 % more. It gets
+there by converging onto its active constraints, which §6.2 shows is what
+destroys reliability. The 3 % is the price of standing off the boundary, and
+the two figures answer different questions: 3501 is the best nominal design,
+3395 the best that also survives its own manufacturing scatter.
 
-| | range | reliability | feasible as specified |
-|---|---|---|---|
-| constraints bind only at the end (`RANGE_DESIGN`) | 3388 km/L | audited: $P_f = 0.79$ | no, by $1.5\times10^{-4}$ |
-| constraints imposed throughout | **3501 km/L** | audited, not constrained | no, by $2\times10^{-4}$ |
-| the same, plus $\beta \ge 3$, bounds relaxed | 3394.9 km/L | **constrained: $P_f = 1.3\times10^{-3}$** | no — relaxed bounds |
+This design is **not feasible against the specification as written** — it needs
+the relaxed bounds, and under the specified 0.01 mm gap and $\pm 0.05$ bands it
+is not close. §6.2 reports that a $10^{-3}$ target needs $\pm 0.09$ mm; that is
+per-constraint reasoning, and the *system* probability at those bounds is
+$2\times10^{-2}$. $\pm 0.15$ is what the system needs.
 
-Imposing the constraints *without* the reliability requirement reaches
-3501 km/L — 3 % more than with it. It gets there by converging onto its active
-constraints,
-which is precisely what §6.2 shows destroys reliability: a design sitting on
-$g = 0$ misses its requirements about half the time. The reliability
-constraint forbids that, and the 3 % is what standing off the boundary costs.
+### Three defects stood in the way, and one generalises
 
-The two figures are therefore not competing estimates of one quantity.
-3501 km/L is the best *nominal* design; 3394.9 km/L is the best design that
-also survives its own manufacturing scatter at $P_f \approx 10^{-3}$. Which
-one is the answer depends on whether the engine is built once or built.
+Each was invisible in the aggregates the runs reported:
 
-### The relaxation it needed, and a correction to §6.2
+| symptom | cause |
+|---|---|
+| $I = 85.1$ against the 57.6 its gear pair realises | §3.7 makes $I$ an output of the catalogue choice; the search treated it as a variable |
+| $\beta$ pinned at $-8.2095$ to fifteen digits in two runs | the orthant integrates to exactly 1 outside the band, so the index goes flat |
+| ~2× the necessary MDA calls | SLSQP differences objective and constraints over the same stencil in separate passes |
 
-§6.2 reports that a $10^{-3}$ target needs the gap at 0.054 mm and the stroke
-band at $\pm 0.09$ mm. That second figure is per-constraint reasoning, and the
-*system* probability at those bounds is $2\times10^{-2}$:
-
-| gap | band | system $P_f$ | $\beta$ |
-|---|---|---|---|
-| 0.010 | 0.05, as specified | 0.645 | $-0.373$ |
-| 0.054 | 0.09, §6.2's figures | 0.021 | $+2.037$ |
-| **0.054** | **0.15** | **0.00103** | **$+3.082$** |
-
-The system is likelier to fail than any one of its constraints, so a bound
-giving one constraint a $10^{-3}$ margin does not give the system one.
-
-This design is consequently **not feasible against the specification as
-written** — under the specified 0.01 mm gap and $\pm 0.05$ bands it is not
-close. It is the best design under a specification relaxed until a reliable
-design exists at all, which is the only form in which §6.2's question has an
-answer.
-
-### What it cost to make the problem solvable
-
-Three defects stood between the formulation and a usable answer, and each was
-invisible in the aggregates the runs reported:
-
-| | symptom | cause |
-|---|---|---|
-| centre distance free while the gear pair was pinned | $I = 85.1$ against the 57.6 the pair realises | §3.7's catalogue relation makes $I$ an output; the search treated it as a variable |
-| reliability index saturating | $\beta$ pinned at $-8.2095$ to fifteen digits in two runs | the orthant integrates to exactly 1 outside the band, so the index goes flat and its difference quotient is meaningless |
-| evaluation cache too small | ~2× the necessary MDA calls | SLSQP differences the objective and the constraints over the same stencil in separate passes |
-
-The second is the one worth carrying away. **A probability makes a poor
-constraint wherever it saturates**: outside the band it carries no information
-about how far outside, and a finite-difference probe straddling the band sees
-an eleven-unit fall over a $10^{-5}$ step. The search is steered on
-$\min_i \beta_i = \min_i (-g_i/\sigma_i)$, which is smooth through the band,
-and the system probability is *reported* at the solution rather than assumed
-from the target. That is weaker than constraining the system index — §3.8 says
-why — and it is what makes the problem solvable at all.
-
-This is the third place in the study where a flat region defeats a gradient
-method, after §3.10's reliability stall and the objective ladder's middle rung.
-Each time the repair is the same in shape: supply something that still varies
-where the quantity of interest does not.
+The second is the one to carry away. **A probability makes a poor constraint
+wherever it saturates**: outside the band it says nothing about how far
+outside, and a difference quotient straddling the band sees an eleven-unit fall
+over a $10^{-5}$ step. The search is steered on
+$\min_i \beta_i = \min_i(-g_i/\sigma_i)$, smooth through the band, and the
+system probability is *reported* at the solution rather than assumed from the
+target. That is weaker than constraining the system index — §3.8 says why — and
+it is what makes the problem solvable.
 
 ### The fallback earns its place only where it is needed
 
-Two measurements say what the prescribed motion contributes, and they point in
-opposite directions on purpose:
-
-| start | evaluations that fell back | outcome |
+| start | fell back to the target | outcome |
 |---|---|---|
-| `COUPLED_DESIGN` (runs) | **0 of 836** | pure range maximisation |
-| `REFINED_DESIGN` at 1250 rpm (does **not** run) | **26 of 103** | 0 km/L $\to$ 3336 km/L |
+| `COUPLED_DESIGN` (runs) | 0 of 836 | pure range maximisation |
+| `REFINED_DESIGN` at 1250 rpm (does **not** run) | 26 of 103 | 0 km/L $\to$ 3336 km/L |
 
-From a start that already runs, the ladder never fires and costs nothing. From
-one where the engine will not run — friction exceeding indicated work, so km/L
-simply does not exist — a quarter of the search is conducted on the target, and
-the solve climbs out to a working engine. That is what a fallback should do,
-and it is the case a constant penalty cannot handle: there is no gradient in a
-constant.
-
-The complementary measurement is the motion residual, which ends at **5.53 mm**
-— far from the target. Once the range is computable everywhere the optimizer
-abandons the prescribed motion entirely and pursues the objective. If the target
-were pulling on the answer this number would be small; it is not, which is how
-one tells a fallback from a constraint.
+From a start that runs, the ladder never fires and costs nothing. From one
+where the engine will not run and km/L does not exist, a quarter of the search
+is conducted on the target. The motion residual ends at 5.53 mm — far from the
+target — because once the range is computable the optimizer abandons the
+prescribed motion entirely. That is how a fallback differs from a constraint.
 
 ## 6.5 Supporting measurements
 

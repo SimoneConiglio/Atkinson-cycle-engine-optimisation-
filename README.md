@@ -26,20 +26,18 @@ weighs half as much and goes further.
 
 **A specified constraint cannot be manufactured.** The top-dead-centre gap is bounded at
 0.01 mm and the dimensions producing it scatter by more than that. No ISO grade holds it, and
-the reference design has a **64.5 %** probability of missing at least one of its dimensional
-requirements.
+the reference design has a **64.5 %** probability of missing at least one requirement.
 
-**The advantage is firing frequency, not extended expansion.** Against a conventional engine
-*optimised* under identical code the linkage wins 15.6 %; remove its one-revolution cycle and
-it loses by **4.3 %**. But that baseline meets neither the rod-angle nor the side-load limit
-the linkage is held to — held to the same specification it reaches only 2372 km/L, and the
-advantage is **+43 %**. Which comparison is meant has to be said.
+**The advantage depends on which comparison is meant, by a factor of ten.** Against a
+conventional engine optimised as such, the linkage wins **15.6 %** — but remove its
+one-revolution cycle and it *loses* by 4.3 %, while holding that engine to the same rod-angle
+and side-load limits the linkage meets takes the advantage to **+43 %**. All three are in
+§6.3, with what each assumes.
 
-**Imposing a constraint and checking it are different searches.** Holding every coupled and
-structural constraint *during* the search, rather than verifying them on the design it returns,
-reaches **3501 km/L** against 3338 — **+4.9 %** from the same optimizer on a better-posed
-problem. Adding a reliability target on top gives **3395 km/L at a 10⁻³ probability of missing
-a requirement**: 3 % less range, for a design that survives its own manufacturing scatter.
+**Imposing a constraint and checking it are different searches.** Holding every constraint
+*during* the search rather than verifying them afterwards reaches **3501 km/L** against 3338.
+Adding a reliability target gives **3395 km/L at $P_f = 10^{-3}$** — 3 % less range for a
+design that survives its own manufacturing scatter.
 
 ## The study
 

@@ -446,8 +446,8 @@ then checking the twenty-five best against the *full* constraint set:
 
 | | $\beta$ | $P_f$ | range |
 |---|---|---|---|
-| the reference design | $-0.373$ | 0.645 | 3338.3 km/L |
-| best sampled, fully feasible | $\mathbf{+0.502}$ | **0.308** | **3341.7 km/L** |
+| the reference design | $-0.373$ | 0.645 | 3338 km/L |
+| best sampled, fully feasible | $\mathbf{+0.502}$ | **0.308** | **3342 km/L** |
 
 All twenty-five are feasible. The probability of missing a requirement is more
 than halved, and it costs **nothing**: the best of them is 0.10 % *better* in

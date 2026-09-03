@@ -151,260 +151,108 @@ In rough order of value per unit of effort:
    finite differences enter a tight constraint.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
 9. **Converging §6.4.** Both solves there stopped at their iteration cap, not
-   at a convergence test, so 3394.9 km/L and 3501 km/L are lower bounds on what
+   at a convergence test, so 3395 km/L and 3501 km/L are lower bounds on what
    the formulation reaches. Running them to convergence, and from several
    starts, is the cheapest remaining gain in the study. The functional IDF §7.4
    sets out is a larger question again and would need its own study.
 
-## 7.4 A prescribed-motion formulation, measured
+## 7.4 What the prescribed motion taught
 
-The formulation of §3 asks for the best mechanism and lets the piston motion
-$\lambda(\theta)$ fall out of it. Kinematic synthesis conventionally does the
-opposite: it *prescribes* a target motion $\lambda^{\star}(\theta)$ and fits the
-linkage to it,
+The formulation is §3.10's and its result is §6.4. What is left to record is
+what the detour established, because most of it generalises past this problem.
 
-$$\min_X\; J(X) = \sum_k \bigl(\lambda_k(X) - \lambda^{\star}_k\bigr)^2 ,$$
+**A target on the manifold need not be reachable.** Both equalities are
+functionals of $\lambda$ alone, so a motion with the right two strokes satisfies
+them exactly before any linkage exists — measured at 74.0000000000 mm and
+16.0000000000. But being on the manifold is a property of the *target* and
+being fittable is a property of the *mechanism*. A two-harmonic target is
+exact and unreachable: the closest a seven-bar gets is 1.16 mm RMS, which
+carries the fitted design outside both tolerance bands. Seeding the target from
+a motion a real design produces
+({py:func}`~exlink.synthesis.target_from_design`) recovers three orders of
+magnitude of residual. The Fourier table below predicted this and was not read
+that way.
 
-which is the same move as minimising $\lVert u - u^{\star}\rVert^2$ instead of
-compliance in compliant-mechanism topology optimization. This section was
-written as a proposal and is now a measurement:
-{py:mod}`exlink.synthesis` implements it, and the result is more interesting
-than the proposal was, because the part that looked incidental turned out to
-be the whole difficulty.
+**Fitting reaches the manifold; it does not give multistart.** Uniform sampling
+finds a design on the equality manifold in 0 of 12 000 draws. Sampling and
+*then fitting* reaches it in 22 of 30, and those fits are feasible against the
+whole constraint set. But every fit converges to the same linkage whatever
+start it is given — the motion very nearly determines the mechanism — so
+diversity has to come from varying the target, not the start.
 
-### What is simpler, and it is genuinely simpler
+**Whatever is left out of the problem is what the solve violates.** Four times
+a limitation was reported here — a restoration phase is needed, the route is
+limited by reachability, none of these designs is feasible, the fit cannot give
+diverse starts — and four times it was a constraint omitted from the
+formulation. Adding it fixed the problem each time. Against a target the
+mechanism cannot reach, the unconstrained fit leaves the geometric set by ten
+to fifteen units while the constrained one holds every constraint at its
+boundary.
 
-Both equalities are functionals of $\lambda$ alone: $STE$ is the span from top
-dead centre to the deeper bottom dead centre, and $\varepsilon$ follows from the
-shallower one through the swept volume. So a target built to have the right two
-strokes satisfies both requirements before any linkage exists.
-{py:func}`~exlink.synthesis.target_motion` solves two harmonics against the two
-strokes, and {py:func}`~exlink.synthesis.describe_target` measures the result
-with `find_phases` — the same code the constraints use, not the formula the
-target was built from:
+**A flat region defeats a gradient method, three times over.** The reliability
+constraint stalls where $P_f$ saturates (§6.4); the range objective has nothing
+to descend where $R$ does not exist; and the system index is pinned at
+$-8.2095$ for every violating design. Each repair has the same shape: supply
+something that still varies where the quantity of interest does not — the
+motion residual as the objective's middle rung, and $\min_i \beta_i$ in place
+of the system index.
 
-| | target | required |
+### The decomposition this suggests
+
+$\lambda(\theta)$ is the *only* quantity the linkage sends downstream, so it is
+the coupling variable, and IDF on it would put a master choosing
+$\lambda^{\star}$ against a sub-problem fitting the linkage to it. §3.6 rejected
+IDF because the coupling has 45 367 components — but that count is *pointwise*,
+and $\lambda$ is smooth ({py:func}`exlink.formulations.motion_harmonics`):
+
+| design | harmonics for RMS $< 0.1$ mm | $< 0.01$ mm |
 |---|---|---|
-| $STE$ | 74.0000000000 mm | 74 mm |
-| $\varepsilon$ | 16.0000000000 | 16 |
-| $g$ | 0.0 mm | — |
-
-The objective also becomes a sum of squares, so Gauss–Newton applies and the
-residual Jacobian supplies a positive-semidefinite Hessian approximation for
-free; and the residual lives on a fixed $\theta$-grid, so it contains no maximum
-over the revolution and needs no envelope-theorem argument (§3.5).
-
-### The difficulty is attainability, and it is decisive
-
-The proposal claimed the equalities would then be satisfied "by construction".
-**That claim was wrong**, and the measurement says so. The fit is
-over-determined — eleven variables against several hundred residuals — so
-$\lambda(X) = \lambda^{\star}$ is unattainable, and what matters is whether the
-residual is small enough to land inside the tolerance bands of §3.4. Fitting
-the reference design to a two-harmonic target:
-
-| target | correction | fit RMS | $\lvert\Delta STE\rvert$ | $\lvert\Delta\varepsilon\rvert$ | inside the bands |
-|---|---|---|---|---|---|
-| two harmonics, built from nothing | $A = 32.33$, $B = 9.02$ | 1.1621 mm | 0.0735 mm | 0.5594 | **no** |
-| the same, seeded from a real motion | $A = 0.038$, $B = 0.042$ | **0.0011 mm** | 0.0013 mm | 0.0001 | **yes** |
-
-A target can be exactly on the equality manifold and still be useless, because
-being on the manifold is a property of the target while being *fittable* is a
-property of the mechanism. The two-harmonic target misses the compression-ratio
-band by a factor of eleven. In hindsight the Fourier table below predicted it:
-a real motion needs ten to twenty-three harmonics, so a two-harmonic target sits
-far outside the reachable set.
-
-{py:func}`~exlink.synthesis.target_from_design` is the repair. It seeds the
-target from a motion an actual design produces — reachable by definition — and
-adds only the two harmonics that move the strokes onto the requirement. The
-correction is three orders of magnitude smaller, and so is the residual.
-
-### What it is good for: feasible points, not multistart
-
-With a reachable target the generator does the one thing the main formulation
-cannot. Uniform sampling of the design box finds a design on the equality
-manifold in **0 of 12 000** draws (§3.4). Sampling and *then fitting* is a
-different operation, and most fits land inside both bands:
-
-| scatter about the reference | starts | fits obtained | inside the bands | distinct designs |
-|---|---|---|---|---|
-| 10 % | 30 | 22 | 22 | **1** |
-| 25 % | 30 | 13 | 13 | **1** |
-| 50 % | 30 | 9 | 8 | **1** |
-| 80 % | 30 | 3 | 2 | **1** |
-
-The last column is the finding. Every fit converges to the *same* linkage,
-whatever start it is given. That is not a defect of the optimizer: the motion
-very nearly determines the mechanism, so fitting to one target yields one
-design. **Fitting to a single target solves the feasibility problem and not the
-multistart problem**; diversity has to be asked for separately, and the rest of
-this section is about how.
-
-Diversity therefore has to come from varying the *target*. Perturbing it with
-third-to-fifth-harmonic content and re-solving the two stroke harmonics — so the
-target stays exactly on the manifold and only its shape changes — gives:
-
-| perturbation | targets built | fits | inside the bands | distinct designs |
-|---|---|---|---|---|
-| 0.2 mm | 12 | 12 | 4 | **4** |
-| 0.5 mm | 12 | 12 | 1 | **1** |
-| 1.0 mm | 12 | 12 | 3 | **3** |
-| 2.0 mm | 10 | 10 | 0 | 0 |
-
-Distinct now equals in-band at every level: varying the target gives genuinely
-different linkages where varying the start gave one. Past about 2 mm of added
-harmonic content the target leaves the reachable set and no fit lands in band,
-which is the attainability limit measured from the other side.
-
-**Are these points usable, or only near the manifold?** Usable. Of 30 random
-starts fitted to the fixed reachable target, 26 produce a fit, all 26 land
-inside both bands, and **all 26 are feasible against the complete constraint
-set** — every inequality, coupled and vehicle constraints included. The
-generator does not merely approach the equality manifold; it lands on usable
-designs.
-
-That is a property of *this* target rather than of the method, and the
-distinction matters for the jittered targets below, whose unconstrained fits
-do sometimes leave the geometric set. The repair is not a separate restoration
-phase: it is to stop discarding the inequalities. Absorbing the equalities into
-the target removed the measure-zero part of the feasible set, so what remains is
-an ordinary box-and-inequality problem that SQP handles directly,
-
-$$\min_X \; \lVert \lambda(X) - \lambda^{\star} \rVert^2
-  \quad \text{s.t.} \quad g(X) \le 0, \; X \in [X_{lb}, X_{ub}] ,$$
-
-which is what {py:func}`~exlink.synthesis.fit_within_constraints` solves.
-Dropping $g$ was never justified by the reformulation — only the *equalities*
-were absorbed — and keeping it costs one SQP in place of one least-squares
-solve. Measured, the difference is not marginal:
-
-| target | fit | worst $g$ | inside the bands |
-|---|---|---|---|
-| reachable | unconstrained | $-0.0026$ | yes |
-| reachable | constrained | $-0.0026$ | yes |
-| jittered, 0.5 mm | unconstrained | $+10.0$ to $+15.7$ | mostly no |
-| jittered, 0.5 mm | constrained | $\mathbf{+0.0000}$ | no |
-
-On a reachable target the two agree exactly, so the constraints cost nothing.
-On an unreachable one the unconstrained fit violates by *ten to fifteen units*
-while chasing a motion no buildable linkage produces, and the constrained fit
-holds every constraint at its boundary instead. Discarding $g$ was not a
-simplification, it was a way of not noticing.
-
-The last row also shows the constrained fits still outside the stroke bands,
-because holding $g \le 0$ while chasing an unreachable motion trades one
-against the other. But the bands are constraints too, and the same argument
-puts them in the problem rather than in a check afterwards
-({py:func}`~exlink.synthesis.fit_within_constraints` with ``hold_bands``).
-Doing so on six jittered targets:
-
-| | |
-|---|---|
-| constraints held ($\max g$) | $+0.0000$ on all six |
-| inside both bands | six of six, at the boundary |
-| feasible against the *whole* set | **two** |
-| distinct designs among those | **two** |
-
-So the diversity route does work, and the earlier reading that it is limited by
-reachability was premature. Reachability limits how closely the motion can be
-tracked; it does not prevent the solve from returning usable designs, because
-the constrained problem simply trades motion accuracy for feasibility and still
-lands somewhere buildable.
-
-The four that remain infeasible are instructive in the same way as everything
-above: they satisfy every constraint that was *given* to them — $\max g = 0$,
-both bands held — and fail the coupled and vehicle constraints, which are not
-in the fit. The pattern has now repeated three times. Each apparent limitation
-of the reformulation turned out to be a constraint that had been left out of
-it, and adding the constraint fixed it. Those two are the next to add; they are
-excluded here only because each evaluation would then carry an MDA.
-
-One caution that does not dissolve this way. Every one of these fits sits at
-$g = 0$ exactly — SQP converging onto its active constraints — and §6.2 shows
-that sitting on active constraints is precisely what makes a design unreliable.
-A generator built this way should hand its output to a reliability-aware stage
-rather than be trusted as a final design.
-
-### Where it ended up
-
-The argument that took the inequalities and then the bands into the fit does not
-stop there, and its endpoint is not a synthesis problem at all: if every
-constraint belongs in the problem, and the fit is only a means of reaching a
-good design, then the objective should be the one the application scores. That
-formulation is the second and third forms in §3.10, and its results are §6.4's:
-the best nominal design this study produces, and the best one that also holds a
-reliability target. What remains here is what the prescribed motion taught on the way,
-which is not the same thing as what it achieved.
-
-**The lesson that generalises.** Four times in this exercise a limitation was
-reported — a restoration phase is needed, the route is limited by reachability,
-none of these designs is feasible, the fit cannot give diverse starts — and four
-times it turned out to be a constraint that had been left out of the problem.
-Adding the constraint fixed it each time. The habit worth keeping is to ask,
-of any apparent limitation of a reformulation, whether it is a property of the
-problem or of what was omitted from it; here it was never the former.
-
-**What the target is, precisely.** It is a fallback objective, not a
-constraint, and §6.4 measures both halves of that claim: it fires for a quarter
-of the search from a start where the range does not exist, and not at all from
-one where it does, ending 5.53 mm from a motion it was free to abandon. A
-constant penalty cannot do the first — there is no gradient in a constant — and
-a constraint would have prevented the second.
-
-### The functional decomposition this suggests
-
-$\lambda(\theta)$ is the *only* quantity the linkage sends downstream: the cycle
-takes $\lambda \to V \to p$, the dynamics take $\ddot\lambda$, the vehicle takes
-the resulting work. So $\lambda$ **is** the coupling variable, and IDF on it
-reads: a master choosing $\lambda^{\star}$ in a finite basis to maximise range,
-a sub-problem fitting the linkage to it, and
-$\lVert \lambda(X) - \lambda^{\star} \rVert$ as the consistency constraint.
-
-§3.6 rejected IDF because the coupling has 45 367 components — but that count is
-*pointwise*, and $\lambda$ is smooth ({py:func}`exlink.formulations.motion_harmonics`):
-
-| design | harmonics for RMS $< 0.1$ mm | $< 0.01$ mm | $< 0.001$ mm |
-|---|---|---|---|
-| refined (geometric, AL) | 12 | 18 | 25 |
-| gradient (geometric, SLSQP) | 15 | 23 | 30 |
-| coupled (minimum mass) | 10 | 14 | 19 |
-| range (vehicle-level) | 10 | 16 | 20 |
+| coupled (minimum mass) | 10 | 14 |
+| gradient (geometric, SLSQP) | 15 | 23 |
 
 Fourteen to twenty-three coefficients reproduce the motion to 0.01 mm RMS,
-tighter than the 0.020 mm machining scatter §6.2 puts on $STE$. A functional IDF
-would carry of order **30 to 50** consistency variables, not 45 367 — three
-orders of magnitude fewer. §3.6's "IDF is unavailable" is true of the coupling
-*as parameterised there* and false of the same coupling in a basis matched to
-its smoothness: the architecture was selected by a representation choice, not by
-the physics.
+tighter than the 0.020 mm machining scatter. A functional IDF would carry of
+order 30 to 50 consistency variables, not 45 367 — so §3.6's "IDF is
+unavailable" is true of the coupling *as parameterised there* and false in a
+basis matched to its smoothness. The architecture was selected by a
+representation choice, not by the physics.
 
-The measurements above both support and constrain that. Supporting it: the fit
-is a contraction onto a single design, so the sub-problem has an essentially
-unique solution — precisely what a well-posed master/sub split needs.
-Constraining it: the master cannot be allowed to ask for any $\lambda^{\star}$ in
-the basis, because past ~2 mm of harmonic content there is no linkage to be
-found and the consistency residual will not close. A master would need the
-reachable set as an explicit trust region, calibrated on the sub-problem's
-achieved residual. That is the shape of the study this suggests, and it is
-not a small one.
+The measurements both support and constrain that. Supporting: the fit is a
+contraction onto a single design, so the sub-problem has an essentially unique
+solution, which is what a master/sub split needs. Constraining: past about 2 mm
+of added harmonic content there is no linkage to be found, so a master would
+need the reachable set as an explicit trust region. That is a study of its own.
 
 ## 7.5 Headline numbers
+
+Full provenance for every design is in §6.0.
+
+**What the linkage achieves**
 
 | | |
 |---|---|
 | best strictly feasible design, specification as written | 3338 km/L, 12.2 kg |
-| best design under a relaxed specification, reliability constrained (§6.4) | **3395 km/L** at $P_f = 1.3\times10^{-3}$ |
-| the same without the reliability constraint | 3501 km/L, nominal only |
-| what the reliability requirement costs | **-3 %** |
-| range of an optimised conventional engine, identical code | 2888 km/L |
-| advantage over it | +15.6 % |
-| the same, with the baseline held to the EX-link's own limits | 2372 km/L, **+43 %** |
-| reliability index, EX-link vs that baseline, IT8 | +3.00 vs **+8.22** |
-| the same with the firing-frequency advantage removed | **-4.3 %** |
+| best nominal design, all constraints imposed | 3501 km/L |
+| best design that also holds $P_f \le 10^{-3}$, bounds relaxed | **3395 km/L** |
+| what the reliability requirement costs | −3 % |
+
+**Against a conventional engine**
+
+| | |
+|---|---|
+| optimised as a conventional engine (its own limits) | 2888 km/L, **+15.6 %** |
+| the same, with its firing-frequency advantage removed | **−4.3 %** |
+| held to the EX-link's own rod-angle and side-load limits | 2372 km/L, **+43 %** |
+| reliability index at IT8, EX-link vs that baseline | 3.00 vs **8.22** |
+
+**What the specification costs**
+
+| | |
+|---|---|
 | probability the reference design misses a requirement | 64.5 % |
-| the same, for the best sampled design beside it | **30.8 %**, at +0.10 % range |
-| gap bound needed for a $10^{-3}$ target | 0.054 mm against 0.01 specified |
+| the same for the best design sampled beside it | 30.8 %, at +0.10 % range |
+| gap bound a $10^{-3}$ target needs | 0.054 mm against 0.01 specified |
+| stroke band the *system* then needs | ±0.15 mm against ±0.05 |
 
 ---
 
