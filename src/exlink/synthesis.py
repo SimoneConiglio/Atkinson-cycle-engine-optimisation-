@@ -683,6 +683,7 @@ def maximise_range_from_target(
     """
     from scipy.optimize import minimize
 
+    from .gears import lattice_inter_axle
     from .performance import evaluate
     from .robustness import failure_probability
 
@@ -759,11 +760,25 @@ def maximise_range_from_target(
         index = -10.0 if reliability is None else reliability.system_beta
         return np.concatenate([rows, [index - beta_target]])
 
+    lower = np.array(bounds.lower, dtype=float)
+    upper = np.array(bounds.upper, dtype=float)
+    begin = np.clip(start.to_array(), lower, upper)
+    if module is not None and teeth is not None:
+        # Pinning the gear pair pins the centre distance: §3.7's catalogue
+        # relation makes ``I`` an *output* of the choice, not a free variable.
+        # Leaving it in the search lets the linkage drift to a centre distance
+        # the chosen pair cannot realise, and every downstream quantity is then
+        # computed for a mechanism that cannot be built.
+        index = VARIABLE_NAMES.index("I")
+        pinned = float(lattice_inter_axle(module, teeth))
+        lower[index] = upper[index] = pinned
+        begin[index] = pinned
+
     outcome = minimize(
         objective,
-        np.clip(start.to_array(), bounds.lower, bounds.upper),
+        begin,
         method="SLSQP",
-        bounds=list(zip(bounds.lower, bounds.upper, strict=True)),
+        bounds=list(zip(lower, upper, strict=True)),
         constraints=[{"type": "ineq", "fun": constraint}],
         options={"maxiter": int(max_iterations), "ftol": 1.0e-8},
     )

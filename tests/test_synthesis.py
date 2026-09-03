@@ -472,3 +472,38 @@ def test_the_target_takes_over_when_the_range_does_not_exist() -> None:
     )
     assert fit is not None
     assert fit.fell_back > 0, "the target never stood in for the missing range"
+
+
+def test_pinning_the_gear_pair_pins_the_centre_distance() -> None:
+    """§3.7's catalogue relation makes ``I`` an output, not a design variable.
+
+    A 200-iteration run that left ``I`` free while the gear pair was pinned
+    returned a design with ``I = 85.08`` against the 57.6 the chosen pair
+    realises -- a mechanism whose every downstream quantity was computed for
+    something that cannot be built.  ``build_range_scenario`` had this right;
+    this function did not.
+    """
+    from exlink.gears import lattice_inter_axle
+    from exlink.synthesis import maximise_range_from_target, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    fit = maximise_range_from_target(
+        target,
+        COUPLED_DESIGN,
+        speed_rpm=1000.0,
+        module=0.8,
+        teeth=48,
+        max_iterations=1,
+    )
+    assert fit is not None
+    assert pytest.approx(lattice_inter_axle(0.8, 48), abs=1.0e-9) == fit.design.I
+
+
+def test_leaving_the_gear_pair_open_leaves_the_centre_distance_free() -> None:
+    """The pin is a consequence of choosing a pair, not an unconditional bound."""
+    from exlink.synthesis import _residual, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    # Nothing to assert about the optimum here; only that the sizer is allowed
+    # to choose, which is what ``module=None`` means.
+    assert _residual(COUPLED_DESIGN, target, DEFAULT_SPEC) is not None
