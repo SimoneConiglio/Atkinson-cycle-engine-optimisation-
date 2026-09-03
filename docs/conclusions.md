@@ -108,16 +108,16 @@ In rough order of value per unit of effort:
    reliability margin exactly differentiable and remove the one place where
    finite differences enter a tight constraint.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
-9. **Converging the range-with-target formulation.** §7.4 ends with the whole
-   problem stated once -- range under all fourteen constraints, the prescribed
-   motion standing in wherever the range does not exist
-   ({py:func}`~exlink.synthesis.maximise_range_from_target`) -- and shows the
-   fallback rescuing a start that produces no range at all. What is missing is
-   budget rather than method: each evaluation is a converged MDA, so the runs
-   reported there stop at six and eight iterations and end slightly outside
-   their constraints. Running it to convergence, and from several targets, is
-   the work. The functional IDF §7.4 also sets out is a larger question again
-   and would need its own study.
+9. **Converging the range-with-target formulation.** §7.4 states the whole
+   problem once -- range under all fourteen constraints, the prescribed motion
+   standing in wherever the range does not exist
+   ({py:func}`~exlink.synthesis.maximise_range_from_target`) -- and reaches
+   3501 km/L, the best figure in this study, at $1.6 \times 10^{-4}$ outside
+   its constraints. That run stopped at its iteration cap rather than at a
+   convergence test, so the figure is a lower bound. Running it to convergence,
+   and from several targets, is the work; the duplicate-evaluation fix has
+   since halved what each iteration costs. The functional IDF §7.4 also sets
+   out is a larger question again and would need its own study.
 
 ## 7.4 A prescribed-motion formulation, measured
 
@@ -338,13 +338,43 @@ From the coupled reference design, by contrast, the ladder never fires at all �
 every point visited has a computable range — so the fallback is insurance that
 costs nothing when it is not needed and supplies the whole gradient when it is.
 
-**What this does not yet do.** Eight iterations is not convergence: that run
-ends 0.0155 outside its constraints, and a six-iteration run from the reference
-design reaches 3412 km/L while violating by 1.59 — reported as infeasible
-rather than presented as a result, which is the distinction §6.2 exists to
-make. Each evaluation is a converged MDA, so a properly converged solve is tens
-of minutes even after removing the duplicate evaluation SLSQP was paying for.
-The formulation is right; the budget to run it to convergence is the open item.
+**Run at length, from the coupled reference design.** 836 evaluations, 78
+minutes, the 60-iteration cap reached rather than a convergence test met:
+
+| | |
+|---|---|
+| start | 3337.2 km/L |
+| result | **3501.2 km/L**, $+4.9\,\%$ |
+| worst constraint | $+1.64 \times 10^{-4}$ |
+| $\lvert\Delta STE\rvert$ | 0.0497 mm, inside the 0.05 band |
+| $\lvert\Delta\varepsilon\rvert$ | 0.0502, outside by $2 \times 10^{-4}$ |
+| evaluations that fell back | **0 of 836** |
+
+This is the best design the study has produced — 3.4 % beyond the 3387.5 km/L
+of :data:`~exlink.reference.RANGE_DESIGN` and 4.9 % beyond the strictly
+feasible reference — and it is *not* reported as feasible, for the same reason
+`RANGE_DESIGN` is not: it finishes $2 \times 10^{-4}$ outside the
+compression-ratio band, which is SLSQP stopping within its own tolerance of a
+constraint whose width is itself an approximation. §6.2 puts the machining
+scatter on $STE$ at 0.020 mm, a hundred times that gap. No built engine would
+distinguish this design from one exactly on the band, and the study still
+declines to call it feasible, because the alternative is to decide case by case
+which violations are small enough to ignore.
+
+**Two things the run settles about the formulation.** The fallback never fired
+— 0 of 836 — so from a start that already runs, the ladder costs nothing and
+the search is pure range maximisation; it earns its place only from starts like
+the one above, where it supplied a quarter of the evaluations. And the motion
+residual ends at 5.53 mm, far from the target: once the range is computable
+everywhere the optimizer abandons the prescribed motion entirely and pursues
+the objective, which is exactly right. The target is a fallback, not a
+constraint, and this is the measurement that shows it behaves as one.
+
+**What is still open.** The cap was reached, not a convergence criterion, so
+3501 km/L is a lower bound on what this formulation reaches rather than its
+optimum. Each evaluation is a converged MDA; this run predates the fix that
+stopped SLSQP paying for two of them per point, so the same budget now buys
+twice the iterations.
 
 ### The functional decomposition this suggests
 
