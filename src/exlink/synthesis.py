@@ -687,10 +687,13 @@ def maximise_range_from_target(
     from .robustness import failure_probability
 
     calls = {"n": 0, "fallback": 0, "broken": 0}
-    # SLSQP asks for the objective and the constraints at the same point, one
-    # after the other, and each evaluation here is a converged MDA.  Without
-    # this the solve pays for every point twice.
+    # Each evaluation here is a converged MDA, and SLSQP visits the same point
+    # more than once: it differences the objective over the design vector, then
+    # differences the *constraints* over the same perturbed points in a second
+    # pass.  A single-entry cache catches only the paired f(x)/g(x) calls and
+    # misses both gradient sweeps, so the whole stencil has to fit.
     cache: dict[bytes, Performance] = {}
+    cache_limit = 4 * len(VARIABLE_NAMES)
 
     def score(vector: FloatArray) -> Performance:
         key = np.ascontiguousarray(vector, dtype=float).tobytes()
@@ -709,9 +712,11 @@ def maximise_range_from_target(
             teeth=teeth,
             spec=spec,
         )
-        # Only the current point is worth keeping: SLSQP moves on and never
-        # asks again, so an unbounded cache would only hold memory.
-        cache.clear()
+        # Bounded, and evicted oldest-first: the stencil moves on after each
+        # iteration and holding every point ever visited would grow without
+        # limit over a long solve.
+        if len(cache) >= cache_limit:
+            cache.pop(next(iter(cache)))
         cache[key] = performance
         return performance
 
