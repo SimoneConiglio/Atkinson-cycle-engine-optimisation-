@@ -76,7 +76,12 @@ from .reference import (
 )
 from .robustness import ToleranceReport, tolerance_report
 from .sizing import MemberSizing
-from .slidercrank import SliderCrank, evaluate_slidercrank, optimise_slidercrank
+from .slidercrank import (
+    SliderCrank,
+    evaluate_slidercrank,
+    optimise_slidercrank,
+    slidercrank_reliability,
+)
 from .synthesis import TargetMotion, fit_to_target, target_from_design, target_motion
 from .vehicle import RangeResult, Vehicle
 
@@ -137,6 +142,7 @@ __all__ = [
     "lattice_neighbours",
     "optimise_slidercrank",
     "size_pair",
+    "slidercrank_reliability",
     "solve_coupled",
     "solve_for_design",
     "speed_sweep",

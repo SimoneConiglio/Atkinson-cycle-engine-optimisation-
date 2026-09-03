@@ -39,7 +39,10 @@ advantage of the mechanism over a conventional slider-crank -- sized by
 identical structural and tribological models, and optimised over its own
 degrees of freedom rather than proportioned by hand -- becomes a 4.3 % deficit
 when its firing-frequency difference is removed, locating the advantage in the
-cycle rate rather than in extended expansion and reversing its sign. Finally,
+cycle rate rather than in extended expansion and reversing its sign; held
+instead to the same rod-angle and side-load limits as the linkage, the same
+conventional engine reaches only 2372 km/L and the advantage becomes 43 %,
+so which comparison is intended must be stated. Finally,
 imposing the coupled and structural constraints throughout the search rather
 than verifying them on its result is shown to be worth 4.9 % of the objective
 under an identical algorithm -- a difference of formulation rather than of

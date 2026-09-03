@@ -31,7 +31,9 @@ requirements.
 
 **The advantage is firing frequency, not extended expansion.** Against a conventional engine
 *optimised* under identical code the linkage wins 15.6 %; remove its one-revolution cycle and
-it loses by **4.3 %**.
+it loses by **4.3 %**. But that baseline meets neither the rod-angle nor the side-load limit
+the linkage is held to — held to the same specification it reaches only 2372 km/L, and the
+advantage is **+43 %**. Which comparison is meant has to be said.
 
 **Imposing a constraint and checking it are different searches.** Holding every coupled and
 structural constraint *during* the search, rather than verifying them on the design it returns,

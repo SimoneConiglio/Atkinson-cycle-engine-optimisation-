@@ -46,9 +46,11 @@ firing frequency. Not settled: what the linkage costs. None of these studies
 carries the linkage dimensions through to the mass of the parts that must
 carry the inertia loads at speed, so none can say whether the thermodynamic
 gain survives the mechanism that delivers it. §6.3 shows that the accounting
-decides the sign: against a conventional engine optimised under the same
-models, separating the cycle-rate effect from the extended-expansion effect
-turns a +15.6 % range advantage into a 4.3 % deficit.
+decides the answer twice over: separating the cycle-rate effect from the
+extended-expansion effect turns a +15.6 % range advantage into a 4.3 % deficit,
+while holding the conventional engine to the *same specification* as the
+linkage moves the same figure to +43 %. Which comparison is meant has to be
+stated, because the two differ by a factor of ten.
 
 ## 2.3 Formulating a mechanism-synthesis problem
 

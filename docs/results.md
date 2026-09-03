@@ -186,7 +186,7 @@ so the conclusion is not fragile even though the estimator is approximate.
 This is a defect in the specification, not in any design meeting it, and it is
 the single most useful result here for anyone who would build the engine.
 
-## 6.3 Against an optimised conventional engine the advantage is firing frequency alone
+## 6.3 Against a conventional engine held to the same specification
 
 ### Result
 
@@ -249,62 +249,66 @@ also the most fragile part of the result: it rests entirely on the phasing that
 `find_phases` extracts from the piston motion, and an engine that did not
 achieve it in practice would lose the whole margin and more.
 
-### Both sides, optimised the same way
+### Both sides, held to the same specification
 
-§6.4 finds that imposing constraints during the search rather than checking
-them afterwards is worth 4.9 % to the EX-link. If that were a property of the
-method it would apply to the baseline too, and this comparison would be unfair
-until the baseline got the same treatment. It is not:
+The comparison above optimises both engines and scores both by range, which
+makes it fair in method. It is not fair in *specification*, and finishing the
+reliability study exposed why.
 
-| baseline, optimised by | $r/l$ | speed | range | evaluations |
+The EX-link is held to a maximum rod angle of 10° and a side-load ratio of
+0.02. `evaluate_slidercrank` applied neither: its feasibility test is
+convergence, net work and the speed rule. So the optimised baseline was scored
+while meeting neither limit — at $r/l = 0.195$ its rod angle is 11.2° and its
+side-load ratio about 0.039, roughly twice the cap. **The 15.6 % advantage was
+measured against an engine held to fewer constraints than the one it was
+compared with.**
+
+Holding the baseline to the same two limits changes what it can reach:
+
+| $r/l$ | rod angle | $\gamma$ | rod length | best range | meets both |
+|---|---|---|---|---|---|
+| 0.300 (textbook) | 17.5° | 0.058 | 93 mm | 2693 km/L | no |
+| 0.195 (its optimum) | 11.2° | 0.039 | 143 mm | 2888 km/L | no |
+| 0.174 | 10.0° | 0.035 | 161 mm | 2871 km/L | no — $\gamma$ |
+| 0.100 | 5.7° | 0.021 | 280 mm | 2447 km/L | no — just |
+| **0.095** | **5.5°** | **0.020** | **295 mm** | **2372 km/L** | **yes** |
+
+The side-load cap, not the rod angle, is what binds: meeting it needs a
+connecting rod five times the stroke, and the engine loses 18 % of its range
+getting there.
+
+### The comparison with reliability on both sides
+
+{py:func}`~exlink.slidercrank.slidercrank_reliability` applies the method of
+§3.8 to the baseline — the same IT grade, the same
+$\sigma = \text{half-width}/3$, the same correlated orthant — over the four
+requirements a slider-crank has. It has four rather than seven because it has
+one dead centre, no transmission angle to lose, and equal strokes by
+construction; those are properties of the mechanism, not of the treatment.
+
+| | range | $P_f$ | $\beta$ | toleranced dimensions |
 |---|---|---|---|---|
-| Nelder-Mead, infeasible points rejected | 0.195 | 2151 rpm | 2887.7 km/L | 393 |
-| SLSQP, both constraints imposed | 0.195 | 2141 rpm | **2887.7 km/L** | **100** |
+| EX-link, reliability constrained | **3394.9 km/L** | $1.3\times10^{-3}$ | +3.00 | 11 |
+| slider-crank, same specification | 2372.4 km/L | $\approx 0$ | **+8.22** | 2 |
 
-The same optimum, to the tenth of a km/L, four times cheaper. The comparison
-above is therefore unaffected by which method produced the baseline.
+Two findings, pulling opposite ways, and both are the answer.
 
-The reason is the one §6.4 turns on, seen from the other side: **imposing a
-constraint helps only where the constraint binds**. The slider-crank has two
-degrees of freedom and two constraints, and at its optimum neither is active —
-the peak in $r/l$ is interior, set by rod mass against piston side load, not by
-a bound. There is nothing for constraint-handling to buy. The EX-link's
-optimum sits on several active constraints at once, which is why the same
-change is worth 4.9 % there and nothing here. The 4.9 % is not a general
-property of the method.
+**On range the EX-link's advantage is larger than reported, not smaller:
++43 %**, once the baseline is held to the specification the EX-link is held to.
+The +15.6 % of the previous section understates it because it let the baseline
+violate two limits.
 
-One conservatism worth naming before the caveats, because it runs the other
-way. Neither cycle models gas exchange, so neither engine pays any pumping
-work — and that is *not* even-handed. The EX-link opens its exhaust valve on a
-charge expanded to $1.23\,p_0$ against the slider-crank's $1.70\,p_0$, so the
-loss the model discards is about two and a half times larger for the
-conventional engine (§7.2). The advantage reported here is therefore
-conservative against the EX-link by an amount this model cannot quantify.
+**On reliability the slider-crank is far ahead**, and for a reason that has
+nothing to do with either engine being better designed: it has two toleranced
+lengths against eleven, so it has fewer ways to be wrong. Its binding
+constraint is a function of the ratio $r/l$, and machining error on a 28 mm
+crank and a 295 mm rod moves that ratio by about a tenth of a percent. **A
+mechanism pays for its degrees of freedom twice — once in the parts, and again
+in the probability that all of them land inside their tolerances at once.**
 
-Two things this comparison is not. It is not a claim about extended-expansion
-engines in general: {cite:t}`watanabe2006` measure a 4-point indicated-efficiency
-gain on hardware, and this model reproduces 2 points, so if anything the
-thermodynamic side here is conservative. And it is not a statement that the
-optimised baseline is a good engine — it is the best engine *these models* can
-build with two degrees of freedom, and its 0.195 obliquity is longer-rodded
-than practice, which suggests the model prices rod length only through mass and
-not through the packaging that would really limit it.
-
-What makes the comparison worth anything at all is that both sides went through
-the same sizing, friction, mass-budget and vehicle code, and both were
-optimised; only the kinematics, the equilibrium system and the cycle differ.
-
-:::{note}
-The optimised baseline is found by Nelder-Mead restarts on a two-variable box
-({py:func}`exlink.slidercrank.optimise_slidercrank`). A derivative-free method
-is used here having been rejected in §2.6 for the EX-link, and the difference
-is the geometry of the feasible set, not a change of mind: the slider-crank's
-feasible set is a full-dimensional box in which every sampled point can be
-evaluated, while the EX-link's is a manifold of measure zero on which sampling
-finds nothing. The compression ratio is deliberately *not* a design variable —
-this model has no knock limit, so left free it would rise without bound and the
-comparison would measure a missing sub-model.
-:::
+That second finding is the one worth carrying past this study. It is invisible
+to any comparison that scores only the nominal design, and it is the
+counterweight to §6.1's argument that more freedom buys a better optimum.
 
 ## 6.4 The announced problem, solved
 

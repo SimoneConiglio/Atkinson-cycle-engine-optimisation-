@@ -61,7 +61,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .constants import DEFAULT_SPEC, EngineSpec
+from .constants import DEFAULT_SPEC, DEFAULT_TARGETS, DesignTargets, EngineSpec
 from .derivatives import ramp_derivative, spectral_derivative
 from .friction import JOURNAL_FRICTION, PISTON_FRICTION, RING_TENSION
 from .mass_budget import (
@@ -998,6 +998,223 @@ def optimise_slidercrank_constrained(
         comparison=row,
         evaluations=calls,
         starts=1,
+    )
+
+
+SLIDERCRANK_CONSTRAINTS: tuple[str, ...] = (
+    "ratio_upper",
+    "ratio_lower",
+    "rod_angle",
+    "side_load",
+)
+"""The requirements a slider-crank actually has, in the order reported.
+
+Four, against the EX-link's seven, and the difference is the mechanism rather
+than the treatment.  A slider-crank has one dead centre, so there is no
+top-dead-centre gap; its coupler cannot approach a transmission-angle
+singularity, so there is no compatibility condition; and its expansion and
+compression strokes are the same length by construction, so ``STE = 74`` is not
+a requirement it can be asked to meet -- that asymmetry is the whole reason the
+EX-link exists.  What both must meet is the compression ratio, the rod-angle
+limit and the side-load limit, and those are what is compared.
+"""
+
+
+@dataclass(frozen=True)
+class SliderCrankReliability:
+    """FORM reliability of a slider-crank, on the same terms as the EX-link's."""
+
+    mechanism: SliderCrank
+    grade: int
+    value: FloatArray
+    """Constraint values, negative meaning satisfied."""
+
+    sigma: FloatArray
+    """First-order standard deviation of each constraint."""
+
+    correlation: FloatArray
+    per_constraint: dict[str, float]
+    system: float
+    """Probability that *any* constraint fails, correlation kept."""
+
+    independent_bound: float
+
+    @property
+    def beta(self) -> FloatArray:
+        """Reliability index of each constraint."""
+        safe = np.where(self.sigma > 0.0, self.sigma, np.inf)
+        return -self.value / safe
+
+    @property
+    def system_beta(self) -> float:
+        """System reliability index."""
+        from scipy.stats import norm
+
+        return float(norm.isf(min(max(self.system, 1e-16), 1.0 - 1e-16)))
+
+    def binding(self) -> str:
+        """The constraint contributing most of the failure probability."""
+        return max(self.per_constraint, key=lambda name: self.per_constraint[name])
+
+
+def _slidercrank_constraints(
+    crank: float,
+    rod: float,
+    band: float,
+    samples: int,
+    targets: DesignTargets,
+    spec: EngineSpec,
+) -> FloatArray | None:
+    """The four constraints, negative meaning satisfied.
+
+    ``gamma`` is taken from the solved model rather than from a closed form.
+    The obvious closed form -- ``tan`` of the maximum rod angle -- is wrong by
+    80 %, because the peak side load and the peak gas force occur at *different*
+    crank angles: the gas force peaks at top dead centre, where the rod is
+    nearly upright and the side load is near zero.  A ratio of two maxima is
+    not the maximum of a ratio.
+    """
+    mechanism = SliderCrank(crank=crank, rod=rod)
+    try:
+        result = solve(mechanism, 1.0, samples=samples, spec=spec)
+    except (ValueError, FloatingPointError):
+        return None
+    if not result.converged:
+        return None
+    swept = spec.piston_area * mechanism.stroke
+    ratio = (spec.dead_volume + swept) / spec.dead_volume
+    obliquity = mechanism.obliquity
+    if obliquity >= 1.0:
+        return None
+    rod_angle = math.degrees(math.asin(obliquity))
+    gas = float(np.max(np.abs(np.asarray(result.gas_force))))
+    liner = float(np.max(np.abs(np.asarray(result.liner_force))))
+    side_load = liner / gas if gas > 0.0 else 1.0e3
+    difference = ratio - targets.compression_ratio
+    return np.array(
+        [
+            difference - band,
+            -difference - band,
+            rod_angle - targets.max_rod_angle,
+            side_load - targets.max_side_load,
+        ],
+        dtype=float,
+    )
+
+
+def slidercrank_reliability(
+    mechanism: SliderCrank,
+    grade: int = 8,
+    band: float = 0.05,
+    samples: int = 360,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+    step: float = 1.0e-4,
+) -> SliderCrankReliability | None:
+    """Probability that a built slider-crank misses one of its requirements.
+
+    The same method as :func:`exlink.robustness.failure_probability` -- ISO 286
+    tolerances on the machined lengths, first-order propagation to each
+    constraint, and the correlated multivariate-normal orthant for the system
+    probability -- applied to the baseline so that §6.3 compares reliability
+    with reliability rather than reliability with silence.
+
+    What is the same, and what cannot be
+    ------------------------------------
+    Same: the IT grade, the ``sigma = half-width / 3`` convention, the
+    definitions of the compression ratio, the rod angle and the side-load
+    ratio, and the orthant integral.
+
+    Not the same, and unavoidably so: the *dimensions* carrying the tolerance.
+    The EX-link's covariance is over eleven lengths and two clocking angles;
+    a slider-crank has two lengths.  A mechanism with fewer dimensions has
+    fewer ways to be wrong, and a like-for-like reliability comparison between
+    two mechanisms is therefore never wholly like-for-like.  What the
+    comparison does establish is each engine's probability of missing *its own*
+    requirements when machined to the same grade, which is the question a
+    builder would ask.
+
+    Gradients are central differences on two variables, not the analytic
+    Jacobians §3.5 needs for the EX-link.  The reason §3.5 rejects differences
+    is extremum switching, and it applies here too -- ``gamma`` is a ratio of
+    two maxima -- so the step is checked against a tenth and ten times its
+    value in the tests rather than assumed safe.
+
+    Args:
+        mechanism: The slider-crank.
+        grade: ISO 286 IT grade of the machined lengths.
+        band: Half-width on the compression-ratio requirement.
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+        step: Relative step for the central differences.
+
+    Returns:
+        The reliability, or ``None`` if the mechanism cannot be solved.
+    """
+    from scipy.stats import multivariate_normal, norm
+
+    from .robustness import IT_FACTORS, SIGMA_PER_HALF_WIDTH, tolerance_unit
+
+    lengths = np.array([mechanism.crank, mechanism.rod], dtype=float)
+    nominal = _slidercrank_constraints(
+        float(lengths[0]), float(lengths[1]), band, samples, targets, spec
+    )
+    if nominal is None:
+        return None
+
+    jacobian = np.zeros((nominal.size, lengths.size))
+    for index, value in enumerate(lengths):
+        delta = step * max(abs(float(value)), 1.0)
+        rows = []
+        for sign in (+1.0, -1.0):
+            moved = lengths.copy()
+            moved[index] += sign * delta
+            row = _slidercrank_constraints(
+                float(moved[0]), float(moved[1]), band, samples, targets, spec
+            )
+            if row is None:
+                return None
+            rows.append(row)
+        jacobian[:, index] = (rows[0] - rows[1]) / (2.0 * delta)
+
+    half = IT_FACTORS[grade] * np.array([tolerance_unit(float(value)) for value in lengths])
+    sigma_matrix = np.diag((half / SIGMA_PER_HALF_WIDTH) ** 2)
+    covariances = jacobian @ sigma_matrix @ jacobian.T
+    sigma = np.sqrt(np.clip(np.diag(covariances), 0.0, None))
+    outer = np.outer(sigma, sigma)
+    correlation = np.divide(covariances, outer, out=np.eye(sigma.size), where=outer > 0.0)
+
+    safe_sigma = np.where(sigma > 0.0, sigma, np.inf)
+    beta = -nominal / safe_sigma
+    per_constraint = {
+        name: float(norm.sf(value))
+        for name, value in zip(SLIDERCRANK_CONSTRAINTS, beta, strict=True)
+    }
+    independent = float(1.0 - np.prod([1.0 - value for value in per_constraint.values()]))
+
+    finite = np.isfinite(beta)
+    if not np.any(finite):
+        system = 0.0
+    else:
+        reduced = correlation[np.ix_(finite, finite)]
+        ridge = reduced + 1.0e-8 * np.eye(reduced.shape[0])
+        try:
+            safe = float(
+                multivariate_normal(mean=np.zeros(ridge.shape[0]), cov=ridge).cdf(beta[finite])
+            )
+        except Exception:
+            safe = float(np.prod([1.0 - value for value in per_constraint.values()]))
+        system = float(min(max(1.0 - safe, 0.0), 1.0))
+    return SliderCrankReliability(
+        mechanism=mechanism,
+        grade=grade,
+        value=nominal,
+        sigma=sigma,
+        correlation=correlation,
+        per_constraint=per_constraint,
+        system=system,
+        independent_bound=independent,
     )
 
 

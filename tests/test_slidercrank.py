@@ -277,3 +277,67 @@ def test_the_constrained_baseline_imposes_its_constraints() -> None:
     # The optimum must be interior, or it reports a bound rather than a design.
     low, high = OBLIQUITY_BOUNDS
     assert low < best.mechanism.obliquity < high
+
+
+# -- reliability, so the comparison is not one-sided ----------------------------
+
+
+def test_the_baseline_has_a_reliability_of_its_own() -> None:
+    """§6.3 compared range with range and reliability with silence.
+
+    The slider-crank carries ISO 286 tolerances on its two lengths exactly as
+    the EX-link does on its eleven, so it has a probability of missing its
+    requirements and that probability can be compared.
+    """
+    from exlink.slidercrank import SLIDERCRANK_CONSTRAINTS, slidercrank_reliability
+
+    mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=0.095)
+    reliability = slidercrank_reliability(mechanism)
+    assert reliability is not None
+    assert reliability.value.size == len(SLIDERCRANK_CONSTRAINTS) == 4
+    assert 0.0 <= reliability.system <= 1.0
+    # A design well inside its limits must come out reliable.
+    assert reliability.system < 0.5
+
+
+def test_the_baseline_reliability_is_insensitive_to_the_difference_step() -> None:
+    """The gradients are differences, so the step has to be shown to be safe.
+
+    §3.5 rejects differences for the EX-link because its constraints are
+    extrema whose maximiser moves.  The same risk applies here -- the
+    side-load ratio is a quotient of two maxima -- so this checks the answer
+    across two decades of step rather than trusting one.
+    """
+    from exlink.slidercrank import slidercrank_reliability
+
+    mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=0.095)
+    indices = []
+    for step in (1.0e-3, 1.0e-4, 1.0e-5):
+        reliability = slidercrank_reliability(mechanism, step=step)
+        assert reliability is not None
+        indices.append(reliability.system_beta)
+    assert max(indices) - min(indices) < 0.5
+
+
+def test_the_optimised_baseline_misses_the_ex_links_limits() -> None:
+    """The asymmetry §6.3 was carrying, made explicit.
+
+    The EX-link is held to a 10 degree rod angle and a 0.02 side-load ratio.
+    ``evaluate_slidercrank`` never applied either, so the baseline's optimum
+    sits at 11.2 degrees and a side-load ratio near 0.04 -- it was compared
+    while meeting neither limit.
+    """
+    import math
+
+    import numpy as np
+
+    from exlink.constants import DEFAULT_TARGETS
+    from exlink.slidercrank import solve
+
+    mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=0.195)
+    result = solve(mechanism, 1.0, samples=360)
+    gas = float(np.max(np.abs(np.asarray(result.gas_force))))
+    liner = float(np.max(np.abs(np.asarray(result.liner_force))))
+
+    assert math.degrees(math.asin(mechanism.obliquity)) > DEFAULT_TARGETS.max_rod_angle
+    assert liner / gas > DEFAULT_TARGETS.max_side_load

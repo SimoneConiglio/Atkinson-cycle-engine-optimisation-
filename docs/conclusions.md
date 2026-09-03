@@ -49,6 +49,7 @@ Grouped by what would have to change to remove them.
 | Coulomb friction with constant coefficients | absolute FMEP uncertain by ~30 %; rankings robust, since comparisons are at equal coefficients |
 | instantaneous combustion, no heat transfer | indicated efficiency optimistic by several points, equally for both mechanisms |
 | **no gas exchange** | optimistic for both, but **not equally** — see below; it flatters the conventional engine and understates §6.3 |
+| reliability compared across mechanisms of different dimensionality | the slider-crank's two toleranced lengths against the EX-link's eleven is a real difference, not an artefact, but it means §6.3's reliability columns are not like-for-like in the way its range columns are |
 | constant crankshaft speed | the flywheel sizing already prices the fluctuation this assumes away |
 | pin-jointed trigonal link | small; it is a stiff triangle either way |
 
@@ -75,7 +76,8 @@ model discards both.
 
 So the simplification removes a loss that is roughly two and a half times
 larger for the conventional engine, and **§6.3's comparison is conservative
-against the EX-link by some margin**. How large a margin is not established
+against the EX-link by some margin** -- as, separately, is the fact that its
+headline figure lets the baseline violate two limits the EX-link is held to. How large a margin is not established
 here: a real engine recovers a fraction of the theoretical maximum, and that
 fraction depends on valve timing and port design the model does not represent.
 What can be said is the sign, and that the sign runs the opposite way to the
@@ -397,6 +399,8 @@ not a small one.
 | what the reliability requirement costs | **-3 %** |
 | range of an optimised conventional engine, identical code | 2888 km/L |
 | advantage over it | +15.6 % |
+| the same, with the baseline held to the EX-link's own limits | 2372 km/L, **+43 %** |
+| reliability index, EX-link vs that baseline, IT8 | +3.00 vs **+8.22** |
 | the same with the firing-frequency advantage removed | **-4.3 %** |
 | probability the reference design misses a requirement | 64.5 % |
 | the same, for the best sampled design beside it | **30.8 %**, at +0.10 % range |
