@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from exlink.constants import DEFAULT_SPEC
+from exlink.constants import DEFAULT_SPEC, DEFAULT_TARGETS
 from exlink.cycle import find_phases
 from exlink.reference import COUPLED_DESIGN
 from exlink.synthesis import (
@@ -388,3 +388,56 @@ def test_holding_the_bands_as_constraints_keeps_the_fit_in_band() -> None:
     # The bands are constraints now, so they hold to solver tolerance.
     assert held.stroke_error <= 0.05 + 1.0e-6
     assert held.ratio_error <= 0.05 + 1.0e-6
+
+
+# -- the full formulation: range objective, every constraint, target fallback ---
+
+
+def test_the_constraint_vector_covers_the_whole_problem() -> None:
+    """All twelve constraints of §3.10, not the five that were cheap.
+
+    Each earlier round of this exercise found that whatever was left out of the
+    fit was what the solve then violated.  This pins that nothing is left out:
+    five geometric, four band sides, three coupled, two vehicle.
+    """
+    from exlink.performance import evaluate
+    from exlink.synthesis import NUMBER_OF_CONSTRAINTS, _range_constraints, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    performance = evaluate(COUPLED_DESIGN, speed_rpm=1000.0, samples=CRANK)
+    rows = _range_constraints(performance, target, 0.05, DEFAULT_TARGETS)
+
+    assert rows.size == NUMBER_OF_CONSTRAINTS == 14
+    # The reference design is feasible, so every row must be satisfied.
+    assert float(np.min(rows)) >= -1.0e-6, f"violated: {rows}"
+
+
+def test_an_unanalysable_design_reads_as_deeply_infeasible() -> None:
+    """A broken design must not look feasible just because nothing evaluated."""
+    from exlink.performance import evaluate
+    from exlink.synthesis import _range_constraints, target_from_design
+
+    target = target_from_design(COUPLED_DESIGN, samples=CRANK)
+    broken = evaluate(COUPLED_DESIGN.replace(a=25.0, c=25.0), speed_rpm=1000.0, samples=CRANK)
+    rows = _range_constraints(broken, target, 0.05, DEFAULT_TARGETS)
+    assert float(np.max(rows)) < 0.0
+
+
+def test_the_objective_ladder_is_ordered() -> None:
+    """Each rung must be strictly worse than the one above it.
+
+    The ladder only guides the search if a design that runs always scores
+    better than one that does not, and one that at least completes a cycle
+    always scores better than one that does not.  If the constants overlapped,
+    the optimizer could prefer a broken design to a working one.
+    """
+    from exlink.synthesis import CYCLE_PENALTY, MOTION_WEIGHT, RANGE_UNAVAILABLE
+
+    # Any real design scores -km/L, which is negative; the package's designs
+    # are in the thousands, so use a deliberately poor one as the bound.
+    worst_real_range = -1.0
+    # A large motion residual: 5 mm RMS is far beyond anything observed.
+    worst_fallback = RANGE_UNAVAILABLE + MOTION_WEIGHT * 5.0**2
+
+    assert worst_real_range < RANGE_UNAVAILABLE
+    assert worst_fallback < CYCLE_PENALTY

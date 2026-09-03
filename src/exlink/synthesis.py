@@ -42,6 +42,7 @@ points, not a substitute for the objective.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.optimize import fsolve, least_squares
@@ -51,6 +52,9 @@ from .cycle import PhaseError, find_phases
 from .design import GLOBAL_BOUNDS, VARIABLE_NAMES, Bounds, Design
 from .materials import FloatArray
 from .model import INEQUALITY_NAMES, analyse, inequality_constraints
+
+if TYPE_CHECKING:
+    from .performance import Performance
 
 DEFAULT_TARGET_SAMPLES = 360
 """Crank angles used to represent a target motion."""
@@ -471,6 +475,258 @@ def fit_within_constraints(
         ratio_error=abs(float(metrics.compression_ratio) - target.compression_ratio),
         converged=bool(outcome.success),
         evaluations=int(outcome.nfev),
+    )
+
+
+CYCLE_PENALTY = 1.0e6
+"""Objective value for a design whose motion is not an Atkinson cycle at all.
+
+Worse than any range-unavailable value, so the search always climbs back to a
+mechanism that at least completes four strokes before it starts caring about
+how far the car goes.
+"""
+
+RANGE_UNAVAILABLE = 1.0e3
+"""Objective floor for a design that is analysable but produces no range.
+
+Any computable range scores negative, so this is worse than every real design
+and better than a broken cycle -- the middle rung of the ladder.
+"""
+
+MOTION_WEIGHT = 1.0e2
+"""Weight on the motion residual when it stands in for the range [1/mm^2]."""
+
+
+@dataclass(frozen=True)
+class RangeFit:
+    """One range-maximising solve guided by a target motion."""
+
+    design: Design
+    km_per_litre: float
+    rms: float
+    """Motion residual against the target [mm]."""
+
+    stroke_error: float
+    ratio_error: float
+    worst_constraint: float
+    """Largest constraint value; ``<= 0`` means every constraint holds."""
+
+    feasible: bool
+    """Feasible against the whole model, by :func:`exlink.performance.evaluate`."""
+
+    fell_back: int
+    """Evaluations that scored on the target because the range was unavailable."""
+
+    broken_cycle: int
+    """Evaluations whose motion was not a four-stroke cycle."""
+
+    evaluations: int
+    converged: bool
+
+
+def _range_constraints(
+    performance: Performance,
+    target: TargetMotion,
+    band: float,
+    targets: DesignTargets,
+) -> FloatArray:
+    """Every constraint of the full problem, as ``>= 0`` when satisfied.
+
+    Geometric, tolerance bands, coupled and vehicle, in that order -- the same
+    twelve §3.10 states, minus nothing.
+    """
+    from .disciplines import MEMBER_IS_SLENDER
+    from .dynamics import MEMBER_NAMES
+    from .gears import MAX_WIDTH_FACTOR
+    from .sizing import MAX_DIAMETER, member_lengths
+
+    analysis = performance.analysis
+    if not analysis.valid:
+        return np.full(NUMBER_OF_CONSTRAINTS, -1.0e3)
+
+    metrics = analysis.metrics
+    stroke = float(metrics.expansion_stroke) - target.expansion_stroke
+    ratio = float(metrics.compression_ratio) - target.compression_ratio
+    rows = [
+        -inequality_constraints(analysis, targets),
+        np.array([band - stroke, band + stroke, band - ratio, band + ratio]),
+    ]
+
+    coupled = performance.coupled
+    if coupled is None:
+        rows.append(np.full(3, -1.0e3))
+    else:
+        # Both arrays are indexed by MEMBER_NAMES, which is the order the
+        # sizing and the slenderness mask are both written against; sorting
+        # the dict would silently mis-pair diameters with lengths.
+        diameters = np.array([float(coupled.diameters[name]) for name in MEMBER_NAMES])
+        lengths = member_lengths(performance.design)
+        slender = float(np.max((diameters / lengths)[MEMBER_IS_SLENDER], initial=0.0))
+        rows.append(
+            np.array(
+                [
+                    0.98 * MAX_DIAMETER - float(diameters.max()),
+                    0.34 - slender,
+                    1.0 - coupled.peak_bearing_load / targets.max_bearing_load,
+                ]
+            )
+        )
+
+    friction = performance.friction
+    gears = performance.budget.gears
+    runs = (
+        friction.brake_work / max(friction.indicated_work, 1.0)
+        if friction is not None
+        else -1.0
+    )
+    gear = MAX_WIDTH_FACTOR - gears.width_factor if gears is not None else -1.0
+    rows.append(np.array([runs, gear]))
+    return np.concatenate(rows)
+
+
+NUMBER_OF_CONSTRAINTS = 14
+"""Five geometric, four band sides, three coupled, two vehicle."""
+
+
+def maximise_range_from_target(
+    target: TargetMotion,
+    start: Design,
+    speed_rpm: float = 1000.0,
+    bounds: Bounds = GLOBAL_BOUNDS,
+    max_iterations: int = 120,
+    band: float = 0.05,
+    module: float | None = None,
+    teeth: int | None = None,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> RangeFit | None:
+    """Maximise range under every constraint, with the target as a fallback.
+
+    The formulation
+    ---------------
+    This is the whole problem of §3.10 with the prescribed motion carried
+    along, rather than a synthesis problem that hands its answer to a separate
+    optimization:
+
+    .. math::
+
+        \\max_X \\; R(X) \\quad \\text{s.t.} \\quad g(X) \\le 0, \\;
+        |STE - 74| \\le \\delta, \\; |\\varepsilon - 16| \\le \\delta, \\;
+        X \\in [X_{lb}, X_{ub}]
+
+    where :math:`g` now carries *all* of it -- the five geometric constraints,
+    the three coupled ones and the two vehicle ones -- because each previous
+    round of this exercise found that whatever was left out was what the solve
+    then violated.
+
+    Why the target does not simply disappear
+    ----------------------------------------
+    The range is not computable everywhere.  A design whose kinematics closes
+    can still fail to size, fail to run, or fail to produce a motion that is a
+    four-stroke cycle at all, and at such a point :math:`R` has no value for a
+    line search to descend.  Deleting the target and penalising those points
+    with a constant leaves the optimizer a flat, uninformative region to cross.
+
+    So the objective is a ladder, and the target holds the middle rung:
+
+    ==========================================  ==========================================
+    the design                                  scores
+    ==========================================  ==========================================
+    range computable                            :math:`-R(X)`, the real objective
+    analysable, no range                        :data:`RANGE_UNAVAILABLE` plus the
+                                                motion residual -- the target takes over
+    motion is not a four-stroke cycle           :data:`CYCLE_PENALTY`
+    ==========================================  ==========================================
+
+    Every rung is worse than the one above it, so the search is always pushed
+    back towards designs that run; and on the middle rung it still has a
+    gradient to follow, because tracking :math:`\\lambda^\\star` is a proxy for
+    getting back to a cycle that works.
+
+    Args:
+        target: The motion to fall back on.
+        start: Initial design.
+        speed_rpm: Operating point for the range.
+        bounds: Box to search in.
+        max_iterations: SLSQP iteration budget.
+        band: Half-width on the two stroke requirements.
+        module: Gear module to pin, or ``None`` to let the sizer choose.
+        teeth: Teeth on the small gear, or ``None``.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+
+    Returns:
+        The solve, or ``None`` if the final design is unanalysable.
+    """
+    from scipy.optimize import minimize
+
+    from .performance import evaluate
+
+    calls = {"n": 0, "fallback": 0, "broken": 0}
+
+    def score(vector: FloatArray) -> Performance:
+        # ``targets`` is deliberately not forwarded: ``evaluate`` passes its
+        # extra keywords down to the sizing solve, which does not take them,
+        # and the constraint bounds are applied by ``_range_constraints``
+        # against the analysis rather than inside it.
+        return evaluate(
+            Design.from_array(vector),
+            speed_rpm=speed_rpm,
+            samples=target.samples,
+            module=module,
+            teeth=teeth,
+            spec=spec,
+        )
+
+    def objective(vector: FloatArray) -> float:
+        calls["n"] += 1
+        performance = score(vector)
+        analysis = performance.analysis
+        if not analysis.valid:
+            calls["broken"] += 1
+            return CYCLE_PENALTY
+        usable = (
+            performance.friction is not None
+            and performance.coupled is not None
+            and performance.km_per_litre > 0.0
+            and np.isfinite(performance.km_per_litre)
+        )
+        if usable:
+            return -float(performance.km_per_litre)
+        calls["fallback"] += 1
+        residual = _residual(Design.from_array(vector), target, spec)
+        motion = 0.0 if residual is None else float(np.mean(residual**2))
+        return RANGE_UNAVAILABLE + MOTION_WEIGHT * motion
+
+    def constraint(vector: FloatArray) -> FloatArray:
+        return _range_constraints(score(vector), target, band, targets)
+
+    outcome = minimize(
+        objective,
+        np.clip(start.to_array(), bounds.lower, bounds.upper),
+        method="SLSQP",
+        bounds=list(zip(bounds.lower, bounds.upper, strict=True)),
+        constraints=[{"type": "ineq", "fun": constraint}],
+        options={"maxiter": int(max_iterations), "ftol": 1.0e-8},
+    )
+    design = Design.from_array(np.asarray(outcome.x, dtype=float))
+    final = score(design.to_array())
+    if not final.analysis.valid:
+        return None
+    residual = _residual(design, target, spec)
+    metrics = final.analysis.metrics
+    return RangeFit(
+        design=design,
+        km_per_litre=float(final.km_per_litre),
+        rms=0.0 if residual is None else float(np.sqrt(np.mean(residual**2))),
+        stroke_error=abs(float(metrics.expansion_stroke) - target.expansion_stroke),
+        ratio_error=abs(float(metrics.compression_ratio) - target.compression_ratio),
+        worst_constraint=-float(np.min(_range_constraints(final, target, band, targets))),
+        feasible=bool(final.feasible),
+        fell_back=calls["fallback"],
+        broken_cycle=calls["broken"],
+        evaluations=calls["n"],
+        converged=bool(outcome.success),
     )
 
 
