@@ -28,16 +28,21 @@ testable, from the optimization, which is GEMSEO.
 
 | §3 | method | module | notes |
 |---|---|---|---|
-| 3.2 | sizing/dynamics fixed point | {mod}`exlink.coupled` | reference Gauss–Seidel implementation |
-| 3.2 | the $18\times18$ equilibrium solve | {mod}`exlink.dynamics` | d'Alembert, statically determinate |
-| 3.2 | yield / fatigue / buckling | {mod}`exlink.sizing` | Goodman with Marin factors |
-| 3.4 | forward-mode + envelope theorem | {mod}`exlink.jacobian` | exact, verified against converged differences |
-| 3.4 | derivatives through the MDA | {mod}`exlink.dynamics_jacobian` | implicit function theorem on the bisection |
-| 3.5 | MDF, and the coupling measurement | {mod}`exlink.formulations` | $\rho$ from the MDA residual history |
-| 3.6 | bi-level outer approximation | {mod}`exlink.minlp` | `gemseo-bilevel-outer-approximation` |
-| 3.6 | the gear lattice | {mod}`exlink.gears` | ISO 54 modules, undercut limit |
-| 3.7 | tolerance and reliability | {mod}`exlink.robustness` | ISO 286, FORM, correlated orthant |
-| 3.8 | restarts on the manifold | {mod}`exlink.scenarios` | `multistart`, `project_onto_equalities` |
+| 3.3 | sizing/dynamics fixed point | {mod}`exlink.coupled` | reference Gauss–Seidel implementation |
+| 3.3 | the $18\times18$ equilibrium solve | {mod}`exlink.dynamics` | d'Alembert, statically determinate |
+| 3.3 | yield / fatigue / buckling | {mod}`exlink.sizing` | Goodman with Marin factors |
+| 3.5 | forward-mode + envelope theorem | {mod}`exlink.jacobian` | exact, verified against converged differences |
+| 3.5 | derivatives through the MDA | {mod}`exlink.dynamics_jacobian` | implicit function theorem on the bisection |
+| 3.6 | MDF, and the coupling measurement | {mod}`exlink.formulations` | $\rho$ from the MDA residual history |
+| 3.7 | bi-level outer approximation | {mod}`exlink.minlp` | `gemseo-bilevel-outer-approximation` |
+| 3.7 | the gear lattice | {mod}`exlink.gears` | ISO 54 modules, undercut limit |
+| 3.8 | tolerance and reliability | {mod}`exlink.robustness` | ISO 286, FORM, correlated orthant |
+| 3.9 | restarts on the manifold | {mod}`exlink.scenarios` | `multistart`, `project_onto_equalities` |
+| 3.10, 7.4 | prescribed motion, and range under every constraint | {mod}`exlink.synthesis` | the target as a fallback objective |
+
+The section numbers in the first column were stale against §3's headings and
+are corrected here; the mapping is worth checking rather than trusting, because
+a limitation and its resolution live in different sections.
 
 The objective chain of §3.1 is assembled in {mod}`exlink.performance`, which
 composes {mod}`exlink.friction`, {mod}`exlink.mass_budget` and
@@ -46,13 +51,13 @@ interrogated rather than believed.
 
 ## 4.3 What is exact and what is not
 
-The distinction matters because §3.4 argues that finite differences are wrong on
+The distinction matters because §3.5 argues that finite differences are wrong on
 part of this problem. They are still used where they are safe, and the boundary
 is deliberate:
 
 | quantity | derivative | why |
 |---|---|---|
-| stroke, compression ratio, $W$, $mra$, $g$, $\gamma$ | **analytic** | extremum-based; differences are wrong (§3.4) |
+| stroke, compression ratio, $W$, $mra$, $g$, $\gamma$ | **analytic** | extremum-based; differences are wrong (§3.5) |
 | the $18\times18$ solve, the sizing bisection | **analytic** | the MDA would otherwise cost 11 fixed points per gradient |
 | clearance $d$ | difference | a minimum over both crank angle and three edges; far from active |
 | $\eta$, $H$, $B$ | difference | smooth, none tight |

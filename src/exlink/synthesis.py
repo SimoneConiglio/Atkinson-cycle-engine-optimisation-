@@ -1,4 +1,4 @@
-"""Prescribed-motion synthesis: fit the linkage to a target piston motion.
+"""Prescribed-motion synthesis, and the range problem it grew into.
 
 The formulation of :mod:`exlink.scenarios` asks for the best mechanism and lets
 the piston motion fall out of it.  Kinematic synthesis conventionally does the
@@ -7,36 +7,52 @@ opposite -- it *prescribes* a target motion and fits the linkage to it:
 .. math::
     \\min_X\\; J(X) = \\sum_k \\bigl(\\lambda_k(X) - \\lambda^\\star_k\\bigr)^2
 
-This module implements that, and exists to answer one question the main
-formulation cannot: **where do feasible starting points come from?**
+This module started there and did not stay there, because each round of the
+exercise found the same thing: whatever constraint had been left out of the fit
+was the one the solve then violated.  The entry points below are that argument
+in order.
 
-Why it matters here
--------------------
-The two equality requirements are functionals of :math:`\\lambda` alone --
+Why a target helps at all
+-------------------------
+Both equality requirements are functionals of :math:`\\lambda` alone --
 :math:`STE` is the span from top dead centre to the deeper bottom dead centre,
 and :math:`\\varepsilon` follows from the shallower one through the swept
 volume.  So a target built to have the right two strokes satisfies both
-equalities *as the model measures them*, before any linkage is involved:
-:func:`target_motion` solves for one and :func:`describe_target` confirms it to
-machine precision.
+requirements before any linkage exists.  :func:`target_motion` solves for one
+and :func:`describe_target` confirms it with the code the constraints use.
 
 That makes the fit a sampling device.  Uniform sampling of the design box finds
-a design on the equality manifold with probability zero -- measured at 0 in
-12 000 attempts -- because the manifold has measure zero.  Fitting to a target
-that is *already* on the manifold is instead an unconstrained box problem, so it
-can be run from arbitrary random starts, and each converged fit lands near the
-manifold rather than nowhere near it.  :func:`feasible_starts` does exactly
-that.
+a design on the equality manifold in 0 of 12 000 attempts, because the manifold
+has measure zero; sampling *and then fitting* reaches it in most attempts.
 
-What this does *not* claim
---------------------------
-The fit is over-determined -- eleven variables against several hundred
-residuals -- so :math:`\\lambda(X) = \\lambda^\\star` is not attainable and the
-equalities are *not* satisfied exactly.  Whether the residual is small enough to
-land inside the tolerance bands of §3.4 is an empirical question, and
-:func:`fit_report` is what measures it.  A least-squares residual also has no
-exchange rate with mass, friction or range: this is a generator of feasible
-points, not a substitute for the objective.
+The entry points
+----------------
+:func:`fit_to_target`
+    Unconstrained least squares.  Enough only when the target is reachable:
+    against one that is not, it walks ten to fifteen units outside the geometric
+    constraint set chasing a motion no buildable linkage produces.
+
+:func:`fit_within_constraints`
+    The same fit subject to ``g(X) <= 0``, and with ``hold_bands`` also subject
+    to the tolerance bands.  Absorbing the equalities into the target removed
+    the *measure-zero* part of the feasible set, which is the only part the
+    reformulation earns the right to drop; the inequalities define a
+    full-dimensional set and cost one SQP instead of one least-squares solve.
+
+:func:`maximise_range_from_target`
+    The endpoint, and no longer a synthesis problem: maximise the quantity the
+    application scores, subject to all fourteen constraints, with the motion
+    residual standing in wherever the range does not exist.  Its docstring has
+    the objective ladder and why a constant penalty will not do.
+
+What the target does *not* buy
+------------------------------
+Reachability is a property of the mechanism, not of the target.  A target can
+sit exactly on the equality manifold and still be unfittable, which is why
+:func:`target_from_design` exists: the obvious two-harmonic construction is one
+of those.  And fitting to a single target returns a single linkage whatever
+start it is given, so diversity has to come from varying the target rather than
+the start.
 """
 
 from __future__ import annotations

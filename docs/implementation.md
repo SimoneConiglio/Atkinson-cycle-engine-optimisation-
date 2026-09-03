@@ -106,6 +106,8 @@ src/exlink/
   formulations.py  coupling strength from the MDA residuals; MDF vs IDF, and
                    the coupling recounted in a Fourier basis
   slidercrank.py   the second mechanism, on identical terms
+  synthesis.py     prescribed-motion targets, the constrained fit, and range
+                   under every constraint with the target as a fallback
 ```
 
 ## Reproducing the results

@@ -108,16 +108,16 @@ In rough order of value per unit of effort:
    reliability margin exactly differentiable and remove the one place where
    finite differences enter a tight constraint.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
-9. **Prescribed-motion generation as the multistart source.** §7.4 measures
-   that fitting to a *reachable* target reaches the equality manifold where
-   uniform sampling never does (22 of 30 against 0 of 12 000), that the fits
-   are feasible against the complete constraint set, and that varying the
-   target rather than the start yields distinct designs. It needs no separate
-   restoration phase: every constraint kept *in* the fit is a constraint the
-   fit then satisfies, and the remaining failures are the coupled and vehicle
-   constraints, which are the next ones to add
-   ({py:func}`~exlink.synthesis.fit_within_constraints`). The functional IDF
-   §7.4 also sets out is a larger question and would need its own study.
+9. **Converging the range-with-target formulation.** §7.4 ends with the whole
+   problem stated once -- range under all fourteen constraints, the prescribed
+   motion standing in wherever the range does not exist
+   ({py:func}`~exlink.synthesis.maximise_range_from_target`) -- and shows the
+   fallback rescuing a start that produces no range at all. What is missing is
+   budget rather than method: each evaluation is a converged MDA, so the runs
+   reported there stop at six and eight iterations and end slightly outside
+   their constraints. Running it to convergence, and from several targets, is
+   the work. The functional IDF §7.4 also sets out is a larger question again
+   and would need its own study.
 
 ## 7.4 A prescribed-motion formulation, measured
 
