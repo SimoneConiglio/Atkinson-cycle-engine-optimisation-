@@ -757,7 +757,30 @@ def maximise_range_from_target(
             spec=spec,
             band={"expansion_stroke": band, "compression_ratio": band},
         )
-        index = -10.0 if reliability is None else reliability.system_beta
+        if reliability is None:
+            return np.concatenate([rows, [-10.0 - beta_target]])
+        # The *smallest per-constraint* index, not the system one, and the
+        # reason is a hard-won numerical fact rather than a preference.
+        #
+        # The system index is -Phi^-1 of a multivariate-normal orthant.  Once
+        # the nominal design leaves the band that orthant integrates to exactly
+        # 1, so the index pins to its floor of -8.2095 and stays there however
+        # much worse the design gets.  A finite-difference probe straddling the
+        # band therefore sees the index fall from +3 to -8.21 over a 1e-5 step,
+        # a slope of order 1e6, and the QP subproblem built from it is
+        # meaningless -- SLSQP walks out of the feasible region and does not
+        # come back.  Measured: a 100-iteration solve ended 0.36 outside a 0.15
+        # band with P_f = 1.
+        #
+        # ``beta_i = -g_i / sigma_i`` has no such floor.  It is smooth through
+        # the band and orders designs the same way on the safe side.
+        #
+        # The cost is that this is the per-constraint statement §3.8 argues
+        # against: the system is likelier to fail than any single constraint,
+        # so ``min_i beta_i >= t`` is *weaker* than ``beta_sys >= t``.  It is
+        # used to steer the search, and the system probability is reported at
+        # the solution, which is where the honest number belongs.
+        index = float(np.min(reliability.moments.beta))
         return np.concatenate([rows, [index - beta_target]])
 
     lower = np.array(bounds.lower, dtype=float)

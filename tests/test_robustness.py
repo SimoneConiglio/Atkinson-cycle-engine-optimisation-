@@ -477,3 +477,40 @@ def test_the_default_band_is_the_specified_one() -> None:
     explicit = failure_probability(COUPLED_DESIGN, band=dict(EQUALITY_BAND))
     assert default is not None and explicit is not None
     assert default.system == pytest.approx(explicit.system, rel=1.0e-4)
+
+
+def test_the_system_index_saturates_where_the_per_constraint_one_does_not() -> None:
+    """Why the reliability constraint steers on the per-constraint index.
+
+    The system index is ``-Phi^-1`` of a multivariate-normal orthant.  Once the
+    nominal design leaves the band that orthant integrates to exactly 1, so the
+    index pins to its floor and stays there however much worse the design gets
+    -- a finite-difference probe straddling the band sees a jump of eleven
+    units over a 1e-5 step, and the QP built from it is meaningless.
+
+    ``beta_i = -g_i / sigma_i`` has no floor.  This pins both halves: that the
+    system index goes flat, and that the per-constraint minimum does not.
+    """
+    import numpy as np
+
+    from exlink.design import Design
+    from exlink.robustness import failure_probability
+
+    band = {"expansion_stroke": 0.15, "compression_ratio": 0.15}
+    base = COUPLED_DESIGN.to_array()
+
+    system, smallest = [], []
+    for step in (0.5, 1.0, 2.0, 4.0):
+        vector = base.copy()
+        vector[0] += step
+        reliability = failure_probability(Design.from_array(vector), band=band)
+        if reliability is None:
+            continue
+        system.append(reliability.system_beta)
+        smallest.append(float(np.min(reliability.moments.beta)))
+
+    assert len(system) >= 3
+    # The system index is the same floor at every one of them.
+    assert max(system) - min(system) < 1.0e-9
+    # The per-constraint minimum keeps falling, so it still carries a gradient.
+    assert all(b > a for a, b in zip(smallest[1:], smallest[:-1], strict=True))
