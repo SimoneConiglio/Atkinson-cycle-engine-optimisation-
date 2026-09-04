@@ -45,12 +45,15 @@ Also settled: the half-speed shaft that produces the asymmetry halves the
 firing frequency. Not settled: what the linkage costs. None of these studies
 carries the linkage dimensions through to the mass of the parts that must
 carry the inertia loads at speed, so none can say whether the thermodynamic
-gain survives the mechanism that delivers it. §6.3 shows that the accounting
-decides the answer twice over: separating the cycle-rate effect from the
-extended-expansion effect turns a +15.6 % range advantage into a 4.3 % deficit,
-while holding the conventional engine to the *same specification* as the
-linkage moves the same figure to +43 %. Which comparison is meant has to be
-stated, because the two differ by a factor of ten.
+gain survives the mechanism that delivers it. §6.3 carries it through, and
+finds the advantage robust to how the two engines are matched but its
+*attribution* fragile. At matched power strokes per minute the linkage keeps a
+13–19 % range advantage over an optimised conventional engine; scoring the same
+linkage as if it drove a two-revolution gas exchange turns that into a 4.3 %
+deficit, which locates the benefit in the cycle rate rather than in the extended
+expansion; and holding the conventional engine to the *same specification* as
+the linkage widens the figure further. Which question is being asked has to be
+stated with the number.
 
 ## 2.3 Formulating a mechanism-synthesis problem
 
@@ -266,8 +269,8 @@ it enables. The mechanism-synthesis literature (§2.3) optimises transmission
 quality, which the virtual-work identity shows to be a proxy with no loss in it,
 and does so on a box in which sampling methods are admissible. The
 Eco-marathon literature (§2.3) optimises the strategy at fixed hardware. The
-RBDO literature (§2.8) treats tolerances as given data rather than asking
-whether a stated requirement is *attainable at any* manufacturing grade.
+RBDO literature (§2.8) treats the bounds as given data rather than asking which
+of them the mechanism is able to hold, and at what price in the objective.
 
 *What this study contributes.* Three things, each a consequence of joining
 those strands rather than of extending any one of them.
@@ -276,9 +279,10 @@ those strands rather than of extending any one of them.
    structural sizing and the vehicle model to distance per unit fuel supplies
    the exchange rate that §2.3 shows the conventional formulation lacks, and
    makes the extended-expansion benefit separable from the firing-frequency
-   effect that accompanies it in every geometric realisation -- and, priced
-   against a conventional engine optimised under the same models rather than
-   one proportioned by hand, reverses its sign (§6.3).
+   effect that accompanies it in every geometric realisation. Priced against a
+   conventional engine optimised under the same models rather than proportioned
+   by hand, the topology's advantage survives matching the firing rate while the
+   extended-expansion component alone reverses sign (§6.3).
 
 2. **A demonstration that the geometry of the feasible set selects the
    algorithm.** The measure-zero feasible set is not a nuisance to be
@@ -287,12 +291,14 @@ those strands rather than of extending any one of them.
    band relaxation it obliges — makes reliability analysis a consequence of the
    formulation rather than an addition to it (§3.4, §3.8).
 
-3. **An attainability result on the requirement itself.** Asking not "what is
-   the failure probability at this tolerance?" but "does any ISO 286 grade
-   attain this requirement?" inverts the usual RBDO question, and answers it in
-   the negative for the specified 0.01 mm top-dead-centre band (§6.2). A
-   requirement that no grade attains is a specification defect, and no amount
-   of optimization at fixed specification will reveal it.
+3. **A result about the requirements rather than about a design.** Asking not
+   "what is the failure probability at this tolerance?" but "which of these
+   bounds governs the reliability, and what does widening it cost in the
+   objective?" inverts the usual RBDO question. Answering it here identifies
+   one bound finer than the model's own resolution and one that governs
+   everything else, and prices both in range (§6.2). Neither is visible in any
+   nominal quantity, and optimization at a fixed specification cannot reveal
+   them.
 
 The problem is deliberately small enough that every claim above is checked
 against a closed-form or sampled reference (§4.4), which is what makes it usable

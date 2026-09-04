@@ -5,7 +5,7 @@ exchange rate between them. This prints the chain that closes that gap: the
 mass budget the envelope and the torque ripple actually buy, the friction the
 side loads actually cost, and the range that prices both.
 
-Takes about a minute.
+Takes a few minutes.
 
     python examples/06_range.py
 """
@@ -13,13 +13,18 @@ Takes about a minute.
 from __future__ import annotations
 
 from exlink.cli import configure_logging
+from exlink.constants import DEFAULT_TARGETS
 from exlink.performance import evaluate, speed_sweep
 from exlink.reference import COUPLED_DESIGN, REFINED_DESIGN
 from exlink.slidercrank import (
+    CAP_SPEED_RPM,
     SliderCrank,
     evaluate_slidercrank,
     firing_frequency_sensitivity,
     optimise_slidercrank,
+    optimise_slidercrank_to_specification,
+    side_load_ratio,
+    slidercrank_reliability,
 )
 
 
@@ -107,8 +112,38 @@ def main() -> None:
         four_stroke = 100.0 * (sensitivity["km_per_litre_four_stroke"] / baseline - 1.0)
         print(f"  {label:<38}{modelled:>13.1f} %{four_stroke:>15.1f} %")
     print()
-    print("  So the advantage is firing frequency, not extended expansion --")
-    print("  and against a baseline that was optimised too, the sign changes.")
+    print("  Removing the one-revolution cycle removes the advantage, so the")
+    print("  advantage is attributable to the firing rate.  That is not the same")
+    print("  as saying the comparison was unfair: the optimised baseline already")
+    print(f"  fires {best.speed_rpm / 2:.0f} times a minute against the EX-link's 1000.")
+
+    print()
+    print("Held to the EX-link's own rod-angle and side-load limits")
+    print("=" * 55)
+    # The baseline's own optimum misses both caps, so meeting the same
+    # specification costs it range.  The cap is the quasi-static side-load
+    # ratio, which is the quantity the EX-link's own cap is applied to.
+    held = optimise_slidercrank_to_specification(grid=(13, 7), refinements=12)
+    gamma = side_load_ratio(held.mechanism, CAP_SPEED_RPM)
+    print(
+        f"  r/l = {held.mechanism.obliquity:.5f}, {held.speed_rpm:.0f} rpm, "
+        f"gamma = {gamma:.4f} against a cap of {DEFAULT_TARGETS.max_side_load}"
+    )
+    print(f"  range {held.comparison.km_per_litre:.0f} km/L against {otto.km_per_litre:.0f}")
+    print(
+        f"  EX-link (COUPLED_DESIGN) advantage over it: "
+        f"{100.0 * (sensitivity['km_per_litre'] / held.comparison.km_per_litre - 1.0):.1f} %"
+    )
+    print()
+    print("  That optimum sits on its cap, which is where reliability goes:")
+    for obliquity in (held.mechanism.obliquity, held.mechanism.obliquity - 0.0004):
+        mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=obliquity)
+        row = evaluate_slidercrank(mechanism, held.speed_rpm)
+        reliability = slidercrank_reliability(mechanism, band=0.15)
+        print(
+            f"    r/l = {obliquity:.5f}  {row.km_per_litre:7.1f} km/L  "
+            f"P_f = {reliability.system:.3e}  beta = {reliability.system_beta:+.2f}"
+        )
 
 
 if __name__ == "__main__":

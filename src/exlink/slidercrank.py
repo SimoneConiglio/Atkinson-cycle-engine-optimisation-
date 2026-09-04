@@ -1001,6 +1001,195 @@ def optimise_slidercrank_constrained(
     )
 
 
+SPECIFICATION_OBLIQUITY_BOUNDS = (0.05, 0.45)
+"""Search bounds on ``r / l`` when the EX-link's own limits are imposed.
+
+Wider at the lower end than :data:`OBLIQUITY_BOUNDS`, because the side-load cap
+pushes the rod longer than the unconstrained optimum ever wants it, and a bound
+that excluded those proportions would decide the comparison by fiat.
+"""
+
+CAP_SPEED_RPM = 1.0
+"""Speed at which the side-load cap is evaluated [rev/min].
+
+The EX-link's own ``gamma <= 0.02`` is a *quasi-static* quantity: it comes from
+:mod:`exlink.loads`, which propagates the gas load alone.  Holding the baseline
+to the same specification therefore means the same definition, so the cap is
+evaluated with the inertia contribution negligible.  Scoring it at the operating
+speed instead is a different, and materially looser, requirement -- the
+reciprocating inertia opposes the gas side load over part of the cycle -- and
+would flatter the baseline by about a tenth of its range.
+"""
+
+
+def side_load_ratio(
+    mechanism: SliderCrank,
+    speed_rpm: float,
+    samples: int = 360,
+    spec: EngineSpec = DEFAULT_SPEC,
+) -> float:
+    """``gamma = max|D| / max|P|``, the piston side-load ratio, at one speed.
+
+    The same definition :mod:`exlink.metrics` applies to the EX-link: a ratio of
+    two maxima over the cycle, not the maximum of a ratio, and not the ``tan``
+    of the maximum rod angle -- the gas force peaks at top dead centre where the
+    rod is nearly upright and the side load is near zero.  The speed is an
+    argument because the answer depends on it: at :data:`CAP_SPEED_RPM` the
+    result is the quasi-static ratio the specification bounds, and at an
+    operating speed it also carries the reciprocating inertia.
+
+    Args:
+        mechanism: The slider-crank.
+        speed_rpm: Crankshaft speed [rev/min].
+        samples: Crank angles per revolution.
+        spec: Fixed engine data.
+
+    Returns:
+        The ratio, or ``1e3`` if the model cannot be solved there.
+    """
+    try:
+        result = solve(mechanism, float(speed_rpm), samples=samples, spec=spec)
+    except (ValueError, FloatingPointError):
+        return 1.0e3
+    if not result.converged:
+        return 1.0e3
+    gas = float(np.max(np.abs(np.asarray(result.gas_force))))
+    liner = float(np.max(np.abs(np.asarray(result.liner_force))))
+    return liner / gas if gas > 0.0 else 1.0e3
+
+
+def optimise_slidercrank_to_specification(
+    ratio: float = 16.0,
+    vehicle: Vehicle | None = None,
+    samples: int = 360,
+    spec: EngineSpec = DEFAULT_SPEC,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    obliquity_bounds: tuple[float, float] = SPECIFICATION_OBLIQUITY_BOUNDS,
+    speed_bounds: tuple[float, float] = SPEED_BOUNDS,
+    grid: tuple[int, int] = (25, 13),
+    refinements: int = 24,
+    cap_speed_rpm: float = CAP_SPEED_RPM,
+) -> OptimisedSliderCrank:
+    """Maximise the baseline's range under the EX-link's own geometric limits.
+
+    Why this exists
+    ---------------
+    :func:`optimise_slidercrank` tests convergence, net work and the speed rule
+    and nothing else, so its optimum sits at 11.2 deg of rod angle and a
+    side-load ratio of 0.039 -- roughly twice each of the caps the EX-link is
+    held to.  Quoting that engine against a linkage that had to meet those caps
+    exempts one competitor from the other's specification.  This function
+    imposes them on the baseline as well.
+
+    Which ``gamma``
+    ---------------
+    The quasi-static one, at :data:`CAP_SPEED_RPM`, because that is the
+    quantity the EX-link's own cap is applied to.  The distinction is not
+    cosmetic: at ``r/l = 0.12`` the ratio is 0.0248 quasi-statically and 0.0181
+    at 1500 rev/min, so scoring the cap at the operating speed would admit
+    proportions the EX-link would not be allowed and hand the baseline about a
+    tenth of a range it has not earned.
+
+    Why a grid rather than a descent
+    --------------------------------
+    Range is not concave in the speed, and the cap binds on the obliquity axis,
+    so the optimum sits against a boundary in one variable and at an interior
+    maximum in the other.  A grid over the box locates it without assuming
+    either shape; two refinement passes then sharpen each axis by bisection,
+    two because moving one axis moves the optimum of the other.
+
+    Args:
+        ratio: Compression ratio to hold, matching the EX-link's requirement.
+        vehicle: The car; a default Prototype-class entry if omitted.
+        samples: Crank angles per revolution.
+        spec: Fixed engine data.
+        targets: Supplies ``max_rod_angle`` and ``max_side_load``.
+        obliquity_bounds: Search interval for ``r / l``.
+        speed_bounds: Search interval for the speed [rev/min].
+        grid: Obliquity and speed divisions of the initial scan.
+        refinements: Bisection steps per axis in each of the two refinement
+            passes that follow the scan.
+        cap_speed_rpm: Speed at which the side-load cap is evaluated.
+
+    Returns:
+        The best mechanism meeting both caps, its speed, and its scored row.
+
+    Raises:
+        RuntimeError: If no point in the box meets both caps.
+    """
+    car = vehicle if vehicle is not None else Vehicle()
+    calls = 0
+    cap_angle = float(targets.max_rod_angle)
+    cap_gamma = float(targets.max_side_load)
+
+    def score(obliquity: float, speed: float) -> tuple[float, SliderCrank, Comparison] | None:
+        """Range at one point, or ``None`` if it misses a cap or does not run."""
+        nonlocal calls
+        calls += 1
+        low, high = obliquity_bounds
+        if not low <= obliquity <= high:
+            return None
+        if math.degrees(math.asin(min(obliquity, 1.0 - 1.0e-12))) > cap_angle:
+            return None
+        mechanism = SliderCrank.for_compression_ratio(ratio, obliquity, spec=spec)
+        try:
+            row = evaluate_slidercrank(mechanism, speed, vehicle=car, samples=samples)
+        except (ValueError, FloatingPointError):
+            return None
+        if not row.feasible:
+            return None
+        if side_load_ratio(mechanism, cap_speed_rpm, samples=samples, spec=spec) > cap_gamma:
+            return None
+        return row.km_per_litre, mechanism, row
+
+    divisions, speeds = (max(int(value), 2) for value in grid)
+    low, high = obliquity_bounds
+    slow, fast = speed_bounds
+    best: tuple[float, SliderCrank, float, Comparison] | None = None
+    for speed in np.linspace(slow, fast, speeds):
+        for obliquity in np.linspace(low, high, divisions):
+            found = score(float(obliquity), float(speed))
+            if found is not None and (best is None or found[0] > best[0]):
+                best = (found[0], found[1], float(speed), found[2])
+
+    if best is None:
+        msg = "no slider-crank in the search box meets the EX-link's limits"
+        raise RuntimeError(msg)
+
+    # Sharpen both axes about the winning grid point: the cap binds on the
+    # obliquity, which the grid can only bracket, and the speed optimum falls
+    # between grid lines.  Two passes, because moving one axis moves the other.
+    obliquity_step = (high - low) / (divisions - 1)
+    speed_step = (fast - slow) / (speeds - 1)
+    for _ in range(2):
+        step = obliquity_step
+        for _ in range(max(int(refinements), 0)):
+            step *= 0.5
+            for sign in (+1.0, -1.0):
+                found = score(best[1].obliquity + sign * step, best[2])
+                if found is not None and found[0] > best[0]:
+                    best = (found[0], found[1], best[2], found[2])
+        step = speed_step
+        for _ in range(max(int(refinements), 0)):
+            step *= 0.5
+            for sign in (+1.0, -1.0):
+                speed = best[2] + sign * step
+                if not slow <= speed <= fast:
+                    continue
+                found = score(best[1].obliquity, speed)
+                if found is not None and found[0] > best[0]:
+                    best = (found[0], found[1], speed, found[2])
+
+    _range, mechanism, speed, row = best
+    return OptimisedSliderCrank(
+        mechanism=mechanism,
+        speed_rpm=speed,
+        comparison=row,
+        evaluations=calls,
+        starts=divisions * speeds,
+    )
+
+
 SLIDERCRANK_CONSTRAINTS: tuple[str, ...] = (
     "ratio_upper",
     "ratio_lower",

@@ -23,32 +23,30 @@ of Lebesgue measure zero. Each property is shown to determine an element of the
 admissible solution method rather than merely to complicate it. The measure-zero
 feasible set, in particular, obliges the relaxation of the equality requirements
 into tolerance bands; those bands are then shown to be comparable in width with
-the manufacturing scatter of the components, so that a deterministic solution
-lying within a band is not a design that satisfies the requirement.
-Reliability-based optimization thereby arises as a consequence of the relaxation
-rather than as an addition to the problem.
+the manufacturing scatter of the components, so that reliability-based
+optimization arises as a consequence of the relaxation rather than as an
+addition to the problem.
 
 Four quantitative results follow. The quasi-statically optimal geometry
 coincides with the transmission-angle singularity at which the inertia loads are
 largest, and admits no feasible structure above 1000 rev/min, whereas a geometry
-displaced from the singularity attains lower mass and greater range
-simultaneously. The specified top-dead-centre tolerance of 0.01 mm is
-unattainable at any ISO 286 machining grade, and the reference design exhibits a
-0.645 probability of violating at least one of its dimensional requirements. The 15.6 % range
-advantage of the mechanism over a conventional slider-crank -- sized by
-identical structural and tribological models, and optimised over its own
-degrees of freedom rather than proportioned by hand -- becomes a 4.3 % deficit
-when its firing-frequency difference is removed, locating the advantage in the
-cycle rate rather than in extended expansion and reversing its sign; held
-instead to the same rod-angle and side-load limits as the linkage, the same
-conventional engine reaches only 2372 km/L and the advantage becomes 43 %,
-so which comparison is intended must be stated. Finally,
-imposing the coupled and structural constraints throughout the search rather
-than verifying them on its result is shown to be worth 4.9 % of the objective
-under an identical algorithm -- a difference of formulation rather than of
-method -- and constraining a system probability of failure in addition returns
-3 % of that in exchange for a design that meets its requirements with
-probability 0.999 rather than nominally.
+displaced from it attains lower mass and greater range simultaneously. A
+tolerance study conducted against the specification rather than against a design
+identifies which of the stated bounds govern reliability, and prices their
+relaxation at 0.47 % of the objective in exchange for a fall in the probability
+of violating a dimensional requirement from 0.645 to 1.9e-5. The mechanism's
+advantage over a conventional slider-crank -- sized by identical structural and
+tribological models, and optimised over its own degrees of freedom rather than
+proportioned by hand -- is 13 % to 19 % at matched firing rate and 37.6 % when
+that engine is held to the same geometric limits, while attributing the
+advantage between extended expansion and firing rate reverses its sign; which
+comparison is intended must therefore be stated. Finally, imposing the coupled
+and structural constraints throughout the search rather than verifying them on
+its result is worth 4.9 % of the objective under an identical algorithm, and
+constraining a system probability of failure returns 3 % of that in exchange for
+a design meeting its requirements with probability 0.999 -- the deterministic
+optima of both mechanisms being shown to be dominated by designs standing
+slightly off their active constraints.
 
 The methodological contribution is a demonstration, on a problem small enough to
 be verified throughout, that the choice of objective and the geometry of the

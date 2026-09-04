@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from exlink.constants import DEFAULT_SPEC
+from exlink.constants import DEFAULT_SPEC, DEFAULT_TARGETS
 from exlink.performance import evaluate
 from exlink.reference import COUPLED_DESIGN
 from exlink.slidercrank import (
@@ -279,6 +279,82 @@ def test_the_constrained_baseline_imposes_its_constraints() -> None:
     assert low < best.mechanism.obliquity < high
 
 
+@pytest.mark.slow
+def test_the_advantage_survives_matching_the_firing_rate() -> None:
+    """The comparison must hold the useful output constant, not the shaft speed.
+
+    The EX-link fires once per crankshaft revolution where a four-stroke fires
+    once per two, so an equal-rpm comparison would measure the cycle rate.  At
+    equal *power strokes per minute* -- the baseline run at twice the linkage's
+    speed, its obliquity re-optimised there -- the linkage still leads.  This
+    pins the sign and a conservative magnitude, not the exact figures of §6.3.
+    """
+    from exlink.slidercrank import OBLIQUITY_BOUNDS
+
+    for fires in (800.0, 1200.0):
+        linkage = evaluate(COUPLED_DESIGN, speed_rpm=fires, samples=180)
+        best = 0.0
+        for obliquity in np.linspace(*OBLIQUITY_BOUNDS, 9):
+            row = evaluate_slidercrank(
+                SliderCrank.for_compression_ratio(16.0, float(obliquity)),
+                2.0 * fires,
+                samples=180,
+            )
+            if row.feasible:
+                best = max(best, row.km_per_litre)
+        assert best > 0.0
+        # Measured at 16-17 %; the floor is well clear of it and of zero.
+        assert linkage.km_per_litre / best - 1.0 > 0.05
+
+
+def test_the_side_load_cap_is_the_quasi_static_one() -> None:
+    """The baseline must be capped on the quantity the EX-link is capped on.
+
+    ``gamma`` for the EX-link comes from :mod:`exlink.loads`, which propagates
+    the gas load alone.  Scoring the baseline's cap at its operating speed
+    instead is a *looser* requirement, because the reciprocating inertia
+    opposes the gas side load over part of the cycle -- and it would admit
+    proportions the EX-link is not allowed.  This pins the gap between the two
+    definitions, which is what makes the choice matter.
+    """
+    from exlink.slidercrank import CAP_SPEED_RPM, side_load_ratio
+
+    mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=0.12)
+    quasi_static = side_load_ratio(mechanism, CAP_SPEED_RPM, samples=360)
+    at_speed = side_load_ratio(mechanism, 1500.0, samples=360)
+    assert at_speed < quasi_static
+    # The looser reading would pass this design; the specification does not.
+    assert at_speed < DEFAULT_TARGETS.max_side_load < quasi_static
+
+
+@pytest.mark.slow
+def test_the_specification_baseline_holds_both_caps_and_beats_a_pinned_design() -> None:
+    """Holding the baseline to the EX-link's limits must still optimise it.
+
+    The caps are imposed, so the result has to meet them; and it has to be the
+    best design meeting them, not merely a design meeting them.  Both are
+    asserted, the second against a hand-picked obliquity that also meets them.
+    """
+    import math
+
+    from exlink.slidercrank import (
+        CAP_SPEED_RPM,
+        optimise_slidercrank_to_specification,
+        side_load_ratio,
+    )
+
+    best = optimise_slidercrank_to_specification(grid=(13, 5), refinements=6, samples=180)
+    assert best.comparison.feasible
+    assert math.degrees(math.asin(best.mechanism.obliquity)) <= DEFAULT_TARGETS.max_rod_angle
+    gamma = side_load_ratio(best.mechanism, CAP_SPEED_RPM, samples=180)
+    assert gamma <= DEFAULT_TARGETS.max_side_load
+
+    pinned = evaluate_slidercrank(
+        SliderCrank.for_compression_ratio(16.0, obliquity=0.095), 1500.0, samples=180
+    )
+    assert best.comparison.km_per_litre >= pinned.km_per_litre
+
+
 # -- reliability, so the comparison is not one-sided ----------------------------
 
 
@@ -331,7 +407,6 @@ def test_the_optimised_baseline_misses_the_ex_links_limits() -> None:
 
     import numpy as np
 
-    from exlink.constants import DEFAULT_TARGETS
     from exlink.slidercrank import solve
 
     mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=0.195)

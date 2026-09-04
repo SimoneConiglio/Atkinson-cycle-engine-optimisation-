@@ -304,17 +304,18 @@ snapping ``I`` 0.18 mm onto the gear lattice  ``0.003 -> 0.058 mm``
 minimum-norm equality projection              ``0.0009 -> 0.0201 mm``
 ============================================  ===========================
 
-against a bound of 0.01 mm.  The honest reading is that the specification is
-over-constrained: the equality manifold and the region ``g <= 0.01`` intersect
-in a sliver too thin for any of machining, gear selection or a converged
-optimizer to land inside reliably.
+against a bound of 0.01 mm.  All three are larger than the bound, so which
+number is written down decides whether a design on the equality manifold exists
+at all: at ``g <= 0.01`` the manifold and the feasible region intersect in a
+sliver thinner than the Newton step that reaches the manifold, and at
+``g <= 0.1`` -- 0.1 mm of dead-centre mismatch being 2.7 % of the clearance
+volume, worth 0.47 % of the range -- the projected design is strictly feasible.
 
 What to do about it
 --------------------
-Treat ``g`` as an assembly adjustment -- a shim on the piston-rod length -- or
-as a quantity to minimise, rather than as a hard geometric constraint.  Under
-that reading this design is the result, at 3388 km/L.  Under the specification
-as written, the best *strictly* feasible design remains
-:data:`COUPLED_DESIGN` at 3338 km/L, and the 1.5 % difference is the price of a
-constraint that cannot be held.
+Take the wider bound, which :mod:`exlink.robustness` shows is also where ``g``
+stops governing the reliability of the mechanism.  The projected design is then
+the result at 3388 km/L.  Under the 0.01 mm bound as written the best *strictly*
+feasible design remains :data:`COUPLED_DESIGN` at 3338 km/L, and the 1.5 %
+difference is the price of a bound set finer than the model can resolve.
 """

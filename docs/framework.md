@@ -40,10 +40,6 @@ testable, from the optimization, which is GEMSEO.
 | 3.9 | restarts on the manifold | {mod}`exlink.scenarios` | `multistart`, `project_onto_equalities` |
 | 3.10, 7.4 | prescribed motion, and range under every constraint | {mod}`exlink.synthesis` | the target as a fallback objective |
 
-The section numbers in the first column were stale against §3's headings and
-are corrected here; the mapping is worth checking rather than trusting, because
-a limitation and its resolution live in different sections.
-
 The objective chain of §3.1 is assembled in {mod}`exlink.performance`, which
 composes {mod}`exlink.friction`, {mod}`exlink.mass_budget` and
 {mod}`exlink.vehicle` and returns every intermediate so a result can be

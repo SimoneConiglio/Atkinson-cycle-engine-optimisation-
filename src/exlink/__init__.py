@@ -80,6 +80,8 @@ from .slidercrank import (
     SliderCrank,
     evaluate_slidercrank,
     optimise_slidercrank,
+    optimise_slidercrank_to_specification,
+    side_load_ratio,
     slidercrank_reliability,
 )
 from .synthesis import TargetMotion, fit_to_target, target_from_design, target_motion
@@ -141,6 +143,8 @@ __all__ = [
     "fit_to_target",
     "lattice_neighbours",
     "optimise_slidercrank",
+    "optimise_slidercrank_to_specification",
+    "side_load_ratio",
     "size_pair",
     "slidercrank_reliability",
     "solve_coupled",

@@ -16,10 +16,12 @@ dimensions to optimise; and the roles of the crankshaft and eccentric shaft are
 exchanged, so the four strokes complete in **one** turn of the output shaft.
 
 That last change is not incidental. It doubles the firing frequency for a given
-displacement and speed, and §6.3 shows that against a conventional engine
-optimised under the same models it accounts for the mechanism's entire measured
-advantage. It is a property of *this* topology, not of extended expansion, and
-every result below is conditional on it.
+displacement and speed, and §6.3 finds it to be the feature carrying the
+mechanism's advantage over a conventional engine optimised under the same
+models: the advantage survives matching the power strokes per minute, but
+scoring the same linkage under a two-revolution gas exchange removes it. It is a
+property of *this* topology rather than of extended expansion, and every result
+below is conditional on it.
 
 ## 5.2 Specification
 
@@ -84,8 +86,10 @@ specification, and they are the interesting part of the formulation:
   reaches 1, the crankshaft cannot turn through a full revolution; it only rocks. Feeding
   `W` to the optimizer as a *number* rather than letting the analysis throw is what makes the
   global search converge.
-- **`g ≤ 0.01 mm`** — the gap between the two top dead centres. Non-zero means burnt gas that
-  cannot be scavenged.
+- **`g ≤ 0.01 mm`** — the gap between the two top dead centres. A non-zero gap means the two
+  revolutions trap different volumes above the piston, so the engine realises two slightly
+  different compression ratios. The bound is a modelling choice and not a physical limit;
+  §6.2 prices it and adopts 0.1 mm.
 - **four monotone phases** — a design whose piston goes up and down only once per revolution
   is a plain Otto engine, not an Atkinson one. Designs failing this are *penalised*
   (`η = 0`, `H = B = 1000`), never rejected.

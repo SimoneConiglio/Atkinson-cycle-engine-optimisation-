@@ -30,15 +30,16 @@ referred to rather than restated.
 | range, constraints imposed | 3501 km/L | §3.10's second form, nominal only | no, by $2\times10^{-4}$ |
 | **range + reliability, relaxed bounds** | **3395 km/L** | **§3.10's third form; $P_f = 1.3\times10^{-3}$** | no — relaxed spec |
 | slider-crank, optimised | 2888 km/L | baseline, its own limits only | n/a — misses the EX-link's |
-| slider-crank, same specification | 2372 km/L | baseline, held to the EX-link's limits | yes |
+| slider-crank, same specification | 2467 km/L | baseline, held to the EX-link's limits | yes, on the cap |
 
-Two advantage figures follow from the last two rows, and both are quoted in
-this document because they answer different questions:
+Three advantage figures follow, and all are quoted in this document because they
+answer different questions (§6.3 tabulates a fourth):
 
 | question | figure |
 |---|---|
+| at matched power strokes per minute, 800–1400 | **+13 to +19 %** |
 | against a conventional engine optimised as such | **+15.6 %** |
-| against one held to the same specification | **+43 %** |
+| against one held to the same specification | **+37.6 %** |
 
 Figures are given to four significant digits once, here, and rounded
 elsewhere.
@@ -88,23 +89,27 @@ its peak main-bearing load **falls** with speed, 4735 N at rest to 2985 N at
 reciprocating inertia pulls the other way — classic inertia relief. Same physics,
 opposite sign, and conditioning decides which.
 
-## 6.2 A specified constraint cannot be manufactured
+## 6.2 Tolerance decides which of the stated bounds are real
 
 ### Result
 
-At IT8, the top-dead-centre gap bound of 0.01 mm has a process capability of
-**0.11** against an industrial target of 1.33, and roughly two thirds of
-nominally-conforming builds violate it.
+The requirements of §5.2 are a mathematical specification: eight numbers written
+down before any part existed. A tolerance study at IT8 says which of them this
+mechanism can hold, and only two are in question — the top-dead-centre gap $g$
+and the band each equality is relaxed into. Widening the gap from 0.01 to
+0.1 mm and the bands from $\pm 0.05$ to $\pm 0.15$ takes the reference design
+from a 0.645 probability of missing a requirement to $1.9\times10^{-5}$. The
+physical price is **0.47 % of range**, all of it from the gap: a wider band
+relaxes a constraint and cannot cost anything, whereas a dead-centre mismatch
+of 0.1 mm is 2.7 % of the clearance volume and is felt by the cycle.
 
-The central finding is about *conditioning* — the mechanism sits near a singularity — and a
-design chosen for nominal performance in a badly conditioned region is exactly what a
-tolerance study exists to catch. Presenting a deterministic optimum without one would be
-negligent.
+### Why
 
-Tolerances are ISO 286 IT grades, not invented numbers: `i = 0.45·D^(1/3) + 0.001·D` µm, with
-IT8 at 25i for a machined member. Errors propagate two ways — **first order from the exact
-Jacobians**, so a full assessment costs one extra Jacobian evaluation, and **Monte Carlo** to
-check the linearisation, which is precisely what should be distrusted near a singularity.
+Tolerances are ISO 286 IT grades, not invented numbers: $i = 0.45 D^{1/3} +
+0.001 D$ µm, with IT8 at $25i$ for a machined member. Errors propagate two ways
+— **first order from the exact Jacobians**, so a full assessment costs one extra
+Jacobian evaluation, and **Monte Carlo** to check the linearisation, which is
+precisely what should be distrusted near a singularity.
 
 ```
   constraint               nominal   sigma_1st    sigma_MC     Cpk   violated
@@ -117,64 +122,75 @@ check the linearisation, which is precisely what should be distrusted near a sin
   side_load              -0.001414   4.277e-05   4.098e-05   11.50       0.0%
 ```
 
-**`g ≤ 0.01 mm` cannot be held.** The dimensions producing the top-dead-centre gap are held to
-±0.011–0.031 mm at IT8, and combine to give `g` a standard deviation of 0.013 mm — larger than
-the constraint band itself. Process capability is **0.11** against an industrial target of
-1.33, and two thirds of nominally conforming builds violate it.
+Two rows are near their bounds and five are not. `tdc_gap` has a standard
+deviation of 0.013 mm against a bound of 0.01 mm — the scatter is wider than the
+requirement — and `expansion_stroke` has 0.036 mm against a half-band of
+0.05 mm. The remaining five run from $C_{pk} = 3.2$ to 493 and do not enter the
+discussion again.
 
-Scanning the IT ladder settles what to do about it. Holding `g` would need a tolerance unit
-multiple of **1.25i**, below the tightest grade in the table. *No machining grade fixes it.*
-This is a defect in the specification, not in any design that meets it, and the remedy is a
-shim at assembly or a relaxed bound — not a better optimizer. Every other constraint is
-comfortable.
+First order overestimates $\sigma$ by up to 80 % here, so it is **conservative**,
+not optimistic; worth stating, because the opposite would make first-order
+robust design unusable in this region.
 
-First order overestimates σ by up to 80 % here, so it is **conservative**, not optimistic. Worth
-stating: the opposite would make first-order robust design unusable in this region.
+$g$ is the most sensitive quantity in the problem, and four independent
+perturbations agree on its scale:
 
----
-
-### Why
-
-The dimensions producing $g$ are held to +/-0.011 to +/-0.031 mm and combine to
-give it a standard deviation of 0.013 mm — larger than the constraint band
-itself. Scanning the ISO ladder, holding it would need a tolerance unit multiple
-of **1.25i**, below the tightest grade in the table. No machining grade fixes it.
-
-Four independent routes agree:
-
-| perturbation | effect on $g$ (bound 0.01 mm) |
+| perturbation | effect on $g$ |
 |---|---|
 | IT8 machining tolerance | $\sigma = 0.013$ mm |
 | snapping $I$ 0.18 mm onto the gear lattice | $0.003 \to 0.058$ mm |
 | minimum-norm equality projection | $0.0009 \to 0.0201$ mm |
 | crank-angle resolution below 360 samples | 44 % error |
 
-### The reliability statement
+A bound of 0.01 mm lies below every one of them — below the machining scatter,
+below the spacing of the gear catalogue, below the optimizer's own convergence,
+and below the discretisation at which $g$ is computed. It is not a requirement
+the rest of the model can resolve. A bound of 0.1 mm lies above all four.
+
+### What widening the bounds costs
+
+$g$ is the distance between the two top dead centres, and the cycle feels it
+only through the volume trapped above the piston. The clearance volume is
+3000 mm³, which over a 32 mm bore is 3.73 mm of head space:
+
+| | mismatch | trapped volume | realised $\varepsilon$ | range |
+|---|---|---|---|---|
+| as specified | 0.010 mm | $+8.0$ mm³, $+0.27$ % | 15.96 | — |
+| §6.4 relaxation | 0.054 mm | $+43.4$ mm³, $+1.45$ % | 15.79 | $-0.25$ % |
+| accepted here | 0.100 mm | $+80.4$ mm³, $+2.68$ % | 15.61 | $-0.47$ % |
+
+On one of its two revolutions the engine realises a compression ratio of 15.6
+rather than 16.0, and the reference design loses 0.47 % of its range. That is
+the entire consequence of the relaxation, computed rather than argued.
+
+The bands on the equalities are the same kind of statement, in different units.
+$\varepsilon = 16 \pm 0.15$ is $\pm 0.94$ % of the ratio, which is $\pm 0.035$ mm
+of piston height — a shim under the cylinder head. $STE = 74 \pm 0.15$ mm is
+$\pm 0.2$ % of the stroke.
+
+### What widening them buys
 
 §3.8 computes a probability rather than a margin, over the seven constraints
-whose uncertainty $\Sigma$ actually carries; it is evaluated *on* the solved
-design rather than constrained during the search, so what follows is an audit
-of that design and not a target it was held to (§3.10). For the coupled
-reference design at IT8:
+whose uncertainty $\Sigma$ actually carries. Evaluated on `COUPLED_DESIGN`:
 
-| | |
-|---|---|
-| system $P_f$, correlation kept | **0.645** |
-| the same assuming independence | 0.563 |
-| binding constraint | `tdc_gap` |
-| bound needed for a $10^{-3}$ target | **0.054 mm** against 0.01 specified |
+| gap bound | band | system $P_f$ | $\beta$ | binding |
+|---|---|---|---|---|
+| 0.010 mm | $\pm 0.05$ | 0.645 | $-0.37$ | `tdc_gap` |
+| 0.054 mm | $\pm 0.05$ | 0.251 | 0.67 | `stroke_lower` |
+| 0.100 mm | $\pm 0.05$ | 0.250 | 0.67 | `stroke_lower` |
+| 0.100 mm | $\pm 0.12$ | $1.0\times10^{-3}$ | 3.09 | `stroke_lower` |
+| 0.100 mm | $\pm 0.15$ | $1.9\times10^{-5}$ | 4.12 | `stroke_lower` |
 
-Keeping the correlation is not a formality and does not always reassure: the two
-largest contributors are *anti*-correlated, so the system probability comes out
-**above** the independent estimate.
+The second row is the useful one: **once the gap is at 0.054 mm it stops
+binding, and no further widening of it changes anything.** The two bottom rows
+differ from the third only in the band, and they span four orders of magnitude
+of failure probability. What sets the reliability of this mechanism is not the
+gap but how nearly the expansion stroke is required to equal 74 mm.
 
-Relaxing the gap to 0.054 mm moves the problem rather than removing it — the
-stroke band becomes binding at $\beta = 0.68$, because that band is itself only
-1.7 standard deviations wide and the design sits off-centre in it. Reaching
-$10^{-3}$ *on that constraint* needs $\pm 0.09$ mm — but the **system**
-probability at those bounds is $2\times10^{-2}$, and $10^{-3}$ for the system
-needs $\pm 0.15$ mm. §6.4 tabulates the difference and solves the problem at
-the wider bound.
+Keeping the correlation is not a formality and does not always reassure: at the
+first row the two largest contributors are *anti*-correlated, so the system
+probability, 0.645, comes out **above** the 0.563 an independence assumption
+gives.
 
 ### Most of this probability is avoidable, and free
 
@@ -199,91 +215,187 @@ rewards standing off them, and a design sitting exactly on $g = 0$ fails half
 the time. Backing off by a few hundredths of a millimetre is nearly free in
 range and buys most of the reliability back.
 
-Two things this does *not* say. It does not repair the specification — §6.2's
-0.01 mm gap bound is still unattainable at any ISO grade, and $P_f = 0.308$ is
-still far from a design target. And it is not a substitute for solving the
-reliability-constrained problem: sampling found these points, whereas SLSQP
-starting from the deterministic optimum could not move at all (§3.10).
+Sampling is how those points were found, and it is not a substitute for solving
+the reliability-constrained problem: SLSQP started from the deterministic
+optimum could not move at all (§3.10). §6.4 solves it.
 
 ### Discussion
 
-The estimator is first-order and its weakest point is exactly where the finding
-is strongest: $g$ is the most nonlinear constraint and FORM under-predicts its
-failure probability, 0.42 against 0.54 sampled. That error is in the
-conservative direction for the finding — the truth is worse than the estimate —
-so the conclusion is not fragile even though the estimator is approximate.
+The estimator is first-order and its weakest point is exactly where the
+constraint is tightest: $g$ is the most nonlinear constraint and FORM
+under-predicts its failure probability, 0.42 against 0.54 sampled. The error is
+in the conservative direction, so the conclusion is not fragile even though the
+estimator is approximate.
 
-This is a defect in the specification, not in any design meeting it, and it is
-the single most useful result here for anyone who would build the engine.
+The transferable statement is about the order of the two studies rather than
+about this engine. The bounds were fixed first and the tolerance study run on
+the result, and by then the specification contained one requirement finer than
+the model's own resolution and one that governed the reliability of everything
+else — neither visible in any nominal quantity. Running the tolerance study
+against the *specification*, before any design exists, costs one Jacobian and
+answers a question the optimizer never asks: which of these numbers the
+specification is entitled to contain.
 
-## 6.3 Against a conventional engine held to the same specification
+## 6.3 Against a conventional engine
 
 ### Result
 
 Both engines at the same compression ratio, clearance volume and fuel per
-cycle, sized by identical code, and both optimised — the baseline over the two
-freedoms it has, rod obliquity and speed.
+cycle, sized by identical code, and both optimised. The baseline has two
+freedoms, rod obliquity and speed, and is optimised twice: once under the
+requirements a conventional engine actually has, and once under the EX-link's
+own rod-angle and side-load caps.
 
 | | slider-crank, its own limits | slider-crank, same specification | EX-link |
 |---|---|---|---|
-| $r/l$, speed | 0.195, 2151 rpm | 0.095, 1500 rpm | — , 1000 rpm |
-| rod angle / $\gamma$ | 11.2° / 0.039 | 5.5° / 0.020 | within 10° / 0.02 |
-| brake efficiency | 0.359 | — | 0.407 |
-| range | 2888 km/L | 2372 km/L | 3395 km/L |
-| $P_f$ at IT8 | — | $\approx 0$ ($\beta = 8.2$) | $1.3\times10^{-3}$ ($\beta = 3.0$) |
+| $r/l$, speed | 0.195, 2151 rpm | 0.0959, 1227 rpm | — , 1000 rpm |
+| power strokes per minute | 1076 | 614 | 1000 |
+| rod angle / $\gamma$ | 11.2° / 0.039 | 5.50° / 0.0200 | within 10° / 0.02 |
+| brake efficiency | 0.359 | 0.347 | 0.407 |
+| range | 2888 km/L | 2467 km/L | 3395 km/L |
+| EX-link advantage | +15.6 % | +37.6 % | — |
 
-### Three findings, and they do not agree
+### The advantage survives matching the firing rate
 
-**Firing frequency, not extended expansion.** The EX-link completes four
-strokes per crankshaft revolution where a four-stroke needs two, so per unit of
-work it accumulates half the journal rotation and half the piston sliding.
-Removing that — doubling its friction and halving its power, then re-scoring
-through the vehicle — takes the advantage over the *own-limits* baseline from
-+15.6 % to **−4.3 %**. Extended expansion alone does not pay for four extra
-journals and a gear train.
+The EX-link completes its four strokes in one crankshaft revolution where a
+four-stroke needs two, so at equal shaft speed it fires twice as often and the
+comparison would be measuring the cycle rate. It is not: the own-limits
+baseline's optimum is 2151 rpm, which is **1076 power strokes per minute against
+the EX-link's 1000**. The 15.6 % above is therefore already an essentially
+rate-matched comparison, and it is the baseline that fires more often.
 
-**But that baseline meets neither of the EX-link's limits.**
-`evaluate_slidercrank` tests convergence, net work and the speed rule, never
-the 10° rod angle or the 0.02 side-load ratio. Its optimum sits at 11.2° and
-0.039 — roughly twice the cap. Held to the same specification, the side-load
-limit binds and needs a connecting rod five times the stroke; the baseline
-loses 18 % of its range and the advantage becomes **+43 %**.
+Matching the rate exactly — the baseline pinned to twice the EX-link's speed,
+its obliquity re-optimised there — holds the result across the rates the
+EX-link runs at:
 
-**And the baseline is far more reliable**, at $\beta = 8.2$ against 3.0. Not
-because it is better designed: it has two toleranced lengths against eleven, so
-it has fewer ways to be wrong. Its binding constraint is a function of $r/l$,
-and machining error on a 28 mm crank and a 295 mm rod moves that ratio by about
-a tenth of a percent.
+| power strokes / min | EX-link, rpm | km/L | slider-crank, rpm | $r/l$ | km/L | advantage |
+|---|---|---|---|---|---|---|
+| 800 | 800 | 3350 | 1600 | 0.178 | 2822 | **+18.7 %** |
+| 1000 | 1000 | 3395 | 2000 | 0.191 | 2884 | **+17.7 %** |
+| 1200 | 1200 | 3363 | 2400 | 0.200 | 2878 | **+16.9 %** |
+| 1400 | 1400 | 3181 | 2800 | 0.214 | 2823 | **+12.7 %** |
+
+Between 800 and 1400 fires per minute the advantage is +13 % to +19 % and never
+changes sign. The EX-link design is the one optimised at 1000 rpm and is merely
+re-scored at the other three rates, so those rows understate it; the baseline is
+re-optimised at every row and does not.
+
+This is the comparison to quote when the question is whether the mechanism is
+worth building, because it is the one that holds the useful output constant.
+
+### Where the advantage comes from is a different question
+
+Firing rate and extended expansion arrive together in this topology, and
+{py:func}`~exlink.slidercrank.firing_frequency_sensitivity` separates them by a
+counterfactual on the EX-link itself: keep the linkage and its motion, but give
+it a conventional two-revolution gas exchange — twice the friction per cycle and
+half the power at the same speed — and re-score through the vehicle. The
+advantage over the own-limits baseline goes from +15.6 % to **−4.3 %**.
+
+That answers "which feature carries the advantage", and the answer is the firing
+rate rather than the extended expansion: the longer expansion alone does not pay
+for four extra journals and a gear train. It is not a comparison between two
+engines, because the engine it scores does not exist — it is the EX-link with
+the property that distinguishes it removed. As an attribution it is
+informative; as a verdict it would be wrong, and the matched-rate table above is
+the verdict.
+
+### Held to the EX-link's own limits the gap widens
+
+`evaluate_slidercrank` tests convergence, net work and the speed rule, never the
+10° rod angle or the 0.02 side-load ratio, and the own-limits optimum sits at
+11.2° and 0.039 — roughly twice each cap. Imposing them,
+{py:func}`~exlink.slidercrank.optimise_slidercrank_to_specification` reaches
+2467 km/L: the side-load cap binds, needs a connecting rod ten times the crank
+throw, and costs the baseline 15 % of its range. The advantage becomes
+**+37.6 %**.
+
+Two details decide that number and are worth stating, because getting either
+wrong moves it by ten points.
+
+*Which $\gamma$.* The EX-link's cap is applied to a quasi-static quantity —
+{mod}`exlink.loads` propagates the gas load alone. At the operating speed the
+reciprocating inertia opposes the gas side load over part of the cycle, so the
+same mechanism reads 0.0248 quasi-statically at $r/l = 0.12$ and 0.0181 at
+1500 rpm. Capping the *at-speed* ratio would admit proportions the EX-link is
+not allowed and hand the baseline about a tenth of its range.
+
+*Which search.* Range rises with obliquity and the cap binds from above, so the
+optimum lies against a boundary in one variable and at an interior maximum in
+the other, and the function grids the box before refining. Stopping a fraction
+inside the cap, at $r/l = 0.095$ and 1500 rpm, returns 2372 km/L — 4 % low, and
+low in the direction that flatters the linkage.
+
+This baseline runs at 614 power strokes per minute against the EX-link's 1000,
+so unlike the matched-rate table it is *not* rate-matched. Matching it would
+widen the gap further, not narrow it: at 2000 rpm the same caps admit nothing
+better than 988 km/L, because the cap is quasi-static while the friction and
+inertia that punish the short rod at speed are not.
+
+### The constrained baseline is dominated too
+
+The baseline held to the same specification converges onto its side-load cap, at
+$\gamma = 0.02000$ against a bound of 0.02, which is precisely where §6.2 shows
+reliability is lost:
+
+| $r/l$ | quasi-static $\gamma$ | range | $P_f$ | $\beta$ |
+|---|---|---|---|---|
+| **0.09593** (the optimum) | 0.02000 | **2467.5 km/L** | 0.595 | $-0.24$ |
+| 0.09590 | 0.01999 | 2467.2 km/L | 0.106 | 1.25 |
+| 0.09580 | 0.01997 | 2466.2 km/L | $9\times10^{-9}$ | 5.63 |
+| 0.09550 | 0.01991 | 2463.4 km/L | $< 10^{-16}$ | $\ge 8.2$ |
+
+The optimum sits on the constraint, so about three builds in five miss it.
+Giving up 0.4 % of the obliquity costs **0.17 % of range** and takes the failure
+probability below the estimator's floor. This is §6.2's dominated optimum again,
+on a mechanism with two toleranced dimensions instead of eleven and a search
+over two variables instead of ten — which is the strongest evidence in the study
+that the effect belongs to *deterministic optimization under tolerance* rather
+than to this linkage.
+
+Once both are backed off their boundaries the baseline is the more reliable
+mechanism, at $\beta \ge 8.2$ against 3.0. Not because it is better designed: it
+has two toleranced lengths against eleven, so it has fewer ways to be wrong. Its
+binding constraint is a function of $r/l$, and machining error on a 28 mm crank
+and a 292 mm rod moves that ratio by about a tenth of a percent.
 
 ### Discussion
 
-The three point different ways on purpose, and the useful statement is their
-conjunction: **the linkage buys range by adding degrees of freedom, and pays
-for them in the probability that all of them land in tolerance at once.** That
-trade is invisible to any comparison scoring only the nominal design, and it is
-the counterweight to §6.1's argument that more freedom buys a better optimum.
+The measurements point different ways on purpose, and the useful statement is
+their conjunction: **the linkage buys range by adding degrees of freedom, and
+pays for them in the probability that all of them land in tolerance at once.**
+That trade is invisible to any comparison scoring only the nominal design, and
+it is the counterweight to §6.1's argument that more freedom buys a better
+optimum.
 
-Which range figure is *the* answer depends on a judgement this study does not
-make. The 10° and 0.02 limits come from the EX-link's brief; practical
+| question | comparison | figure |
+|---|---|---|
+| is the mechanism worth building? | matched power strokes per minute | **+13 to +19 %** |
+| optimum against optimum, each at its own best speed | own-limits baseline | **+15.6 %** |
+| which feature carries the advantage? | EX-link without its firing rate | **−4.3 %** |
+| what if the baseline had to meet the same brief? | same rod-angle and side-load caps | **+37.6 %** |
+
+Which of the two range comparisons — against the baseline under its own limits,
+or against the baseline under the linkage's — is the right question is a
+judgement this study does not make. The 10° and 0.02 limits come from the EX-link's brief, and practical
 slider-cranks run 14–19° routinely, so holding one to 5.5° may be imposing an
-alien specification. Both figures are therefore reported, with what each
-assumes. What is not defensible is the earlier state of this section, where one
-engine was held to limits the other was silently exempt from.
+alien specification. What is not defensible is holding one engine to limits the
+other is silently exempt from.
 
-Two conservatisms run against the EX-link and are not quantified here: no
-gas exchange is modelled, and the loss that omits is about 2.5× larger for the
-conventional engine (§7.2); and the reliability columns compare mechanisms of
-different dimensionality, which is a real difference rather than an artefact
-but is not like-for-like the way the range columns are.
+Two conservatisms run against the EX-link and are not quantified here: no gas
+exchange is modelled, and the loss that omits is about 2.5× larger for the
+conventional engine (§7.2); and the reliability figures compare mechanisms of
+different dimensionality, which is a real difference rather than an artefact but
+is not like-for-like the way the range figures are.
 
 ## 6.4 The announced problem, solved
 
 ### Result
 
 §3.10 states a problem: maximise range, hold every constraint, constrain a
-system probability of failure. Solving *that* needs the bounds relaxed first,
-because §6.2 shows the specification as written admits no reliable design. With
-the gap at 0.054 mm and both bands at $\pm 0.15$:
+system probability of failure. Solving *that* needs the bounds §6.2 identifies,
+because at the bounds as written no design reaches the target. The run used the
+gap at 0.054 mm and both bands at $\pm 0.15$:
 
 | | start (`COUPLED_DESIGN`) | result |
 |---|---|---|
@@ -303,11 +415,25 @@ destroys reliability. The 3 % is the price of standing off the boundary, and
 the two figures answer different questions: 3501 is the best nominal design,
 3395 the best that also survives its own manufacturing scatter.
 
-This design is **not feasible against the specification as written** — it needs
-the relaxed bounds, and under the specified 0.01 mm gap and $\pm 0.05$ bands it
-is not close. §6.2 reports that a $10^{-3}$ target needs $\pm 0.09$ mm; that is
-per-constraint reasoning, and the *system* probability at those bounds is
-$2\times10^{-2}$. $\pm 0.15$ is what the system needs.
+### Which relaxation the result depends on
+
+Only the band. Re-scoring the same design against the 0.1 mm gap accepted in
+§6.2 gives $P_f = 1.339\times10^{-3}$ against $1.344\times10^{-3}$ at 0.054 mm —
+a difference of four parts in a thousand, because the gap sits at $\beta = 8.1$
+either way and contributes nothing. The band is a different matter: at
+$\pm 0.05$ this design is not admissible at all, and at $\pm 0.12$ the target
+would have to be $\beta = 3.09$ rather than 3.00.
+
+| | value at the solution | $\sigma$ | $\beta$ |
+|---|---|---|---|
+| `stroke_upper` | $-0.054$ mm | 0.018 | **3.00** |
+| `ratio_upper` | $-0.032$ | 0.005 | 6.94 |
+| `tdc_gap` (at 0.1 mm) | $-0.100$ mm | 0.012 | 8.12 |
+| every other constraint | — | — | $> 13$ |
+
+One constraint is active in the reliability sense and the rest are spectators,
+which is the shape a reliability-constrained optimum should have and a useful
+check that the index is being steered rather than merely reported.
 
 ### Three defects stood in the way, and one generalises
 
@@ -342,6 +468,13 @@ target — because once the range is computable the optimizer abandons the
 prescribed motion entirely. That is how a fallback differs from a constraint.
 
 ## 6.5 Supporting measurements
+
+The results above rest on properties of the problem and of the implementation
+that are asserted where they are used and measured here: how strongly the
+disciplines couple, what the analytic derivatives are worth, what the
+decomposition costs against enumeration, whether the optima are global, and what
+each reference design is. They are collected rather than interleaved because
+none of them is a finding about the engine.
 
 ### How coupled the problem is
 
@@ -413,8 +546,7 @@ SLSQP on `neg_range`, gear pair pinned, 1000 rpm, started from the coupled refer
 | start (`COUPLED_DESIGN`) | 3338 km/L | 12.17 kg | 0.0067 mm | **yes** |
 | best found (`RANGE_DESIGN`) | 3388 km/L | 12.47 kg | 0.0009 mm | no — see below |
 
-The 1.5 % gain is modest, and the reason it is not simply banked is worth stating rather than
-smoothing over.
+The 1.5 % gain is modest, and what it takes to bank it is the point of the exercise.
 
 `RANGE_DESIGN` satisfies every inequality, including the gap, at `g = 0.0009 mm`. It misses
 the two *relaxed equalities* by 1.5 × 10⁻⁴ mm and 6.1 × 10⁻⁵ — SLSQP stopping within its own
@@ -422,30 +554,26 @@ convergence tolerance of the constraint it was handed. For scale, the tolerance 
 the machining standard deviation of `STE` at 0.020 mm, **130 times larger**; no real part
 would tell the two apart.
 
-The obvious fix is to project it back onto the equality manifold, which
-`project_onto_equalities` does exactly, by the minimum-norm Newton step from the analytic
-Jacobians. That step is a few hundredths of a millimetre — and it moves `g` from 0.0009 to
-0.0201 mm, twice its bound.
+Projecting it back onto the equality manifold is exact and cheap:
+`project_onto_equalities` takes the minimum-norm Newton step from the analytic Jacobians. The
+step is a few hundredths of a millimetre, it lands the equalities at 1.0 × 10⁻⁴ and
+3.1 × 10⁻⁵, and it moves `g` from 0.0009 to **0.0201 mm**:
 
-So the same wall appears from a fourth direction:
+| | equality residuals | `g` | worst inequality, gap at 0.01 mm | at 0.1 mm | range |
+|---|---|---|---|---|---|
+| `RANGE_DESIGN` | $5.0\times10^{-2}$, outside the band | 0.0009 mm | $-0.0006$ | $-0.0006$ | 3388 km/L |
+| projected onto the equalities | $1.0\times10^{-4}$, $3.1\times10^{-5}$ | 0.0201 mm | $+0.0101$ | $-0.0075$ | 3388 km/L |
 
-| perturbation | effect on `g` (bound: 0.01 mm) |
-|---|---|
-| IT8 machining tolerance on the members | `σ = 0.013 mm` |
-| snapping `I` 0.18 mm onto the gear lattice | `0.003 → 0.058 mm` |
-| minimum-norm equality projection | `0.0009 → 0.0201 mm` |
-| tightest ISO grade that would hold it | 1.25i — off the ladder |
+Which of the two bounds is written down decides whether the projected design exists. At
+0.01 mm the equality manifold and the region `g ≤ 0.01` intersect in a sliver thinner than the
+Newton step that reaches the manifold, so the best strictly feasible design remains
+`COUPLED_DESIGN` and the 1.5 % is unreachable. At the 0.1 mm bound of §6.2 the projected design is
+strictly feasible and the 1.5 % is simply banked, at a cost of 0.47 % of range in the
+relaxation — a net gain of about one per cent.
 
-The honest reading is that **the specification is over-constrained**. The equality manifold
-and the region `g ≤ 0.01` intersect in a sliver too thin for machining, gear selection or a
-converged optimizer to land inside reliably. Treat `g` as an assembly adjustment — a shim on
-the piston-rod length — or as a quantity to minimise, and `RANGE_DESIGN` is the answer at
-3388 km/L. Under the specification as written, the best strictly feasible design is the one
-we started from, and the 1.5 % is the price of a constraint that cannot be held.
-
-That is not a result the optimizer could have delivered. It came out of the tolerance study,
-and it is the single most useful thing in this repository for anyone who would actually build
-the engine.
+That trade is not one the optimizer could have found. It came out of the tolerance study, and
+it is the argument for running one against the specification before the design rather than
+against the design afterwards.
 
 ---
 

@@ -8,6 +8,23 @@ code follows them.
 Units throughout: **mm**, **rad** (degrees only at the API surface), **N**,
 **MPa** = N/mm², **N·mm**.
 
+## Scope of this appendix
+
+This page carries the *derivations* only: what the equations are and where they
+come from. The argument they support, and every measured figure, belongs to the
+paper, and is not restated here — a second copy would have to be kept in step
+with the first, and a derivation that quotes a stale number is worse than one
+that quotes none.
+
+| for | see |
+|---|---|
+| why the conventional objective fails | §2.3 |
+| the range objective and the model chain | §3.1, §3.2 |
+| the coupling, and MDF against IDF | §3.6 |
+| the discrete gear choice | §3.7 |
+| tolerance and reliability | §3.8 |
+| every measured result | §6 |
+
 ---
 
 ## 1. Parametrisation
@@ -454,10 +471,11 @@ section would be arbitrary; and being concentric with their axes they do not
 feed the inertia loop at all. The bearing *reactions* are computed and
 constrained.
 
-### 9.4 Does the loop converge?
+### 9.4 Convergence of the loop
 
-Scaling answers it. A bending-critical member needs `d ~ F^(1/3)`, so its mass
-goes as `m ~ d² ~ F^(2/3)`; the inertia force it then creates is `F ~ m a`.
+A scaling argument settles it. A bending-critical member needs `d ~ F^(1/3)`, so
+its mass goes as `m ~ d² ~ F^(2/3)`, and the inertia force it then creates is
+`F ~ m a`.
 Composing, `m ~ (C a) m^(2/3)`. The loop gain is **sub-linear**, so a fixed point
 exists at
 
@@ -597,27 +615,3 @@ for three points of efficiency.
 Left differenced, deliberately: `η`, `H`, `B` and the clearance. All smooth, none
 tight, and `η` would additionally need `dθ_TDC/dX`, because the combustion
 pressure jump puts moving-boundary terms in its integral.
-
----
-
-## What is not here
-
-Sections 11 to 16 of an earlier draft restated the study's argument — why
-`η` is not an efficiency, why range is the right objective, the discrete
-inter-axle distance, robustness, the formulation comparison and the
-slider-crank head-to-head. All six are now covered properly in §2 to §6, and
-keeping a second copy here meant maintaining two sets of numbers; the copy went
-stale, quoting a range comparison that §6.3 has since corrected twice.
-
-This page is therefore the *derivations* only: what the equations are and where
-they come from. The argument they support, and every figure, lives in the
-paper:
-
-| for | see |
-|---|---|
-| why the conventional objective fails | §2.3 |
-| the range objective and the model chain | §3.1, §3.2 |
-| the coupling, and MDF against IDF | §3.6 |
-| the discrete gear choice | §3.7 |
-| tolerance and reliability | §3.8 |
-| every measured result | §6 |

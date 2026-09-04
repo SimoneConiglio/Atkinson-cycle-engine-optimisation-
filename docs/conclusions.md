@@ -24,12 +24,25 @@ bearing load falling with speed by inertia relief. Same physics, opposite sign.
 **A relaxation made for numerical reasons is a promise about tolerance.** The
 equalities make the feasible set measure zero, forcing a relaxation into bands;
 those bands are then only 1.7 standard deviations wide against the scatter of
-the parts. Treating that probabilistically is not an embellishment — it is the
-only way to know whether the relaxed requirement is met. It is not: 64.5 %
-chance of missing at least one requirement, and a gap bound no ISO grade holds.
-Worse, most of that is self-inflicted -- a deterministic optimizer converges
-onto its active constraints, and designs beside this one halve the probability
-at no cost in range (§6.2).
+the parts, and the reference design has a 64.5 % chance of missing at least one
+requirement. Which bounds are responsible is not visible in any nominal
+quantity: the top-dead-centre bound is set finer than the model's own
+resolution, and once it is widened the band on the expansion stroke governs
+everything, over four orders of magnitude of failure probability. Widening both
+costs 0.47 % of range. Most of the rest is self-inflicted — a deterministic
+optimizer converges onto its active constraints, and designs beside this one
+halve the probability at no cost in range (§6.2).
+
+**A topology comparison is only as good as its matching, and both sides must be
+optimised the same way.** Against a conventional engine optimised under
+identical models the linkage leads by 13–19 % at matched power strokes per
+minute; removing its one-revolution cycle turns that into a 4.3 % deficit, which
+attributes the benefit to the firing rate rather than to extended expansion; and
+holding the conventional engine to the linkage's own rod-angle and side-load
+caps widens the lead to 37.6 %. Those three span a change of sign and a factor
+of nine in magnitude, and each of them moves if either side is optimised less
+carefully than the other: the constrained baseline alone is 4 % low if its
+search stops a fraction inside the binding cap (§6.3).
 
 **Decomposition buys structure, not speed.** Bi-level outer approximation halves
 the sub-solves against enumeration and lands 0.6 % short, on a bound that is not
@@ -49,7 +62,7 @@ Grouped by what would have to change to remove them.
 | Coulomb friction with constant coefficients | absolute FMEP uncertain by ~30 %; rankings robust, since comparisons are at equal coefficients |
 | instantaneous combustion, no heat transfer | indicated efficiency optimistic by several points, equally for both mechanisms |
 | **no gas exchange** | optimistic for both, but **not equally** — see below; it flatters the conventional engine and understates §6.3 |
-| reliability compared across mechanisms of different dimensionality | the slider-crank's two toleranced lengths against the EX-link's eleven is a real difference, not an artefact, but it means §6.3's reliability columns are not like-for-like in the way its range columns are |
+| reliability compared across mechanisms of different dimensionality | the slider-crank's two toleranced lengths against the EX-link's eleven is a real difference, not an artefact, but it means §6.3's reliability figures are not like-for-like in the way its range figures are |
 | constant crankshaft speed | the flywheel sizing already prices the fluctuation this assumes away |
 | pin-jointed trigonal link | small; it is a stiff triangle either way |
 
@@ -80,8 +93,8 @@ against the EX-link by some margin** -- as, separately, is the fact that its
 headline figure lets the baseline violate two limits the EX-link is held to. How large a margin is not established
 here: a real engine recovers a fraction of the theoretical maximum, and that
 fraction depends on valve timing and port design the model does not represent.
-What can be said is the sign, and that the sign runs the opposite way to the
-firing-frequency effect §6.3 spends most of its length removing.
+What can be said is the sign, and that it runs the opposite way to the
+firing-rate attribution of §6.3.
 
 Modelling it properly needs a valve-timing model and a pumping loop, which is a
 larger change than any other item in this table.
@@ -110,10 +123,11 @@ establish a trend.
 
 ### Scope
 
-The specification cannot be met as written. Relaxing the gap to its required
-0.054 mm moves the binding constraint to the stroke band, which itself needs
-widening to $\pm 0.09$ mm. Whether those bounds are acceptable is a question for
-the customer, not the optimizer.
+The results at $\beta = 3$ are stated at a widened specification: the
+top-dead-centre gap at 0.1 mm and both equality bands at $\pm 0.15$. §6.2 prices
+that widening at 0.47 % of range and shows what it buys, but whether those
+bounds are acceptable is a question for the customer, not the optimizer. At the
+bounds as written the mechanism reaches no reliable design at all.
 
 ## 7.3 Possible improvements
 
@@ -180,14 +194,15 @@ whole constraint set. But every fit converges to the same linkage whatever
 start it is given — the motion very nearly determines the mechanism — so
 diversity has to come from varying the target, not the start.
 
-**Whatever is left out of the problem is what the solve violates.** Four times
-a limitation was reported here — a restoration phase is needed, the route is
-limited by reachability, none of these designs is feasible, the fit cannot give
-diverse starts — and four times it was a constraint omitted from the
-formulation. Adding it fixed the problem each time. Against a target the
-mechanism cannot reach, the unconstrained fit leaves the geometric set by ten
-to fifteen units while the constrained one holds every constraint at its
-boundary.
+**What a solve violates is what the formulation left out.** Four apparent
+limitations of the prescribed-motion route — that it needed a feasibility
+restoration phase, that it was bounded by reachability, that its designs were
+infeasible, that its fits could not supply diverse starts — each turned out to
+be a constraint absent from the sub-problem rather than a property of the
+method, and each was removed by restoring that constraint. The clearest case is
+measurable: against a target the mechanism cannot reach, the unconstrained fit
+leaves the geometric set by ten to fifteen units, while the same fit with the
+inequalities imposed holds every one of them at its boundary.
 
 **A flat region defeats a gradient method, three times over.** The reliability
 constraint stalls where $P_f$ saturates (§6.4); the range objective has nothing
@@ -240,19 +255,22 @@ Full provenance for every design is in §6.0.
 
 | | |
 |---|---|
+| at matched power strokes per minute, 800–1400 | **+13 to +19 %** |
 | optimised as a conventional engine (its own limits) | 2888 km/L, **+15.6 %** |
-| the same, with its firing-frequency advantage removed | **−4.3 %** |
-| held to the EX-link's own rod-angle and side-load limits | 2372 km/L, **+43 %** |
-| reliability index at IT8, EX-link vs that baseline | 3.00 vs **8.22** |
+| the EX-link with its firing rate removed — an attribution, not a comparison | **−4.3 %** |
+| held to the EX-link's own rod-angle and side-load limits | 2467 km/L, **+37.6 %** |
+| reliability index at IT8, EX-link vs that baseline backed off its cap | 3.00 vs **8.2** |
 
-**What the specification costs**
+**What the bounds cost**
 
 | | |
 |---|---|
 | probability the reference design misses a requirement | 64.5 % |
 | the same for the best design sampled beside it | 30.8 %, at +0.10 % range |
-| gap bound a $10^{-3}$ target needs | 0.054 mm against 0.01 specified |
+| gap bound above which the gap stops binding | 0.054 mm; 0.1 mm adopted |
 | stroke band the *system* then needs | ±0.15 mm against ±0.05 |
+| range given up by widening both | −0.47 % |
+| failure probability bought | 0.645 → $1.9\times10^{-5}$ |
 
 ---
 

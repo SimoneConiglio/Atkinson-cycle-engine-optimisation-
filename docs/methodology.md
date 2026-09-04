@@ -403,14 +403,12 @@ of that: the residual it ends at, and how often it fires.
 §7.4 collects what the prescribed motion taught along the way, including the
 attainability limit that decides whether a target is usable at all.
 
-### Reliability: audited, not imposed
+### Reliability: imposed, and what it took
 
-Under either form above this is a **deterministic** problem, and every design
-reported in §6 came from one of them. The reliability analysis of §3.8 is
-applied *to the solution*, so §6.2's 0.645 is an audit of a design obtained
-without it rather than a target that was met or missed.
+Under either of the two forms above the problem is **deterministic**, and the
+reliability analysis of §3.8 is applied to the solution — so §6.2's 0.645 is an
+audit of a design obtained without it. The third form closes the loop.
 
-The loop can be closed:
 {py:func}`~exlink.scenarios.build_range_scenario` takes a ``beta_target``, which
 attaches {py:class}`~exlink.robustness.FailureProbabilityDiscipline` and adds
 
@@ -418,20 +416,22 @@ $$\beta_{\text{sys}}(X) \;=\; -\Phi^{-1}\bigl(P_f(X)\bigr) \;\ge\; \beta_{\text{
 
 as a thirteenth constraint. The index and not the probability: $P_f$ saturates
 towards 0 and 1, where its gradient vanishes and the optimizer stalls, while
-$\beta$ stays well scaled throughout. The discipline depends on the design
-variables only, so it does not join the MDA and §3.6's coupling count is
+$\beta$ is well scaled wherever it is finite. The discipline depends on the
+design variables only, so it does not join the MDA and §3.6's coupling count is
 unchanged.
 
-**Running it does not produce a more reliable design, and the reason is
-instructive.** From the coupled reference design at $\beta = -0.373$, SLSQP
-returns its starting point unchanged — not only for a demanding target but for
-$\beta \ge -0.2$, a step of 0.17 — reporting a positive directional derivative
-for the line search. The reliability gradient is not at fault: central
-differences on $\beta$ are smooth in all eleven variables at this point, with no
-discontinuity. What defeats the line search is the same thinness §3.4 measures
-elsewhere. A step of 0.05 mm along the normalised $\nabla\beta$ leaves the
-geometric constraint set entirely, at which point $\beta$ is reported as $-8.2$
-by the penalty fallback:
+Attaching it is easy and is not sufficient. Three things had to be true before
+the constrained problem could be solved, and each was found by a run that
+failed:
+
+**The other constraints must be imposed too.** From the coupled reference design
+at $\beta = -0.373$, SLSQP under the first form returns its starting point
+unchanged — not only for a demanding target but for $\beta \ge -0.2$, a step of
+0.17 — reporting a positive directional derivative for the line search. The
+reliability gradient is not at fault: central differences on $\beta$ are smooth
+in all eleven variables there. What defeats the line search is the thinness §3.4
+measures. A step of 0.05 mm along the normalised $\nabla\beta$ leaves the
+geometric constraint set entirely:
 
 | step along $\nabla\beta$ [mm] | $\beta$ | nominally feasible |
 |---|---|---|
@@ -439,10 +439,36 @@ by the penalty fallback:
 | 0.05 | $-2.570$ | no |
 | 0.10 and beyond | $-8.210$ | no |
 
-That better reliability is nevertheless available nearby is shown by sampling
-rather than by descent, and the margin is not small. Drawing 2500 designs at
-0.05 % to 1 % relative scatter about the reference, scoring each by $\beta$, and
-then checking the twenty-five best against the *full* constraint set:
+**The system index is the wrong quantity to steer on.** The last row of that
+table is not a reliability measurement. Outside the band the orthant integrates
+to exactly 1, $\beta_{\text{sys}}$ takes the constant value
+$-\Phi^{-1}(1-10^{-16}) = -8.2095$, and a difference quotient straddling the
+band sees an eleven-unit fall over a $10^{-5}$ step. The search is therefore
+steered on
+
+$$\min_i \beta_i = \min_i \bigl(-g_i(X) / \sigma_i(X)\bigr) \;\ge\; \beta_{\text{target}},$$
+
+which is smooth through the band, and the system probability is *reported* at
+the solution rather than assumed from the target. That is weaker than
+constraining $\beta_{\text{sys}}$ — §3.8 says why the union is not the worst
+margin — and it is what makes the problem solvable.
+
+**The feasible set must be non-empty.** At the bounds as written no design
+reaches $\beta = 3$, so the run states its bounds: the gap at 0.054 mm and both
+bands at $\pm 0.15$. §6.2 prices that widening in range and shows which of the
+two relaxations the result depends on.
+
+With those three in place, the third form reaches 3395 km/L at
+$P_f = 1.3\times10^{-3}$ with every constraint held to $-2.2\times10^{-7}$
+(§6.4). It is the formulation the study's final result comes from.
+
+### What sampling showed along the way
+
+That better reliability was available near the deterministic optimum was shown
+by sampling rather than by descent, and the margin is not small. Drawing 2500
+designs at 0.05 % to 1 % relative scatter about the reference, scoring each by
+$\beta$, and then checking the twenty-five best against the *full* constraint
+set:
 
 | | $\beta$ | $P_f$ | range |
 |---|---|---|---|
@@ -463,15 +489,9 @@ millimetre costs almost no range and buys most of the reliability back, and the
 deterministic formulation cannot see that because it prices only the nominal
 point.
 
-So the failure above is entirely algorithmic. It is not that the reliable
-region is expensive to reach; it is adjacent, feasible, and free.
-
-So closing the reliability loop is not a matter of attaching the discipline,
-which is easy, but of reaching the reliable region, which a gradient method
-starting from the deterministic optimum does not do. §7.3 lists what that needs.
-The deterministic problem above therefore remains the one this study solves, and
-the reliability numbers of §6.2 remain an audit — but now by a measured
-limitation rather than an unexamined omission.
+The failure of the first route was therefore algorithmic rather than physical:
+the reliable region is adjacent, feasible and free, and what was missing was a
+formulation able to move into it.
 
 ### Which constraints the probability covers
 

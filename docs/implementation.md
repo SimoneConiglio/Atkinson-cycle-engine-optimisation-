@@ -118,7 +118,7 @@ src/exlink/
 | the augmented-Lagrangian polish | `python examples/03_optimize.py` |
 | the efficiency/size trade-off | `python examples/04_pareto.py` |
 | sizing, dynamics and the singularity result | `python examples/05_sizing_and_dynamics.py` |
-| the mass budget, loss breakdown and mechanism comparison | `python examples/06_range.py` |
+| the mass budget, loss breakdown and both mechanism comparisons of §6.3 | `python examples/06_range.py` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests
@@ -132,8 +132,8 @@ tox                     # across Python 3.10 – 3.12
 Every claim above is pinned by a test, including the ones that would be embarrassing to get
 wrong: that inertia does no net work over a cycle, that burn-and-coast conserves energy, that
 the Otto cycle reproduces its closed-form efficiency, that `ρ = 0` at rest, that stock
-rounding never shrinks a member, and that the range advantage collapses when the firing
-frequency assumption is removed.
+rounding never shrinks a member, and that the range advantage survives matching the firing
+rate but not removing it.
 
 ## Provenance
 

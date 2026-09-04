@@ -24,15 +24,22 @@ drives the linkage to its transmission-angle singularity — exactly where the a
 bearing loads are worst. That design has no feasible structure above 1000 rpm; one backed off
 weighs half as much and goes further.
 
-**A specified constraint cannot be manufactured.** The top-dead-centre gap is bounded at
-0.01 mm and the dimensions producing it scatter by more than that. No ISO grade holds it, and
-the reference design has a **64.5 %** probability of missing at least one requirement.
+**A tolerance study decides which of the stated bounds are real.** The top-dead-centre gap is
+bounded at 0.01 mm and the dimensions producing it scatter by 0.013 mm, so the reference design
+has a **64.5 %** probability of missing at least one requirement. Widening that bound to
+0.1 mm — 2.7 % of the clearance volume, 0.47 % of the range — removes it from the binding set
+entirely, and what governs reliability from there on is the band imposed on the expansion
+stroke.
 
-**The advantage depends on which comparison is meant, by a factor of ten.** Against a
-conventional engine optimised as such, the linkage wins **15.6 %** — but remove its
-one-revolution cycle and it *loses* by 4.3 %, while holding that engine to the same rod-angle
-and side-load limits the linkage meets takes the advantage to **+43 %**. All three are in
-§6.3, with what each assumes.
+**The advantage survives matching the firing rate.** The linkage fires once per crankshaft
+revolution where a four-stroke fires once per two, so the comparison has to hold the power
+strokes per minute constant rather than the shaft speed. It does: **+13 to +19 %** over an
+optimised conventional engine between 800 and 1400 fires per minute, and **+15.6 %** at each
+engine's own best speed, where the baseline is in fact firing slightly more often. Removing
+the linkage's one-revolution cycle turns that into a 4.3 % deficit, which attributes the
+advantage to the firing rate rather than to extended expansion but scores an engine that does
+not exist; held to the same rod-angle and side-load limits the linkage meets, the conventional
+engine falls further behind, at **+37.6 %**. §6.3 has all four, with what each assumes.
 
 **Imposing a constraint and checking it are different searches.** Holding every constraint
 *during* the search rather than verifying them afterwards reaches **3501 km/L** against 3338.
