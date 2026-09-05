@@ -47,13 +47,17 @@ required `STE = 74 mm` — that asymmetry is what the linkage exists to produce.
 
 *`RELIABLE_DESIGN`, the design §6.4 arrives at, through one cycle — 360° of the
 half-speed shaft, 720° of the crankshaft. Left: the linkage. Right: piston
-height, the p–V cycle, and shaft torque, with a marker tracking the crank angle
-on each. Regenerate with `exlink animate`.*
+height, the p–V cycle, and crankshaft torque, with a marker tracking the
+crankshaft angle on each. Every abscissa runs over the 720° the cycle spans, so
+these read against a conventional four-stroke's without conversion. Regenerate
+with `exlink animate`.*
 
 ![piston motion, cycle and torque](figures/overview.png)
 
-The piston reaches the **same** top dead centre twice (`g = 0.00011 mm` on this design) but two
-different bottom dead centres — `STE = 74.10 mm` against `STC = 55.95 mm`. Torque is strongly positive
+The piston reaches the **same** top dead centre twice per cycle — 360° of crankshaft apart,
+`g = 0.00011 mm` between them on this design — but two different bottom dead centres,
+`STE = 74.10 mm` against `STC = 56.39 mm` — the latter above the 55.95 mm an exact
+`ε = 16` would need, because this design sits at `ε = 16.12`, inside the band §6.2 settles on. Torque is strongly positive
 through expansion, negative through compression, and flat through intake and exhaust, where
 the cylinder is at plenum pressure and the piston carries no gas load.
 
@@ -133,7 +137,7 @@ variable.
 
 | setting | value | why |
 |---|---|---|
-| crank angles per cycle | 360 (coupled), 720 (reporting) | the top-dead-centre gap needs 360+ to be measured correctly; §6.2 |
+| samples per cycle | 360 (coupled), 720 (reporting) | the top-dead-centre gap needs 360+ to be measured correctly; §6.2 |
 | stations along each member | 9 | internal loads are cubic in the station coordinate |
 | material | 42CrMo4 Q&T | $S_y$ 700 MPa, $S_u$ 900 MPa |
 | safety factors | 1.5 static, 2.0 fatigue, 2.5 buckling | first-iteration structural practice |

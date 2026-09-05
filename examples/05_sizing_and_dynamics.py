@@ -27,6 +27,7 @@ matplotlib.use("Agg")
 
 from exlink import analyse
 from exlink.cli import configure_logging
+from exlink.constants import DEFAULT_SPEC
 from exlink.coupled import solve_for_design
 from exlink.plots import plot_bearing_loads, plot_mass_vs_speed, plot_sizing
 from exlink.reference import REFINED_DESIGN
@@ -34,6 +35,9 @@ from exlink.scenarios import format_coupled
 
 OUTDIR = Path("figures")
 SPEEDS = (0.0, 500.0, 1000.0, 1500.0, 2000.0)
+"""Analysis speeds; the crankshaft turns twice as fast, and is what is quoted."""
+
+CRANKSHAFT = tuple(DEFAULT_SPEC.output_speed_rpm(rpm) for rpm in SPEEDS)
 
 
 def main() -> None:
@@ -43,12 +47,12 @@ def main() -> None:
     print("Sizing the reference design across engine speeds.")
     print("Efficiency is a mean-torque quantity, so it cannot move; the parts can.\n")
     print(
-        f"  {'rpm':>6}{'mass [kg]':>12}{'peak bearing [N]':>19}"
+        f"  {'crank rpm':>10}{'mass [kg]':>12}{'peak bearing [N]':>19}"
         f"{'mean Mr [N.mm]':>17}{'  sweeps':>9}  state"
     )
 
     results = []
-    for rpm in SPEEDS:
+    for rpm, crank in zip(SPEEDS, CRANKSHAFT, strict=True):
         result = solve_for_design(
             REFINED_DESIGN, speed_rpm=rpm, samples=360, max_iterations=400
         )
@@ -57,19 +61,21 @@ def main() -> None:
             "ok" if result.feasible else ("RUNAWAY" if result.saturated else "not converged")
         )
         print(
-            f"  {rpm:>6.0f}{result.total_mass_kg:>12.3f}"
+            f"  {crank:>10.0f}{result.total_mass_kg:>12.3f}"
             f"{result.peak_bearing_load:>19.0f}{result.loads.mean_torque:>17.1f}"
             f"{result.iterations:>9}  {state}"
         )
 
     print()
-    print(format_coupled(results[2], "sizing at 1000 rpm"))
+    print(format_coupled(results[2], f"sizing at {CRANKSHAFT[2]:.0f} rpm"))
 
     # The baseline sits at W = 0.981, a hair from the singularity, because
     # that is where the quasi-static lever arm is longest.  Proximity to the
     # singularity is also what amplifies the accelerations, so with inertia in
     # the load path the same choice becomes the expensive one.
-    print("\n\nBacking away from the transmission-angle singularity, at 1000 rpm:")
+    print(
+        f"\n\nBacking away from the transmission-angle singularity, at {CRANKSHAFT[2]:.0f} rpm:"
+    )
     print(
         f"  {'swing rod':>10}{'W':>9}{'eta [%]':>10}{'H [mm]':>9}"
         f"{'mass [kg]':>12}{'bearing [N]':>14}"
@@ -88,8 +94,10 @@ def main() -> None:
 
     for name, figure in {
         "sizing": plot_sizing(results[2]),
-        "bearing_loads": plot_bearing_loads(results[:3], [f"{s:.0f} rpm" for s in SPEEDS[:3]]),
-        "mass_vs_speed": plot_mass_vs_speed(list(SPEEDS), results),
+        "bearing_loads": plot_bearing_loads(
+            results[:3], [f"{s:.0f} rpm" for s in CRANKSHAFT[:3]]
+        ),
+        "mass_vs_speed": plot_mass_vs_speed(list(CRANKSHAFT), results),
     }.items():
         path = OUTDIR / f"{name}.png"
         figure.savefig(path, dpi=140, bbox_inches="tight")

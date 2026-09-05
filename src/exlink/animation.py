@@ -46,6 +46,7 @@ from .plots import (
     _motion_axes,
     _solved,
     _torque_axes,
+    crankshaft_degrees,
 )
 
 LINK_STYLE: dict[str, dict[str, Any]] = {
@@ -167,8 +168,9 @@ def _make_frame_updater(ax: Axes, analysis: SolvedAnalysis, spec: EngineSpec):
             [crown, crown],
         )
         phase = Phase(int(thermo.phases.labels[index]))
+        crank = crankshaft_degrees(kinematics.theta_1[index], spec)
         label.set_text(
-            f"theta1 = {np.degrees(kinematics.theta_1[index]):6.1f} deg\n"
+            f"crank  = {float(crank):6.1f} deg\n"
             f"{PHASE_LABELS[phase]:<11}\n"
             f"p      = {thermo.gauge_pressure[index] / 0.1:6.2f} bar\n"
             f"Mr     = {analysis.loads.torque[index] / 1000.0:6.2f} N.m"
@@ -308,13 +310,14 @@ def animate_dashboard(
             fontsize=10,
         )
 
-    degrees = np.degrees(kinematics.theta_1)
+    degrees = crankshaft_degrees(kinematics.theta_1, kinematics.spec)
+    revolutions = kinematics.spec.output_revolutions_per_cycle
 
     def update(index: int):
         artists = update_mechanism(index)
         markers[0].set_data([degrees[index]], [kinematics.lam[index]])
         markers[1].set_data([thermo.volume[index] / 1000.0], [thermo.pressure[index] / 0.1])
-        markers[2].set_data([degrees[index]], [loads.torque[index] / 1000.0])
+        markers[2].set_data([degrees[index]], [loads.torque[index] / revolutions / 1000.0])
         return (*artists, *markers)
 
     n_frames = kinematics.theta_1.size

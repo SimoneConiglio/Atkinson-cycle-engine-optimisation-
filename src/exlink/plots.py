@@ -2,7 +2,8 @@
 
 Every figure here doubles as a diagnostic:
 
-* :func:`plot_motion` shows the four monotone phases of ``lambda(theta_1)``.
+* :func:`plot_motion` shows the four monotone phases of the piston motion,
+  against crankshaft angle over the 720 deg of a cycle.
   A design that is *not* Atkinson shows up immediately -- either as a single
   up-and-down (a plain Otto motion) or as two top dead centres at visibly
   different heights, which is the ``g`` constraint made visible.
@@ -95,11 +96,32 @@ def _segments(labels: np.ndarray) -> list[tuple[int, int, Phase]]:
     return runs
 
 
+def crankshaft_degrees(theta_1: FloatArray, spec: EngineSpec = DEFAULT_SPEC) -> FloatArray:
+    """Crankshaft angle over the cycle [deg], from the analysis angle [rad].
+
+    The analysis is parametrised on ``theta_1``, one turn of which is one full
+    cycle, but power is taken from the shaft the gear pair turns twice as fast
+    (:attr:`~exlink.constants.EngineSpec.output_revolutions_per_cycle`).  A
+    cycle is therefore **720 deg** of crankshaft, exactly as on a conventional
+    four-stroke, and that is the abscissa every figure here uses: a p-V loop or
+    a turning-moment diagram is read against the crankshaft, and one drawn
+    against a half-speed shaft cannot be compared with anyone else's.
+
+    Args:
+        theta_1: Analysis angle [rad].
+        spec: Fixed engine data.
+
+    Returns:
+        The crankshaft angle [deg].
+    """
+    return np.degrees(np.asarray(theta_1, dtype=float)) * spec.output_revolutions_per_cycle
+
+
 def _motion_axes(ax: Axes, analysis: SolvedAnalysis) -> Axes:
-    """Draw ``lambda(theta_1)``, coloured by phase, onto existing axes."""
+    """Draw the piston motion against crankshaft angle, coloured by phase."""
     kinematics = analysis.kinematics
     thermo = analysis.thermodynamics
-    degrees = np.degrees(kinematics.theta_1)
+    degrees = crankshaft_degrees(kinematics.theta_1, kinematics.spec)
     seen: set[Phase] = set()
     for start, stop, phase in _segments(thermo.phases.labels):
         stop = min(stop + 1, degrees.size)
@@ -119,15 +141,15 @@ def _motion_axes(ax: Axes, analysis: SolvedAnalysis) -> Axes:
         alpha=0.7,
         label="top dead centre",
     )
-    ax.set_xlabel(r"crank angle $\theta_1$ [deg]")
+    ax.set_xlabel("crankshaft angle [deg]")
     ax.set_ylabel(r"piston height $\lambda$ [mm]")
     ax.set_title(
         f"piston motion   STE = {analysis.metrics.expansion_stroke:.2f} mm, "
         f"STC = {analysis.metrics.compression_stroke:.2f} mm, "
         f"g = {analysis.metrics.tdc_gap:.4f} mm"
     )
-    ax.set_xlim(0.0, 360.0)
-    ax.set_xticks(np.arange(0.0, 361.0, 60.0))
+    ax.set_xlim(0.0, 720.0)
+    ax.set_xticks(np.arange(0.0, 721.0, 90.0))
     ax.legend(loc="lower right", ncol=2, framealpha=0.9)
     return ax
 
@@ -162,33 +184,41 @@ def _cycle_axes(ax: Axes, analysis: SolvedAnalysis) -> Axes:
 
 
 def _torque_axes(ax: Axes, analysis: SolvedAnalysis) -> Axes:
-    """Draw the crankshaft torque onto existing axes."""
+    """Draw the crankshaft torque onto existing axes.
+
+    ``M_r`` is the whole engine torque *referred to* ``theta_1``, so the torque
+    at the crankshaft -- which turns twice as fast -- is half of it, and that is
+    what is plotted here against the crankshaft angle.  The shape is identical
+    either way; only the scale and the abscissa change, and both have to match
+    the shaft the reader is being shown.
+    """
     loads = analysis.loads
-    degrees = np.degrees(analysis.kinematics.theta_1)
-    ax.plot(degrees, loads.torque / 1000.0, color="#8e44ad", lw=1.8)
+    spec = analysis.kinematics.spec
+    degrees = crankshaft_degrees(analysis.kinematics.theta_1, spec)
+    torque = np.asarray(loads.torque, dtype=float) / spec.output_revolutions_per_cycle
+    mean = loads.mean_torque / spec.output_revolutions_per_cycle
+    ax.plot(degrees, torque / 1000.0, color="#8e44ad", lw=1.8)
     ax.axhline(
-        loads.mean_torque / 1000.0,
+        mean / 1000.0,
         color="#c0392b",
         ls="--",
         lw=1.0,
-        label=f"mean = {loads.mean_torque / 1000.0:.2f} N.m",
+        label=f"mean = {mean / 1000.0:.2f} N.m",
     )
     ax.axhline(0.0, color="#7f8c8d", lw=0.8)
-    ax.set_xlabel(r"crank angle $\theta_1$ [deg]")
-    ax.set_ylabel(r"torque $M_r$ [N.m]")
+    ax.set_xlabel("crankshaft angle [deg]")
+    ax.set_ylabel(r"crankshaft torque $M_r / 2$ [N.m]")
     ax.set_title(
-        "crankshaft torque   "
-        r"$\eta$ = "
-        f"{100 * analysis.metrics.efficiency:.2f} %"
+        "crankshaft torque   " r"$\eta$ = " f"{100 * analysis.metrics.efficiency:.2f} %"
     )
-    ax.set_xlim(0.0, 360.0)
-    ax.set_xticks(np.arange(0.0, 361.0, 60.0))
+    ax.set_xlim(0.0, 720.0)
+    ax.set_xticks(np.arange(0.0, 721.0, 90.0))
     ax.legend(loc="best", framealpha=0.9)
     return ax
 
 
 def plot_motion(design: Design, analysis: Analysis | None = None, **kwargs: Any) -> Figure:
-    """Plot the piston motion ``lambda(theta_1)`` over one revolution."""
+    """Plot the piston motion over the 720 deg of crankshaft the cycle spans."""
     solved = _solved(analysis or analyse(design, **kwargs))
     with plt.style.context(STYLE):
         figure, ax = plt.subplots(figsize=(7.0, 4.0))
@@ -220,16 +250,18 @@ def plot_torque(design: Design, analysis: Analysis | None = None, **kwargs: Any)
 
 def plot_mechanism(
     design: Design,
-    crank_angles: Sequence[float] = (0.0, 90.0, 180.0, 270.0),
+    crank_angles: Sequence[float] = (0.0, 180.0, 360.0, 540.0),
     spec: EngineSpec = DEFAULT_SPEC,
     analysis: Analysis | None = None,
     **kwargs: Any,
 ) -> Figure:
-    """Draw the mechanism at several crank angles side by side.
+    """Draw the mechanism at several crankshaft angles side by side.
 
     Args:
         design: The mechanism to draw.
-        crank_angles: Crank angles to show [deg].
+        crank_angles: **Crankshaft** angles to show [deg], over the 720 deg the
+            cycle spans; the analysis angle is half of each
+            (:func:`crankshaft_degrees`).
         spec: Fixed engine data.
         analysis: A precomputed analysis at full resolution.
         **kwargs: Forwarded to :func:`exlink.model.analyse`.
@@ -242,7 +274,9 @@ def plot_mechanism(
     solved = _solved(analysis or analyse(design, spec=spec, **kwargs))
 
     # Re-solve at exactly the requested angles rather than snapping to the grid.
-    angles = np.radians(np.asarray(crank_angles, dtype=float))
+    angles = np.radians(
+        np.asarray(crank_angles, dtype=float) / spec.output_revolutions_per_cycle
+    )
     frames = solve_kinematics(design, spec=spec, theta_1=angles)
     bodies = frames.bodies
     xlim, ylim = _mechanism_limits(solved, spec)
@@ -255,7 +289,7 @@ def plot_mechanism(
             ax.set_aspect("equal")
             ax.set_xlim(*xlim)
             ax.set_ylim(*ylim)
-            ax.set_title(r"$\theta_1$ = " f"{angle:.0f}" r"$^\circ$")
+            ax.set_title(f"crankshaft {angle:.0f}" r"$^\circ$")
             _draw_static(ax, solved, spec)
             for name, style in LINK_STYLE.items():
                 polyline = bodies[name][column]
@@ -732,14 +766,14 @@ def plot_convergence(outcome: Any) -> Figure:
 
 
 def _load_axes(ax: Axes, result: Any, joint: str = "R1") -> Axes:
-    """Draw a joint's reaction over the revolution onto existing axes."""
-    degrees = np.degrees(result.loads.kinematics.theta_1)
+    """Draw a joint's reaction over the cycle onto existing axes."""
+    degrees = crankshaft_degrees(result.loads.kinematics.theta_1)
     magnitude = np.linalg.norm(result.loads.reaction[joint], axis=1)
     ax.plot(degrees, magnitude, lw=1.8, color="#c0392b")
-    ax.set_xlabel(r"crank angle $\theta_1$ [deg]")
+    ax.set_xlabel("crankshaft angle [deg]")
     ax.set_ylabel(f"$|F_{{{joint}}}|$ [N]")
-    ax.set_xlim(0.0, 360.0)
-    ax.set_xticks(np.arange(0.0, 361.0, 60.0))
+    ax.set_xlim(0.0, 720.0)
+    ax.set_xticks(np.arange(0.0, 721.0, 90.0))
     return ax
 
 
@@ -761,7 +795,7 @@ def plot_bearing_loads(results: Sequence[Any], labels: Sequence[str]) -> Figure:
         figure, axes = plt.subplots(1, 2, figsize=(11.0, 4.2))
         colours = plt.get_cmap("viridis")(np.linspace(0.15, 0.85, len(results)))
         for result, label, colour in zip(results, labels, colours, strict=True):
-            degrees = np.degrees(result.loads.kinematics.theta_1)
+            degrees = crankshaft_degrees(result.loads.kinematics.theta_1)
             axes[0].plot(
                 degrees,
                 np.linalg.norm(result.loads.reaction["R1"], axis=1) / 1000.0,
@@ -770,16 +804,20 @@ def plot_bearing_loads(results: Sequence[Any], labels: Sequence[str]) -> Figure:
                 label=label,
             )
             axes[1].plot(
-                degrees, result.loads.torque / 1000.0, lw=1.8, color=colour, label=label
+                degrees,
+                result.loads.torque / DEFAULT_SPEC.output_revolutions_per_cycle / 1000.0,
+                lw=1.8,
+                color=colour,
+                label=label,
             )
-        axes[0].set_ylabel("crankshaft bearing load [kN]")
+        axes[0].set_ylabel("shaft bearing load [kN]")
         axes[0].set_title("peak load grows as the square of speed")
-        axes[1].set_ylabel(r"torque $M_r$ [N.m]")
+        axes[1].set_ylabel(r"crankshaft torque $M_r / 2$ [N.m]")
         axes[1].set_title("mean torque is unchanged by it")
         for ax in axes:
-            ax.set_xlabel(r"crank angle $\theta_1$ [deg]")
-            ax.set_xlim(0.0, 360.0)
-            ax.set_xticks(np.arange(0.0, 361.0, 90.0))
+            ax.set_xlabel("crankshaft angle [deg]")
+            ax.set_xlim(0.0, 720.0)
+            ax.set_xticks(np.arange(0.0, 721.0, 90.0))
             ax.legend(loc="best", framealpha=0.9)
         figure.tight_layout()
     return figure
@@ -835,9 +873,11 @@ def plot_sizing(result: Any) -> Figure:
             ax.set_yticks(positions)
             ax.set_yticklabels(names)
             ax.invert_yaxis()
+        crankshaft = (
+            result.speed * 60.0 / (2.0 * np.pi) * DEFAULT_SPEC.output_revolutions_per_cycle
+        )
         figure.suptitle(
-            f"sizing at {result.speed * 60.0 / (2.0 * np.pi):.0f} rpm   "
-            f"({result.iterations} MDA sweeps)",
+            f"sizing at {crankshaft:.0f} rpm   ({result.iterations} MDA sweeps)",
             fontsize=11,
         )
         figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))

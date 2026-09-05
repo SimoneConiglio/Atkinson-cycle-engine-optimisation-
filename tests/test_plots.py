@@ -39,6 +39,50 @@ def test_single_design_figures_build(builder, refined_analysis) -> None:
     assert figure.axes
 
 
+def test_every_angle_axis_spans_the_720_degrees_of_a_cycle(refined_analysis) -> None:
+    """A cycle is 720 deg of crankshaft, and the figures have to say so.
+
+    The analysis is parametrised on ``theta_1``, one turn of which is one cycle,
+    but power is taken from the shaft that turns twice as fast.  A turning-moment
+    diagram or a piston-motion curve drawn against ``theta_1`` runs to 360 and
+    cannot be laid beside a conventional engine's without a conversion the
+    reader has to make.  So the abscissa is the crankshaft's, and this pins it.
+    """
+    from exlink.plots import crankshaft_degrees
+
+    figure = plot_overview(REFINED_DESIGN, refined_analysis)
+    motion, cycle, torque = figure.axes
+    for ax in (motion, torque):
+        assert ax.get_xlim() == pytest.approx((0.0, 720.0))
+        assert "crankshaft angle" in ax.get_xlabel()
+    # The p-V loop has no angle axis and must not have acquired one.
+    assert "volume" in cycle.get_xlabel()
+
+    theta_1 = refined_analysis.require_solved().kinematics.theta_1
+    assert crankshaft_degrees(theta_1).max() == pytest.approx(
+        720.0 * (theta_1.size - 1) / theta_1.size
+    )
+
+
+def test_the_crankshaft_torque_is_half_the_torque_referred_to_theta_1(
+    refined_analysis,
+) -> None:
+    """``M_r`` is referred to ``theta_1``; the crankshaft sees half of it.
+
+    Plotting ``M_r`` itself against a crankshaft abscissa would mix the two
+    shafts on one pair of axes, which is the same error as running the angle to
+    360.  The power is what must be invariant, and it is: half the torque at
+    twice the speed.
+    """
+    import numpy as np
+
+    figure = plot_torque(REFINED_DESIGN, refined_analysis)
+    curves = [np.asarray(line.get_ydata(), dtype=float) for line in figure.axes[0].get_lines()]
+    (drawn,) = [values for values in curves if values.size > 2]
+    loads = refined_analysis.require_solved().loads
+    assert drawn.max() == pytest.approx(loads.torque.max() / 2.0 / 1000.0, rel=1e-9)
+
+
 def test_the_mechanism_figure_has_one_panel_per_angle(refined_analysis) -> None:
     figure = plot_mechanism(
         REFINED_DESIGN, crank_angles=(0.0, 120.0, 240.0), analysis=refined_analysis

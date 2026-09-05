@@ -28,6 +28,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .constants import DEFAULT_SPEC
 from .design import GLOBAL_BOUNDS, VARIABLE_DESCRIPTIONS, VARIABLE_NAMES, Bounds, Design
 from .dynamics import DEFAULT_SPEED_RPM
 from .model import analyse
@@ -200,7 +201,8 @@ def _cmd_size(args: argparse.Namespace) -> int:
         max_iterations=args.max_iterations,
         relaxation=args.relaxation,
     )
-    print(format_coupled(result, f"sizing at {args.rpm:.0f} rpm"))
+    crankshaft = DEFAULT_SPEC.output_speed_rpm(args.rpm)
+    print(format_coupled(result, f"sizing at {crankshaft:.0f} rpm"))
     if not result.converged:
         print("\nthe sizing loop did not converge: try --relaxation 0.5")
     elif result.saturated:
@@ -367,7 +369,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--rpm",
         type=float,
         default=DEFAULT_SPEED_RPM,
-        help="crankshaft speed; the single strongest driver of the answer",
+        help=(
+            "analysis speed (the half-speed shaft); the crankshaft turns twice "
+            "as fast, and it is the crankshaft speed that is reported"
+        ),
     )
     size_parser.add_argument("--samples", type=int, default=180)
     size_parser.add_argument("--max-iterations", type=int, default=400, dest="max_iterations")
