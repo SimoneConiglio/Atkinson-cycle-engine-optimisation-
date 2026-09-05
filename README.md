@@ -15,13 +15,17 @@ the physics fixes.
 Built on **[GEMSEO](https://gemseo.readthedocs.io)**, with exact analytic derivatives through
 the parts where finite differences are not merely inaccurate but wrong.
 
-![the mechanism through one revolution](docs/figures/exlink.gif)
+![the study's design turning through one cycle](docs/figures/exlink.gif)
+
+*The design the study arrives at — 3395 km/L at a failure probability of
+1.3 × 10⁻³ — through one cycle: 360° of the half-speed shaft, 720° of the
+crankshaft, exactly as on a conventional four-stroke.*
 
 ## Four results
 
 **The quasi-static optimum is the worst place to be.** Maximising efficiency without inertia
 drives the linkage to its transmission-angle singularity — exactly where the accelerations and
-bearing loads are worst. That design has no feasible structure above 1000 rpm; one backed off
+bearing loads are worst. That design has no feasible structure above 2000 rpm; one backed off
 weighs half as much and goes further.
 
 **A tolerance study decides which of the stated bounds are real.** The top-dead-centre gap is
@@ -31,15 +35,13 @@ has a **64.5 %** probability of missing at least one requirement. Widening that 
 entirely, and what governs reliability from there on is the band imposed on the expansion
 stroke.
 
-**The advantage survives matching the firing rate.** The linkage fires once per crankshaft
-revolution where a four-stroke fires once per two, so the comparison has to hold the power
-strokes per minute constant rather than the shaft speed. It does: **+13 to +19 %** over an
-optimised conventional engine between 800 and 1400 fires per minute, and **+15.6 %** at each
-engine's own best speed, where the baseline is in fact firing slightly more often. Removing
-the linkage's one-revolution cycle turns that into a 4.3 % deficit, which attributes the
-advantage to the firing rate rather than to extended expansion but scores an engine that does
-not exist; held to the same rod-angle and side-load limits the linkage meets, the conventional
-engine falls further behind, at **+37.6 %**. §6.3 has all four, with what each assumes.
+**The topology is worth 17.6 %, and extended expansion is the smallest part of it.** Both
+engines complete four strokes in 720° of their crankshaft, so the comparison is at equal speed
+and equal firing rate with nothing to correct: **3395 km/L against 2888** for a conventional
+engine sized by identical models and optimised over its own degrees of freedom. Indicated
+efficiency accounts for 0.457 → 0.480 of that, mechanical efficiency for 0.787 → 0.865, and
+engine mass for 16.9 → 12.9 kg — the last two because eleven dimensions can be placed off the
+singularity and two cannot.
 
 **Imposing a constraint and checking it are different searches.** Holding every constraint
 *during* the search rather than verifying them afterwards reaches **3501 km/L** against 3338.
@@ -76,7 +78,9 @@ pytest -m "not slow"
 ```python
 from exlink import COUPLED_DESIGN, evaluate
 
+# speed_rpm is the half-speed shaft's; the crankshaft turns twice per cycle
 outcome = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
+print(outcome.output_speed_rpm)      # 2000.0, the speed the study quotes
 print(outcome.km_per_litre)          # 3338.3
 print(outcome.budget.kilograms())    # where the mass actually is
 ```

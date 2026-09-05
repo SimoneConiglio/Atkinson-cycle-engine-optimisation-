@@ -11,7 +11,6 @@ from exlink.reference import COUPLED_DESIGN
 from exlink.slidercrank import (
     SliderCrank,
     evaluate_slidercrank,
-    firing_frequency_sensitivity,
     friction_work,
     kinematics,
     mass_budget,
@@ -169,30 +168,43 @@ def test_extended_expansion_buys_indicated_efficiency(mechanism: SliderCrank) ->
     assert 0.0 < gain < 0.06
 
 
-def test_the_range_advantage_is_firing_frequency_not_expansion() -> None:
-    """The comparison's most load-bearing assumption, tested rather than assumed.
+def test_both_engines_complete_a_cycle_in_two_output_revolutions() -> None:
+    """The comparison is at equal speed only if the cycles line up.
 
-    In this model the EX-link fires every crankshaft revolution while a
-    conventional four-stroke fires every other one, so per unit of work it
-    accumulates half the journal rotation and half the piston sliding.  Re-run
-    with that advantage removed, the range gain over a slider-crank very nearly
-    disappears -- which means the headline result is about firing frequency,
-    and must be reported as such.
+    The kinematics are parametrised on ``theta_1``, the half-speed shaft, and
+    the four strokes complete in one turn of it.  Power is taken from the other
+    shaft, which turns twice as often -- 720 deg per cycle, exactly what a
+    conventional four-stroke crankshaft does.  So at equal output speed the two
+    engines fire at the same rate and burn the same fuel per minute, and no
+    firing-frequency correction enters the comparison at all.
     """
-    atkinson = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
-    sensitivity = firing_frequency_sensitivity(atkinson)
-    otto = max(
-        (
-            evaluate_slidercrank(SliderCrank.for_compression_ratio(16.0), rpm)
-            for rpm in (1500.0, 2000.0, 2500.0)
-        ),
-        key=lambda item: item.km_per_litre,
+    linkage = evaluate(COUPLED_DESIGN, speed_rpm=1000.0, samples=360)
+    assert linkage.output_speed_rpm == pytest.approx(2000.0)
+    assert linkage.cycles_per_minute == pytest.approx(1000.0)
+
+    # The slider-crank: 2000 rev/min of its crankshaft is likewise 1000 cycles.
+    mechanism = SliderCrank.for_compression_ratio(16.0, obliquity=0.195)
+    otto = evaluate_slidercrank(mechanism, 2000.0)
+    assert otto.speed_rpm / 2.0 == pytest.approx(linkage.cycles_per_minute)
+
+
+def test_reading_the_output_at_either_shaft_gives_the_same_power() -> None:
+    """Which shaft the datasheet quotes cannot change what the engine makes.
+
+    ``M_r`` is the whole engine torque referred to ``theta_1`` -- that is the
+    virtual-work identity :mod:`exlink.loads` is verified against -- so
+    referring it to a shaft turning twice as fast must halve it and leave the
+    product untouched.  This is what licenses quoting every speed at the output
+    shaft without recomputing anything.
+    """
+    linkage = evaluate(COUPLED_DESIGN, speed_rpm=1000.0, samples=360)
+    spec = linkage.spec
+    assert linkage.output_torque == pytest.approx(
+        linkage.metrics.mean_torque / spec.output_revolutions_per_cycle
     )
-    as_modelled = sensitivity["km_per_litre"] / otto.km_per_litre - 1.0
-    four_stroke = sensitivity["km_per_litre_four_stroke"] / otto.km_per_litre - 1.0
-    assert as_modelled > 0.15
-    assert four_stroke < 0.10
-    assert as_modelled > 3.0 * four_stroke
+    at_theta_1 = linkage.metrics.mean_torque * linkage.speed_rpm
+    at_output = linkage.output_torque * linkage.output_speed_rpm
+    assert at_output == pytest.approx(at_theta_1)
 
 
 def test_friction_is_reported_per_cycle_not_per_revolution(solved: object) -> None:
@@ -241,23 +253,20 @@ def test_the_optimised_baseline_stays_inside_its_box() -> None:
 
 
 @pytest.mark.slow
-def test_removing_the_firing_advantage_costs_the_ex_link_its_lead() -> None:
+def test_the_linkage_leads_an_optimised_baseline_at_equal_output_speed() -> None:
     """The headline comparison, against a baseline that was also optimised.
 
-    Against a hand-set slider-crank the EX-link leads by about a quarter, and
-    still leads once its firing-frequency advantage is removed.  Against an
-    *optimised* one the second half of that is no longer true: with the
-    one-revolution cycle taken away the EX-link falls behind.  That is the
-    result, and it is only visible because both sides were optimised.
+    Both engines take 720 deg of their output shaft per cycle, so running them
+    at the same output speed puts them on the same fuel per minute; the range
+    difference is then the mechanisms' and nothing else.  Against a *hand-set*
+    slider-crank the lead would measure the optimization instead, which is what
+    :func:`optimise_slidercrank` exists to remove.
     """
-    atkinson = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
-    sensitivity = firing_frequency_sensitivity(atkinson)
-    best = optimise_slidercrank(starts=3).comparison
-
-    as_modelled = sensitivity["km_per_litre"] / best.km_per_litre - 1.0
-    four_stroke = sensitivity["km_per_litre_four_stroke"] / best.km_per_litre - 1.0
-    assert as_modelled > 0.10
-    assert four_stroke < 0.0
+    linkage = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
+    best = optimise_slidercrank(starts=3)
+    matched = evaluate_slidercrank(best.mechanism, linkage.output_speed_rpm, samples=360)
+    assert matched.feasible
+    assert linkage.km_per_litre / matched.km_per_litre - 1.0 > 0.10
 
 
 def test_the_constrained_baseline_imposes_its_constraints() -> None:
@@ -280,24 +289,24 @@ def test_the_constrained_baseline_imposes_its_constraints() -> None:
 
 
 @pytest.mark.slow
-def test_the_advantage_survives_matching_the_firing_rate() -> None:
-    """The comparison must hold the useful output constant, not the shaft speed.
+def test_the_lead_holds_across_the_operating_range() -> None:
+    """One operating point could be a lucky one; this checks two more.
 
-    The EX-link fires once per crankshaft revolution where a four-stroke fires
-    once per two, so an equal-rpm comparison would measure the cycle rate.  At
-    equal *power strokes per minute* -- the baseline run at twice the linkage's
-    speed, its obliquity re-optimised there -- the linkage still leads.  This
-    pins the sign and a conservative magnitude, not the exact figures of §6.3.
+    Both mechanisms take 720 deg of their crankshaft per cycle, so comparing
+    them at equal crankshaft speed is comparing them at equal fuel per minute.
+    The baseline's obliquity is re-optimised at each speed and the linkage is
+    merely re-scored, which understates the linkage rather than the reverse.
+    This pins the sign and a conservative magnitude, not section 6.3's figures.
     """
     from exlink.slidercrank import OBLIQUITY_BOUNDS
 
-    for fires in (800.0, 1200.0):
-        linkage = evaluate(COUPLED_DESIGN, speed_rpm=fires, samples=180)
+    for cycles in (800.0, 1200.0):
+        linkage = evaluate(COUPLED_DESIGN, speed_rpm=cycles, samples=180)
         best = 0.0
         for obliquity in np.linspace(*OBLIQUITY_BOUNDS, 9):
             row = evaluate_slidercrank(
                 SliderCrank.for_compression_ratio(16.0, float(obliquity)),
-                2.0 * fires,
+                linkage.output_speed_rpm,
                 samples=180,
             )
             if row.feasible:

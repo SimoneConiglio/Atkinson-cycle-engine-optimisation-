@@ -15,6 +15,7 @@ Every figure here doubles as a diagnostic:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -27,6 +28,7 @@ from .constants import DEFAULT_SPEC, EngineSpec
 from .cycle import Phase
 from .design import Design
 from .kinematics import solve as solve_kinematics
+from .materials import FloatArray
 from .model import Analysis, SolvedAnalysis, analyse
 
 STYLE: dict[str, Any] = {
@@ -50,6 +52,21 @@ PHASE_COLOURS: dict[Phase, str] = {
     Phase.INTAKE: "#2980b9",
     Phase.COMPRESSION: "#e67e22",
 }
+
+JOINT_NAMES: tuple[str, ...] = ("R1", "R2", "Q", "A", "D", "E", "P", "H")
+"""Joints of the linkage, in the order :mod:`exlink.kinematics` defines them."""
+
+JOINT_LABEL_OFFSET: dict[str, tuple[float, float]] = {
+    "R1": (8.0, -12.0),
+    "R2": (8.0, -4.0),
+    "Q": (-16.0, 2.0),
+    "A": (8.0, 4.0),
+    "D": (8.0, -8.0),
+    "E": (-16.0, -6.0),
+    "P": (8.0, 0.0),
+    "H": (8.0, 4.0),
+}
+"""Where each joint label sits relative to its joint, in points."""
 
 PHASE_LABELS: dict[Phase, str] = {
     Phase.EXPANSION: "expansion",
@@ -257,6 +274,308 @@ def plot_mechanism(
             else:
                 ax.set_ylabel("y [mm]")
             ax.set_xlabel("x [mm]")
+        figure.tight_layout()
+    return figure
+
+
+def _dimension(
+    ax: Axes,
+    start: Sequence[float] | FloatArray,
+    end: Sequence[float] | FloatArray,
+    label: str,
+    offset: float = 0.0,
+    colour: str = "#2c3e50",
+    fontsize: float = 11.0,
+) -> None:
+    """Draw a double-headed dimension between two points and label its middle.
+
+    Args:
+        ax: Axes to draw on.
+        start: First point ``(x, y)`` [mm].
+        end: Second point [mm].
+        label: Text to place at the midpoint, normally a LaTeX symbol.
+        offset: Perpendicular shift of the dimension line [mm], so the arrow
+            can be pulled clear of the member it measures.
+        colour: Line and text colour.
+        fontsize: Label size in points.
+    """
+    first = np.asarray(start, dtype=float)
+    second = np.asarray(end, dtype=float)
+    span = second - first
+    length = float(np.hypot(*span))
+    if length <= 0.0:
+        return
+    normal = np.array([-span[1], span[0]]) / length
+    shift = normal * offset
+    ax.annotate(
+        "",
+        xy=tuple(second + shift),
+        xytext=tuple(first + shift),
+        arrowprops={
+            "arrowstyle": "<|-|>",
+            "color": colour,
+            "lw": 1.1,
+            "shrinkA": 0,
+            "shrinkB": 0,
+        },
+        zorder=8,
+    )
+    middle = 0.5 * (first + second) + shift + normal * (3.5 if offset >= 0.0 else -3.5)
+    ax.text(
+        float(middle[0]),
+        float(middle[1]),
+        label,
+        color=colour,
+        fontsize=fontsize,
+        ha="center",
+        va="center",
+        zorder=9,
+        bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none", "alpha": 0.85},
+    )
+
+
+def _angle_arc(
+    ax: Axes,
+    centre: Sequence[float] | FloatArray,
+    angle: float,
+    label: str,
+    radius: float = 26.0,
+    colour: str = "#7f8c8d",
+) -> None:
+    """Draw an arc from the +x direction to ``angle`` and label it."""
+    origin = np.asarray(centre, dtype=float)
+    sweep = np.linspace(0.0, angle, 64)
+    ax.plot(
+        origin[0] + radius * np.cos(sweep),
+        origin[1] + radius * np.sin(sweep),
+        color=colour,
+        lw=1.0,
+        ls="-",
+        zorder=7,
+    )
+    ax.plot(
+        [origin[0], origin[0] + 1.35 * radius],
+        [origin[1], origin[1]],
+        color=colour,
+        lw=0.8,
+        ls=":",
+        zorder=6,
+    )
+    tip = origin + 1.16 * radius * np.array([np.cos(0.5 * angle), np.sin(0.5 * angle)])
+    ax.text(
+        float(tip[0]),
+        float(tip[1]),
+        label,
+        color=colour,
+        fontsize=11.0,
+        ha="center",
+        va="center",
+        zorder=9,
+        bbox={"boxstyle": "round,pad=0.12", "fc": "white", "ec": "none", "alpha": 0.85},
+    )
+
+
+def _trigonal_inset(ax: Axes, design: Design, colour: str = "#34495e") -> None:
+    """Inset showing ``E`` in the frame the trigonal link carries.
+
+    ``x_b`` and ``y_b`` are the coordinates of ``E`` in the frame whose origin
+    is ``A`` and whose first axis runs along ``AD``.  On the mechanism itself
+    those two dimensions land on top of ``c`` and of the link, because the foot
+    of ``E`` on ``AD`` falls close to ``D``; they are drawn here instead, in the
+    frame that defines them.
+
+    Args:
+        ax: Axes to place the inset inside.
+        design: The mechanism, for ``c``, ``x_b`` and ``y_b``.
+        colour: Colour of the two dimensions.
+    """
+    inset = ax.inset_axes((0.62, 0.68, 0.36, 0.30))
+    inset.set_aspect("equal")
+    inset.set_facecolor("white")
+    corner = {"A": (0.0, 0.0), "D": (design.c, 0.0), "E": (design.x_b, design.y_b)}
+    order = ("A", "D", "E", "A")
+    inset.plot(
+        [corner[name][0] for name in order],
+        [corner[name][1] for name in order],
+        color="#2c3e50",
+        lw=2.0,
+        zorder=4,
+    )
+    inset.plot(
+        [design.x_b, design.x_b, 0.0],
+        [0.0, design.y_b, 0.0],
+        color="#95a5a6",
+        lw=0.9,
+        ls=":",
+        zorder=3,
+    )
+    for name, (x, y) in corner.items():
+        inset.plot(x, y, marker="o", ms=4.0, color="#2c3e50", zorder=5)
+        inset.annotate(
+            name,
+            (x, y),
+            textcoords="offset points",
+            xytext=(5.0, 4.0),
+            fontsize=8.5,
+            color="#2c3e50",
+        )
+    span = max(abs(design.c), abs(design.x_b), abs(design.y_b))
+    _dimension(
+        inset,
+        (0.0, 0.0),
+        (design.x_b, 0.0),
+        r"$x_b$",
+        offset=0.16 * span,
+        colour=colour,
+        fontsize=9.0,
+    )
+    _dimension(
+        inset,
+        (design.x_b, 0.0),
+        (design.x_b, design.y_b),
+        r"$y_b$",
+        offset=0.16 * span,
+        colour=colour,
+        fontsize=9.0,
+    )
+    _dimension(
+        inset,
+        (0.0, 0.0),
+        (design.c, 0.0),
+        r"$c$",
+        offset=-0.20 * span,
+        colour="#2c3e50",
+        fontsize=9.0,
+    )
+    inset.set_title("trigonal link, in its own frame", fontsize=8.5, pad=3.0)
+    inset.set_xticks([])
+    inset.set_yticks([])
+    inset.grid(False)
+    for spine in inset.spines.values():
+        spine.set_visible(True)
+        spine.set_color("#bdc3c7")
+    inset.margins(0.30)
+
+
+def plot_variables(
+    design: Design,
+    theta_1: float = 45.0,
+    spec: EngineSpec = DEFAULT_SPEC,
+    analysis: Analysis | None = None,
+    **kwargs: Any,
+) -> Figure:
+    """Draw the mechanism with all eleven design variables dimensioned.
+
+    The design vector is a list of symbols until someone sees where each one
+    sits on the linkage, so this is the figure the use case opens with.  Every
+    entry of ``X`` appears exactly once: the four member lengths and two crank
+    throws as dimensions along the members they measure, the inter-axle
+    distance and its orientation at the shafts, the local coordinates of ``E``
+    in the frame the trigonal link carries, the cylinder offset as a horizontal
+    dimension from the ``R1`` axis, and the crank dephasing through the
+    kinematic relation that defines it.
+
+    Args:
+        design: The mechanism to draw.
+        theta_1: Crank angle to freeze the linkage at [deg].  The default opens
+            the triangle enough that no two dimensions overlap.
+        spec: Fixed engine data.
+        analysis: A precomputed analysis at full resolution.
+        **kwargs: Forwarded to :func:`exlink.model.analyse`.
+
+    Returns:
+        The figure.
+    """
+    from .animation import LINK_STYLE, _draw_static, _mechanism_limits
+
+    solved = _solved(analysis or analyse(design, spec=spec, **kwargs))
+    angle = math.radians(float(theta_1))
+    frame = solve_kinematics(design, spec=spec, theta_1=np.array([angle]))
+    point = {name: np.asarray(getattr(frame, name)[0], dtype=float) for name in JOINT_NAMES}
+    xlim, ylim = _mechanism_limits(solved, spec)
+
+    with plt.style.context(STYLE):
+        figure, ax = plt.subplots(figsize=(8.4, 8.6))
+        ax.set_aspect("equal")
+        ax.set_xlim(xlim[0] - 18.0, xlim[1] + 18.0)
+        ax.set_ylim(ylim[0] - 8.0, ylim[1] + 4.0)
+        _draw_static(ax, solved, spec)
+        for name, style in LINK_STYLE.items():
+            polyline = frame.bodies[name][0]
+            ax.plot(polyline[:, 0], polyline[:, 1], solid_capstyle="round", **style)
+
+        crown = point["H"][1]
+        half_bore = 0.5 * spec.bore
+        ax.plot(
+            [design.x_1 - half_bore, design.x_1 + half_bore],
+            [crown, crown],
+            color="#2c3e50",
+            lw=7.0,
+            solid_capstyle="butt",
+        )
+
+        for name, offset in JOINT_LABEL_OFFSET.items():
+            ax.plot(*point[name], marker="o", ms=5.0, color="#2c3e50", zorder=10)
+            ax.annotate(
+                name,
+                (float(point[name][0]), float(point[name][1])),
+                textcoords="offset points",
+                xytext=offset,
+                fontsize=9.5,
+                color="#2c3e50",
+                zorder=10,
+            )
+
+        # -- the four lengths and the two crank throws ---------------------------
+        _dimension(ax, point["R1"], point["Q"], r"$q_1$", offset=-8.0, colour="#c0392b")
+        _dimension(ax, point["R2"], point["D"], r"$q_2$", offset=9.0, colour="#16a085")
+        _dimension(ax, point["Q"], point["A"], r"$a$", offset=11.0, colour="#8e44ad")
+        _dimension(ax, point["A"], point["D"], r"$c$", offset=13.0, colour="#2c3e50")
+        _dimension(ax, point["E"], point["P"], r"$e$", offset=-11.0, colour="#d35400")
+        _dimension(ax, point["R1"], point["R2"], r"$I$", offset=-15.0, colour="#7f8c8d")
+
+        # -- E in the frame the trigonal link carries ----------------------------
+        # Drawn in that frame rather than on the mechanism: the foot of E on
+        # AD falls within a millimetre of D here, so the two dimensions would
+        # lie on top of ``c`` and on the link itself.
+        _trigonal_inset(ax, design)
+
+        # -- the cylinder offset --------------------------------------------------
+        datum = float(ylim[0]) + 0.06 * (float(ylim[1]) - float(ylim[0]))
+        ax.plot([0.0, 0.0], [0.0, datum], color="#95a5a6", lw=0.8, ls=":", zorder=6)
+        ax.plot(
+            [design.x_1, design.x_1],
+            [datum, crown],
+            color="#95a5a6",
+            lw=0.8,
+            ls=":",
+            zorder=6,
+        )
+        _dimension(ax, (0.0, datum), (design.x_1, datum), r"$x_1$", colour="#34495e")
+
+        # -- the two angles -------------------------------------------------------
+        _angle_arc(ax, point["R1"], design.theta_r_rad, r"$\theta_r$", radius=34.0)
+        _angle_arc(ax, point["R1"], angle, r"$\theta_1$", radius=19.0, colour="#c0392b")
+        _angle_arc(
+            ax,
+            point["R2"],
+            float(frame.theta_2[0]),
+            r"$\theta_2$",
+            radius=22.0,
+            colour="#16a085",
+        )
+
+        ax.set_xlabel("x [mm]")
+        ax.set_ylabel("y [mm]")
+        ax.set_title(
+            r"$X = (a,\, c,\, I,\, x_b,\, y_b,\, x_1,\, e,\, q_1,\, q_2,"
+            r"\, \theta_f,\, \theta_r)^\top$"
+            "\n"
+            r"drawn at $\theta_1$ = "
+            f"{theta_1:.0f}"
+            r"$^\circ$;"
+            r" the dephasing enters through $\theta_2 = -2\theta_1 + \theta_f$"
+        )
         figure.tight_layout()
     return figure
 

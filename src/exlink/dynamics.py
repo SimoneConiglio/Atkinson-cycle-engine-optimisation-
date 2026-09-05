@@ -62,14 +62,20 @@ from .kinematics import Kinematics
 FloatArray = NDArray[np.float64]
 
 DEFAULT_SPEED_RPM = 1500.0
-"""Crankshaft speed used by default [rev/min].
+"""Speed of the half-speed shaft used by default [rev/min].
+
+This is ``theta_1``'s rate, the quantity the analysis is parametrised on; the
+crankshaft turns twice as fast, so the default is 3000 rev/min at the shaft
+power is taken from -- see
+:attr:`~exlink.constants.EngineSpec.output_revolutions_per_cycle`.
 
 Chosen because it is where the problem is interesting.  A Shell Eco-marathon
 engine runs slowly by design, and for this linkage the structural mass grows
 roughly as the *cube* of the acceleration level (see :mod:`exlink.coupled`):
-the published geometry needs 0.25 kg of links at rest, 1.0 kg at 1000 rpm,
-8.4 kg at 1500 rpm, and cannot be built at all much above 2000 rpm.  1500 rpm
-therefore exercises the coupling hard while leaving sensible designs reachable.
+quoted at the crankshaft, the published geometry needs 0.25 kg of links at
+rest, 1.0 kg at 2000 rev/min, 8.4 kg at 3000 rev/min, and cannot be built at
+all much above 4000.  3000 therefore exercises the coupling hard while leaving
+sensible designs reachable.
 """
 
 

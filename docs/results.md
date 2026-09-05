@@ -9,9 +9,10 @@ limitations.
 *What each objective converged to, from the same starting point, drawn at one
 scale and one crank angle. Left to right: the geometric objective under an
 augmented Lagrangian and under SLSQP with exact gradients, then minimum coupled
-mass, then maximum range. The two geometric optima are long-limbed and stand
-their cylinder high — §6.1 is about why — while the two that can see mass are
-visibly shorter and squatter. Regenerate with `exlink animate --formulations`.*
+mass, then the study's result — maximum range under a reliability constraint,
+3395 km/L. The two geometric optima are long-limbed and stand their cylinder
+high — §6.1 is about why — while the two that can see mass are visibly shorter
+and squatter. Regenerate with `exlink animate --formulations`.*
 
 ## 6.0 Every design in one place
 
@@ -29,20 +30,19 @@ referred to rather than restated.
 | `RANGE_DESIGN` | 3388 km/L | range, constraints bound at the end | no, by $1.5\times10^{-4}$ |
 | range, constraints imposed | 3501 km/L | §3.10's second form, nominal only | no, by $2\times10^{-4}$ |
 | **range + reliability, relaxed bounds** | **3395 km/L** | **§3.10's third form; $P_f = 1.3\times10^{-3}$** | no — relaxed spec |
-| slider-crank, optimised | 2888 km/L | baseline, its own limits only | n/a — misses the EX-link's |
-| slider-crank, same specification | 2467 km/L | baseline, held to the EX-link's limits | yes, on the cap |
+| slider-crank, optimised | 2888 km/L | the baseline of §6.3, optimised over its own two freedoms | its own limits |
+| slider-crank, capped | 2467 km/L | the same, held to the linkage's limits; §6.2 only | yes, on the cap |
 
-Three advantage figures follow, and all are quoted in this document because they
-answer different questions (§6.3 tabulates a fourth):
+The comparison of §6.3 uses the first of those two and reports one figure,
+**+17.6 %** — the study's result against the baseline's. The second slider-crank
+row is not a competing comparison: it exists because a baseline forced onto an
+active constraint is what §6.2 needs to show that the dominated-optimum effect
+is not peculiar to the linkage.
 
-| question | figure |
-|---|---|
-| at matched power strokes per minute, 800–1400 | **+13 to +19 %** |
-| against a conventional engine optimised as such | **+15.6 %** |
-| against one held to the same specification | **+37.6 %** |
-
-Figures are given to four significant digits once, here, and rounded
-elsewhere.
+Speeds are quoted at the crankshaft, which turns twice per cycle on both
+mechanisms; the ``speed_rpm`` the code takes for the linkage is the half-speed
+shaft's, at half the quoted figure (§5.3). Figures are given to four significant
+digits once, here, and rounded elsewhere.
 
 ## 6.1 The quasi-static optimum is the worst place to be
 
@@ -61,7 +61,7 @@ worst available choice.
 | x0.82 | 0.9488 | 28.56 % | 213.2 | 0.450 kg | 6 027 N |
 
 Half the bearing load, a smaller envelope, less than half the mass — at equal or
-better efficiency, at 1000 rpm.
+better efficiency, at 2000 rpm.
 
 ### Why
 
@@ -73,9 +73,9 @@ speed**:
 | speed | moving mass | peak bearing load |
 |---|---|---|
 | 0 rpm | 0.25 kg | 7.7 kN |
-| 1000 rpm | 1.03 kg | 12.5 kN |
-| 1500 rpm | 8.43 kg | 245 kN |
-| 2000 rpm | *no section is thick enough* | |
+| 2000 rpm | 1.03 kg | 12.5 kN |
+| 3000 rpm | 8.43 kg | 245 kN |
+| 4000 rpm | *no section is thick enough* | |
 
 ### Discussion
 
@@ -219,6 +219,34 @@ Sampling is how those points were found, and it is not a substitute for solving
 the reliability-constrained problem: SLSQP started from the deterministic
 optimum could not move at all (§3.10). §6.4 solves it.
 
+### The same happens to the slider-crank, which settles what the effect is
+
+A result measured on one mechanism could be a property of that mechanism. It is
+not. {py:func}`~exlink.slidercrank.optimise_slidercrank_to_specification`
+optimises the conventional baseline under the linkage's own rod-angle and
+side-load caps — a specification it has no reason to meet, imposed here only so
+that it has an active constraint to converge onto. It converges onto it, at
+$\gamma = 0.02000$ against a bound of 0.02:
+
+| $r/l$ | quasi-static $\gamma$ | range | $P_f$ | $\beta$ |
+|---|---|---|---|---|
+| **0.09593** (the optimum) | 0.02000 | **2467.5 km/L** | 0.595 | $-0.24$ |
+| 0.09590 | 0.01999 | 2467.2 km/L | 0.106 | 1.25 |
+| 0.09580 | 0.01997 | 2466.2 km/L | $9\times10^{-9}$ | 5.63 |
+| 0.09550 | 0.01991 | 2463.4 km/L | $< 10^{-16}$ | $\ge 8.2$ |
+
+Three builds in five miss the requirement at the optimum; giving up 0.4 % of the
+obliquity costs **0.17 % of range** and takes the failure probability below the
+estimator's floor. Two toleranced dimensions instead of eleven, two design
+variables instead of ten, a different topology and a different optimizer — and
+the same shape of result. **The effect belongs to deterministic optimization
+under tolerance, not to this linkage.**
+
+That is also why this baseline is not the one §6.3 compares against: 2467 km/L
+is what a conventional engine reaches when held to a specification written for
+something else, which answers a question about constraints rather than about
+mechanisms.
+
 ### Discussion
 
 The estimator is first-order and its weakest point is exactly where the
@@ -240,153 +268,70 @@ specification is entitled to contain.
 
 ### Result
 
-Both engines at the same compression ratio, clearance volume and fuel per
-cycle, sized by identical code, and both optimised. The baseline has two
-freedoms, rod obliquity and speed, and is optimised twice: once under the
-requirements a conventional engine actually has, and once under the EX-link's
-own rod-angle and side-load caps.
+Both engines complete their four strokes in 720° of the shaft that power is
+taken from, at the same compression ratio, the same clearance volume and the
+same fuel per cycle, and are sized by identical structural and tribological
+code. Both are
+optimised: the baseline over the two freedoms it has, rod obliquity and speed.
 
-| | slider-crank, its own limits | slider-crank, same specification | EX-link |
+| | slider-crank, optimised | EX-link (`RELIABLE_DESIGN`) |
+|---|---|---|
+| $r/l$ | 0.195 | — |
+| crankshaft speed | 2151 rpm | 2000 rpm |
+| power strokes / min | 1076 | 1000 |
+| indicated efficiency | 0.457 | 0.480 |
+| mechanical efficiency | 0.787 | 0.865 |
+| brake efficiency | 0.359 | 0.416 |
+| engine mass | 16.9 kg | 12.9 kg |
+| range | 2888 km/L | **3395 km/L** |
+
+**+17.6 %**, and that is the whole comparison. There is no firing-rate
+correction to make, because taking the power off the shaft that turns twice per
+cycle leaves both engines with the same relation between speed and cycles; and
+there is no speed mismatch to argue about, because re-scoring the baseline at
+the linkage's own 2000 rpm gives 2883 km/L rather than 2888, which moves the
+figure to +17.8 %.
+
+Against `COUPLED_DESIGN`, the strictly feasible minimum-mass design rather than
+the study's result, the same comparison gives +15.6 %. Both are quoted in §7.5;
+the 17.6 % is the one that compares each study's best.
+
+### Why
+
+The linkage is ahead on all three terms of the objective at once, which is worth
+separating because the three come from different physics.
+
+| | slider-crank | EX-link | why |
 |---|---|---|---|
-| $r/l$, speed | 0.195, 2151 rpm | 0.0959, 1227 rpm | — , 1000 rpm |
-| power strokes per minute | 1076 | 614 | 1000 |
-| rod angle / $\gamma$ | 11.2° / 0.039 | 5.50° / 0.0200 | within 10° / 0.02 |
-| brake efficiency | 0.359 | 0.347 | 0.407 |
-| range | 2888 km/L | 2467 km/L | 3395 km/L |
-| EX-link advantage | +15.6 % | +37.6 % | — |
+| indicated efficiency | 0.457 | 0.480 | expansion through 20.8 volumes against 16.0 |
+| mechanical efficiency | 0.787 | 0.865 | 9.7° of rod angle against 11.2°, and a side-load ratio of 0.018 against 0.039 |
+| engine mass | 16.9 kg | 12.9 kg | a flatter torque curve needs less flywheel |
 
-### The advantage survives matching the firing rate
-
-The EX-link completes its four strokes in one crankshaft revolution where a
-four-stroke needs two, so at equal shaft speed it fires twice as often and the
-comparison would be measuring the cycle rate. It is not: the own-limits
-baseline's optimum is 2151 rpm, which is **1076 power strokes per minute against
-the EX-link's 1000**. The 15.6 % above is therefore already an essentially
-rate-matched comparison, and it is the baseline that fires more often.
-
-Matching the rate exactly — the baseline pinned to twice the EX-link's speed,
-its obliquity re-optimised there — holds the result across the rates the
-EX-link runs at:
-
-| power strokes / min | EX-link, rpm | km/L | slider-crank, rpm | $r/l$ | km/L | advantage |
-|---|---|---|---|---|---|---|
-| 800 | 800 | 3350 | 1600 | 0.178 | 2822 | **+18.7 %** |
-| 1000 | 1000 | 3395 | 2000 | 0.191 | 2884 | **+17.7 %** |
-| 1200 | 1200 | 3363 | 2400 | 0.200 | 2878 | **+16.9 %** |
-| 1400 | 1400 | 3181 | 2800 | 0.214 | 2823 | **+12.7 %** |
-
-Between 800 and 1400 fires per minute the advantage is +13 % to +19 % and never
-changes sign. The EX-link design is the one optimised at 1000 rpm and is merely
-re-scored at the other three rates, so those rows understate it; the baseline is
-re-optimised at every row and does not.
-
-This is the comparison to quote when the question is whether the mechanism is
-worth building, because it is the one that holds the useful output constant.
-
-### Where the advantage comes from is a different question
-
-Firing rate and extended expansion arrive together in this topology, and
-{py:func}`~exlink.slidercrank.firing_frequency_sensitivity` separates them by a
-counterfactual on the EX-link itself: keep the linkage and its motion, but give
-it a conventional two-revolution gas exchange — twice the friction per cycle and
-half the power at the same speed — and re-score through the vehicle. The
-advantage over the own-limits baseline goes from +15.6 % to **−4.3 %**.
-
-That answers "which feature carries the advantage", and the answer is the firing
-rate rather than the extended expansion: the longer expansion alone does not pay
-for four extra journals and a gear train. It is not a comparison between two
-engines, because the engine it scores does not exist — it is the EX-link with
-the property that distinguishes it removed. As an attribution it is
-informative; as a verdict it would be wrong, and the matched-rate table above is
-the verdict.
-
-### Held to the EX-link's own limits the gap widens
-
-`evaluate_slidercrank` tests convergence, net work and the speed rule, never the
-10° rod angle or the 0.02 side-load ratio, and the own-limits optimum sits at
-11.2° and 0.039 — roughly twice each cap. Imposing them,
-{py:func}`~exlink.slidercrank.optimise_slidercrank_to_specification` reaches
-2467 km/L: the side-load cap binds, needs a connecting rod ten times the crank
-throw, and costs the baseline 15 % of its range. The advantage becomes
-**+37.6 %**.
-
-Two details decide that number and are worth stating, because getting either
-wrong moves it by ten points.
-
-*Which $\gamma$.* The EX-link's cap is applied to a quasi-static quantity —
-{mod}`exlink.loads` propagates the gas load alone. At the operating speed the
-reciprocating inertia opposes the gas side load over part of the cycle, so the
-same mechanism reads 0.0248 quasi-statically at $r/l = 0.12$ and 0.0181 at
-1500 rpm. Capping the *at-speed* ratio would admit proportions the EX-link is
-not allowed and hand the baseline about a tenth of its range.
-
-*Which search.* Range rises with obliquity and the cap binds from above, so the
-optimum lies against a boundary in one variable and at an interior maximum in
-the other, and the function grids the box before refining. Stopping a fraction
-inside the cap, at $r/l = 0.095$ and 1500 rpm, returns 2372 km/L — 4 % low, and
-low in the direction that flatters the linkage.
-
-This baseline runs at 614 power strokes per minute against the EX-link's 1000,
-so unlike the matched-rate table it is *not* rate-matched. Matching it would
-widen the gap further, not narrow it: at 2000 rpm the same caps admit nothing
-better than 988 km/L, because the cap is quasi-static while the friction and
-inertia that punish the short rod at speed are not.
-
-### The constrained baseline is dominated too
-
-The baseline held to the same specification converges onto its side-load cap, at
-$\gamma = 0.02000$ against a bound of 0.02, which is precisely where §6.2 shows
-reliability is lost:
-
-| $r/l$ | quasi-static $\gamma$ | range | $P_f$ | $\beta$ |
-|---|---|---|---|---|
-| **0.09593** (the optimum) | 0.02000 | **2467.5 km/L** | 0.595 | $-0.24$ |
-| 0.09590 | 0.01999 | 2467.2 km/L | 0.106 | 1.25 |
-| 0.09580 | 0.01997 | 2466.2 km/L | $9\times10^{-9}$ | 5.63 |
-| 0.09550 | 0.01991 | 2463.4 km/L | $< 10^{-16}$ | $\ge 8.2$ |
-
-The optimum sits on the constraint, so about three builds in five miss it.
-Giving up 0.4 % of the obliquity costs **0.17 % of range** and takes the failure
-probability below the estimator's floor. This is §6.2's dominated optimum again,
-on a mechanism with two toleranced dimensions instead of eleven and a search
-over two variables instead of ten — which is the strongest evidence in the study
-that the effect belongs to *deterministic optimization under tolerance* rather
-than to this linkage.
-
-Once both are backed off their boundaries the baseline is the more reliable
-mechanism, at $\beta \ge 8.2$ against 3.0. Not because it is better designed: it
-has two toleranced lengths against eleven, so it has fewer ways to be wrong. Its
-binding constraint is a function of $r/l$, and machining error on a 28 mm crank
-and a 292 mm rod moves that ratio by about a tenth of a percent.
+The thermodynamic term is the one the topology exists for and it is the
+smallest of the three: five per cent of indicated efficiency. The other two are
+consequences of where the optimizer put the linkage rather than of extended
+expansion, and §6.1 is the reason it could go there at all — a mechanism with
+eleven dimensions can be placed off its singularity, and a slider-crank with
+two cannot be placed anywhere its obliquity does not already put it.
 
 ### Discussion
 
-The measurements point different ways on purpose, and the useful statement is
-their conjunction: **the linkage buys range by adding degrees of freedom, and
-pays for them in the probability that all of them land in tolerance at once.**
-That trade is invisible to any comparison scoring only the nominal design, and
-it is the counterweight to §6.1's argument that more freedom buys a better
-optimum.
+Two conservatisms run against the linkage and are not quantified here. No gas
+exchange is modelled, and §7.2 measures the loss that omits as about 2.5× larger
+for the conventional engine, because an over-expanded charge reaches the exhaust
+valve nearer ambient. And the baseline meets neither the 10° rod-angle cap nor
+the 0.02 side-load cap the linkage is held to; those come from the linkage's own
+brief and practical slider-cranks run 14–19° routinely, so imposing them on it
+would be imposing an alien specification. §6.2 reports what happens when they
+are imposed anyway — the point there is about reliability, not about the range
+comparison.
 
-| question | comparison | figure |
-|---|---|---|
-| is the mechanism worth building? | matched power strokes per minute | **+13 to +19 %** |
-| optimum against optimum, each at its own best speed | own-limits baseline | **+15.6 %** |
-| which feature carries the advantage? | EX-link without its firing rate | **−4.3 %** |
-| what if the baseline had to meet the same brief? | same rod-angle and side-load caps | **+37.6 %** |
-
-Which of the two range comparisons — against the baseline under its own limits,
-or against the baseline under the linkage's — is the right question is a
-judgement this study does not make. The 10° and 0.02 limits come from the EX-link's brief, and practical
-slider-cranks run 14–19° routinely, so holding one to 5.5° may be imposing an
-alien specification. What is not defensible is holding one engine to limits the
-other is silently exempt from.
-
-Two conservatisms run against the EX-link and are not quantified here: no gas
-exchange is modelled, and the loss that omits is about 2.5× larger for the
-conventional engine (§7.2); and the reliability figures compare mechanisms of
-different dimensionality, which is a real difference rather than an artefact but
-is not like-for-like the way the range figures are.
+One conservatism runs the other way, and it is the reason the mass column is not
+quite like-for-like: the baseline carries a flywheel sized for a single-cylinder
+four-stroke's turning-moment diagram, which is the worst case in this class, and
+the linkage's flatter curve is a genuine property of the topology rather than a
+modelling artefact — but both flywheels are sized by the same rule at their own
+shaft speeds, so the comparison is at least consistent.
 
 ## 6.4 The announced problem, solved
 
@@ -397,7 +342,7 @@ system probability of failure. Solving *that* needs the bounds §6.2 identifies,
 because at the bounds as written no design reaches the target. The run used the
 gap at 0.054 mm and both bands at $\pm 0.15$:
 
-| | start (`COUPLED_DESIGN`) | result |
+| | start (`COUPLED_DESIGN`) | result (`RELIABLE_DESIGN`) |
 |---|---|---|
 | range | 3338 km/L | **3395 km/L** |
 | system $P_f$ | $1.0\times10^{-3}$ | $1.3\times10^{-3}$ |
@@ -459,7 +404,7 @@ it is what makes the problem solvable.
 | start | fell back to the target | outcome |
 |---|---|---|
 | `COUPLED_DESIGN` (runs) | 0 of 836 | pure range maximisation |
-| `REFINED_DESIGN` at 1250 rpm (does **not** run) | 26 of 103 | 0 km/L $\to$ 3336 km/L |
+| `REFINED_DESIGN` at 2500 rpm (does **not** run) | 26 of 103 | 0 km/L $\to$ 3336 km/L |
 
 From a start that runs, the ladder never fires and costs nothing. From one
 where the engine will not run and km/L does not exist, a quarter of the search
@@ -480,12 +425,12 @@ none of them is a finding about the engine.
 
 $\rho$ is the Gauss–Seidel contraction factor of §3.5.
 
-| rpm | $\rho$ | sweeps | verdict |
+| crankshaft rpm | $\rho$ | sweeps | verdict |
 |---|---|---|---|
 | 0 | 0.0000 | 2 | weak |
-| 500 | 0.1307 | 9 | moderate |
-| 1000 | 0.6513 | 28 | strong |
-| 1500 | 0.6819 | 42 | strong |
+| 1000 | 0.1307 | 9 | moderate |
+| 2000 | 0.6513 | 28 | strong |
+| 3000 | 0.6819 | 42 | strong |
 
 At rest $\rho = 0$ exactly, which is the sharpest available check that the
 measure reflects the physics rather than the solver: with no inertia there is no
@@ -493,7 +438,7 @@ path from mass to load.
 
 ### What the derivatives buy
 
-Minimising total moving mass at 1000 rpm, subject to every constraint and a
+Minimising total moving mass at 2000 rpm, subject to every constraint and a
 25 % efficiency floor:
 
 | | COBYLA | SLSQP + differences | SLSQP + analytic |
@@ -532,14 +477,18 @@ which is bounded, 0 of 6 restarts reached feasibility at an affordable budget.
 | `GRADIENT_DESIGN` | 30.91 % | 320 | 159 | 0.9850 | 0.0095 | yes |
 | `COUPLED_DESIGN` | 25.00 % | 198 | 131 | 0.9372 | 0.0070 | yes |
 | `RANGE_DESIGN` | 25.46 % | 231 | 131 | 0.9319 | 0.0012 | no |
+| `RELIABLE_DESIGN` | 25.14 % | 238 | 128 | 0.9364 | 0.00011 | yes, at the §6.2 bounds |
 
 `COUPLED_DESIGN` is the design to compare against: it gives up five points of
 $\eta$ to move off the singularity and gets a lighter, faster, longer-ranged
-engine for it.
+engine for it. `RELIABLE_DESIGN` is the study's result and the design every
+figure here is drawn from; it reaches its top dead centres within
+$10^{-4}$ mm of each other, so the bound §6.2 spends its length on is not what
+constrains it — the band on the stroke is.
 
 ### The range optimization
 
-SLSQP on `neg_range`, gear pair pinned, 1000 rpm, started from the coupled reference:
+SLSQP on `neg_range`, gear pair pinned, 2000 rpm, started from the coupled reference:
 
 | | range | engine mass | `g` | strictly feasible |
 |---|---|---|---|---|

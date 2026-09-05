@@ -29,9 +29,8 @@ were written down from a textbook measures the optimization, not the topology,
 and it flatters the side that was searched.  :func:`optimise_slidercrank`
 removes that asymmetry by maximising the conventional engine's range over the
 two degrees of freedom it has -- the rod length and the speed -- under the same
-models.  It is worth 7.4 % to the baseline, and it changes the *sign* of the
-study's headline comparison once the firing-frequency difference below is taken
-out.
+models.  It is worth 7.4 % to the baseline, and it is the baseline the study's
+headline comparison is made against.
 
 Modelling parity
 ----------------
@@ -44,14 +43,15 @@ flywheel models from :mod:`exlink.mass_budget`, and the same vehicle and
 burn-and-coast strategy from :mod:`exlink.vehicle`.  What differs is only what
 must: the kinematics, the equilibrium system, and the cycle.
 
-One asymmetry is *not* a modelling choice and has to be stated plainly.  In
-this model the EX-link completes all four strokes in one crankshaft revolution
--- that is exactly what :func:`exlink.cycle.find_phases` requires of it -- while
-a conventional slider-crank needs two.  The EX-link therefore fires twice as
-often for the same displacement and speed.  That is a power-density advantage,
-not an efficiency one, and since range is fuel per unit of *work* it does not
-flatter the EX-link's range directly; it shows up only through the operating
-point the vehicle can use.
+The cycles line up, and that has to be stated because it is easy to assume
+otherwise.  The EX-link completes all four strokes in one revolution of the
+shaft the kinematics are parametrised on -- that is exactly what
+:func:`exlink.cycle.find_phases` requires of it -- but power is taken from the
+*other* shaft, which the gear pair turns twice as fast
+(:attr:`~exlink.constants.EngineSpec.output_revolutions_per_cycle`).  A cycle is
+therefore 720 deg of the crankshaft on both mechanisms, so equal crankshaft
+speed is equal fuel per minute and the comparison carries no firing-rate
+correction of any kind.
 """
 
 from __future__ import annotations
@@ -1405,68 +1405,3 @@ def slidercrank_reliability(
         system=system,
         independent_bound=independent,
     )
-
-
-def firing_frequency_sensitivity(
-    performance: object,
-    vehicle: Vehicle | None = None,
-) -> dict[str, float]:
-    """Test the comparison's single most load-bearing assumption.
-
-    In this model the EX-link completes all four strokes in one crankshaft
-    revolution, because that is what :func:`exlink.cycle.find_phases` demands
-    of the piston motion.  A conventional four-stroke needs two.  The EX-link
-    therefore accumulates, *per cycle*, half the journal rotation and half the
-    piston sliding distance -- and that, not extended expansion, turns out to
-    be the larger part of its advantage.
-
-    So the comparison is re-run as if the same linkage drove a conventional
-    four-stroke gas exchange: twice the friction per cycle, and half the power
-    at the same speed, since an engine that fires half as often makes half the
-    power.  Both are re-scored through the vehicle rather than compared as
-    efficiencies, because halving the power moves the operating point the
-    burn-and-coast strategy can use, and that is where the effect shows up.
-
-    If the advantage survives, it comes from the thermodynamics; if it does
-    not, it comes from the firing frequency, and the conclusion has to be
-    stated as being about firing frequency.  Measured against
-    :func:`optimise_slidercrank`'s baseline it does not survive -- it reverses
-    -- which is why that baseline has to be optimised rather than assumed.
-
-    Args:
-        performance: An :class:`~exlink.performance.Performance` to re-score.
-        vehicle: The car; a default Prototype-class entry if omitted.
-
-    Returns:
-        ``brake_efficiency`` and ``km_per_litre`` as modelled, and the same two
-        under the doubled-friction assumption.
-
-    Raises:
-        ValueError: If the performance carries no friction breakdown.
-    """
-    car = vehicle if vehicle is not None else Vehicle()
-    loss = getattr(performance, "friction", None)
-    if loss is None:
-        msg = "cannot re-score a design that was never sized"
-        raise ValueError(msg)
-
-    quantity = performance.heat_release  # type: ignore[attr-defined]
-    speed_rpm = performance.speed_rpm  # type: ignore[attr-defined]
-    mass = performance.engine_mass_kg  # type: ignore[attr-defined]
-
-    def score(brake_work: float, revolutions: float) -> tuple[float, float]:
-        efficiency = brake_efficiency(brake_work, quantity)
-        power = brake_work / 1000.0 * (speed_rpm / 60.0) / revolutions
-        outcome = best_strategy(car, mass, power, efficiency)
-        return efficiency, outcome.km_per_litre
-
-    as_modelled = score(loss.brake_work, 1.0)
-    # Two revolutions per cycle: twice the sliding and twice the rotation for
-    # the same indicated work, so twice the friction.
-    doubled = score(loss.indicated_work - 2.0 * loss.total_work, 2.0)
-    return {
-        "brake_efficiency": as_modelled[0],
-        "km_per_litre": as_modelled[1],
-        "brake_efficiency_four_stroke": doubled[0],
-        "km_per_litre_four_stroke": doubled[1],
-    }

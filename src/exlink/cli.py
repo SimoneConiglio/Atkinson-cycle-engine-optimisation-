@@ -33,15 +33,16 @@ from .dynamics import DEFAULT_SPEED_RPM
 from .model import analyse
 from .reference import PUBLISHED_DESIGN
 
-NAMED_DESIGNS = ("published", "refined")
+NAMED_DESIGNS = ("published", "refined", "coupled", "range", "reliable")
 
 
 def load_design(reference: str | None) -> Design:
     """Resolve a design from a name or a JSON file path.
 
     Args:
-        reference: ``"published"``, ``"refined"``, a path to a JSON file, or
-            ``None`` for the refined reference.
+        reference: One of :data:`NAMED_DESIGNS`, a path to a JSON file, or
+            ``None`` for :data:`~exlink.reference.RELIABLE_DESIGN`, the best
+            design the study found and the one the figures are drawn from.
 
     Returns:
         The design.
@@ -49,12 +50,24 @@ def load_design(reference: str | None) -> Design:
     Raises:
         SystemExit: If the reference cannot be resolved.
     """
-    from .reference import REFINED_DESIGN
+    from .reference import (
+        COUPLED_DESIGN,
+        RANGE_DESIGN,
+        REFINED_DESIGN,
+        RELIABLE_DESIGN,
+    )
 
-    if reference is None or reference == "refined":
-        return REFINED_DESIGN
-    if reference == "published":
-        return PUBLISHED_DESIGN
+    named = {
+        "published": PUBLISHED_DESIGN,
+        "refined": REFINED_DESIGN,
+        "coupled": COUPLED_DESIGN,
+        "range": RANGE_DESIGN,
+        "reliable": RELIABLE_DESIGN,
+    }
+    if reference is None:
+        return RELIABLE_DESIGN
+    if reference in named:
+        return named[reference]
     path = Path(reference)
     if not path.is_file():
         raise SystemExit(
@@ -127,6 +140,7 @@ def _cmd_plot(args: argparse.Namespace) -> int:
         "cycle": plots.plot_cycle(design, analysis),
         "torque": plots.plot_torque(design, analysis),
         "mechanism": plots.plot_mechanism(design, analysis=analysis),
+        "variables": plots.plot_variables(design, analysis=analysis),
         "overview": plots.plot_overview(design, analysis),
     }
     for name, figure in figures.items():

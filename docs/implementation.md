@@ -36,9 +36,9 @@ NSGA-II. Everything except `exlink pareto` works without it.
 ## Command line and library
 
 ```bash
-exlink analyse                       # objectives and constraints of the reference design
+exlink analyse                       # the study's result; see --design below
 exlink analyse --design published    # the historical baseline design (see Provenance)
-exlink plot -o figures               # motion, p-V cycle, torque, mechanism
+exlink plot -o figures               # motion, p-V cycle, torque, mechanism, variables
 exlink animate -o figures/exlink.gif # animated mechanism + live cycle and torque
 exlink animate --formulations \
   -o figures/formulations.gif        # each formulation's final design, side by side
@@ -46,6 +46,11 @@ exlink refine --design published --save refined.json   # augmented Lagrangian
 exlink optimize --save best.json     # differential evolution over the full box
 exlink pareto --pop-size 200 --max-gen 60              # NSGA-II front
 ```
+
+`--design` takes `published`, `refined`, `coupled`, `range`, `reliable` or a path
+to a JSON design file. It defaults to `reliable` — `RELIABLE_DESIGN`, the design
+§6.4 arrives at — so every figure in this documentation is produced by the
+commands above with no arguments beyond an output path.
 
 The commands chain through JSON design files:
 
@@ -132,8 +137,8 @@ tox                     # across Python 3.10 – 3.12
 Every claim above is pinned by a test, including the ones that would be embarrassing to get
 wrong: that inertia does no net work over a cycle, that burn-and-coast conserves energy, that
 the Otto cycle reproduces its closed-form efficiency, that `ρ = 0` at rest, that stock
-rounding never shrinks a member, and that the range advantage survives matching the firing
-rate but not removing it.
+rounding never shrinks a member, and that both engines complete a cycle in 720° of their
+crankshaft so the comparison needs no firing-rate correction.
 
 ## Provenance
 

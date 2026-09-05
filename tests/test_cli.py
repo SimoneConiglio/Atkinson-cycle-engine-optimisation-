@@ -17,9 +17,22 @@ def test_the_parser_requires_a_command() -> None:
 
 
 def test_named_designs_resolve() -> None:
+    """Every name in :data:`NAMED_DESIGNS` resolves, and the default is the result.
+
+    The default matters: the figures in the documentation are produced by these
+    commands without ``--design``, so it has to be the design the study argues
+    for rather than an intermediate one.
+    """
+    from exlink.cli import NAMED_DESIGNS
+    from exlink.reference import COUPLED_DESIGN, RANGE_DESIGN, RELIABLE_DESIGN
+
     assert load_design("published") == PUBLISHED_DESIGN
     assert load_design("refined") == REFINED_DESIGN
-    assert load_design(None) == REFINED_DESIGN
+    assert load_design("coupled") == COUPLED_DESIGN
+    assert load_design("range") == RANGE_DESIGN
+    assert load_design("reliable") == RELIABLE_DESIGN
+    assert load_design(None) == RELIABLE_DESIGN
+    assert set(NAMED_DESIGNS) == {"published", "refined", "coupled", "range", "reliable"}
 
 
 def test_an_unknown_design_is_reported_clearly() -> None:
@@ -67,7 +80,14 @@ def test_plot_writes_every_figure(tmp_path) -> None:
     )
     assert code == 0
     written = {p.name for p in outdir.glob("*.png")}
-    assert written == {"motion.png", "cycle.png", "torque.png", "mechanism.png", "overview.png"}
+    assert written == {
+        "motion.png",
+        "cycle.png",
+        "torque.png",
+        "mechanism.png",
+        "variables.png",
+        "overview.png",
+    }
 
 
 @pytest.mark.slow

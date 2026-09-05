@@ -41,19 +41,20 @@ treatment of engine friction, heat release and mean effective pressures in
 Two things are settled by this literature and one is not. Settled: the
 thermodynamic benefit is real, and it is measured at a *fixed* mechanism —
 Watanabe et al. analyse a linkage whose dimensions are given, not chosen.
-Also settled: the half-speed shaft that produces the asymmetry halves the
-firing frequency. Not settled: what the linkage costs. None of these studies
+Also settled: the half-speed shaft that produces the asymmetry does not change
+the firing frequency, because power is taken from the crankshaft as usual. Not
+settled: what the linkage costs. None of these studies
 carries the linkage dimensions through to the mass of the parts that must
 carry the inertia loads at speed, so none can say whether the thermodynamic
 gain survives the mechanism that delivers it. §6.3 carries it through, and
-finds the advantage robust to how the two engines are matched but its
-*attribution* fragile. At matched power strokes per minute the linkage keeps a
-13–19 % range advantage over an optimised conventional engine; scoring the same
-linkage as if it drove a two-revolution gas exchange turns that into a 4.3 %
-deficit, which locates the benefit in the cycle rate rather than in the extended
-expansion; and holding the conventional engine to the *same specification* as
-the linkage widens the figure further. Which question is being asked has to be
-stated with the number.
+finds the thermodynamic gain to be the *smallest* of the three terms by which
+the linkage
+beats an optimised conventional engine at equal speed: indicated efficiency
+contributes 0.457 → 0.480, mechanical efficiency 0.787 → 0.865, and engine mass
+16.9 → 12.9 kg, for 17.6 % of range in all. The gain survives the mechanism
+that delivers it, but not because the mechanism is cheap — because the same
+freedom that realises the asymmetry also buys a lower side load and a flatter
+torque curve.
 
 ## 2.3 Formulating a mechanism-synthesis problem
 
@@ -278,11 +279,11 @@ those strands rather than of extending any one of them.
 1. **A priced formulation.** Carrying the mechanism through mass, friction,
    structural sizing and the vehicle model to distance per unit fuel supplies
    the exchange rate that §2.3 shows the conventional formulation lacks, and
-   makes the extended-expansion benefit separable from the firing-frequency
-   effect that accompanies it in every geometric realisation. Priced against a
-   conventional engine optimised under the same models rather than proportioned
-   by hand, the topology's advantage survives matching the firing rate while the
-   extended-expansion component alone reverses sign (§6.3).
+   makes the extended-expansion benefit separable from the mechanical and
+   inertial costs that accompany it in every geometric realisation. Priced
+   against a conventional engine optimised under the same models rather than
+   proportioned by hand, the thermodynamic term turns out to be the smallest of
+   the three (§6.3).
 
 2. **A demonstration that the geometry of the feasible set selects the
    algorithm.** The measure-zero feasible set is not a nuisance to be

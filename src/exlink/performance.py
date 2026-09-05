@@ -95,6 +95,9 @@ class Performance:
     stock_premium: float
     """Fractional mass added by that rounding [-]."""
 
+    spec: EngineSpec = DEFAULT_SPEC
+    """Fixed engine data, kept so the output shaft can be reported."""
+
     @property
     def metrics(self) -> Metrics:
         """The geometric metrics of the design."""
@@ -111,8 +114,33 @@ class Performance:
         return self.budget.total_kg
 
     @property
+    def output_speed_rpm(self) -> float:
+        """Speed of the shaft power is taken from [rev/min].
+
+        Twice :attr:`speed_rpm`, which is the half-speed shaft the kinematics
+        are parametrised on.  The cycle spans 720 deg of the output shaft, as
+        it does on a conventional four-stroke, so this is the speed to quote
+        and the speed to compare at.
+        """
+        return self.spec.output_speed_rpm(self.speed_rpm)
+
+    @property
+    def cycles_per_minute(self) -> float:
+        """Power strokes per minute [1/min], equal to :attr:`speed_rpm`."""
+        return self.output_speed_rpm / self.spec.output_revolutions_per_cycle
+
+    @property
+    def output_torque(self) -> float:
+        """Mean torque at the output shaft [N.mm]."""
+        return self.spec.output_torque(self.analysis.metrics.mean_torque)
+
+    @property
     def brake_power(self) -> float:
-        """Brake power at this speed [W]."""
+        """Brake power at this speed [W].
+
+        One cycle per turn of ``theta_1``, hence one per two turns of the
+        output shaft; reading the speed at either shaft gives the same power.
+        """
         if self.friction is None:
             return 0.0
         return _brake_power(self.friction.brake_work, self.speed_rpm)
@@ -289,6 +317,7 @@ def evaluate(
         heat_release=float(quantity),
         buildable_diameters={n: float(d) for n, d in zip(names, discrete, strict=True)},
         stock_premium=stock_premium(continuous, discrete),
+        spec=spec,
     )
 
 

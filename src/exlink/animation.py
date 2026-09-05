@@ -364,7 +364,12 @@ def animate_formulations(
     Raises:
         ValueError: If a design cannot be analysed, or none is given.
     """
-    from .reference import COUPLED_DESIGN, GRADIENT_DESIGN, RANGE_DESIGN, REFINED_DESIGN
+    from .reference import (
+        COUPLED_DESIGN,
+        GRADIENT_DESIGN,
+        REFINED_DESIGN,
+        RELIABLE_DESIGN,
+    )
 
     chosen = (
         designs
@@ -372,8 +377,8 @@ def animate_formulations(
         else {
             "geometric, augmented Lagrangian\n$\\eta$ = 27.9 %": REFINED_DESIGN,
             "geometric, SLSQP + exact gradients\n$\\eta$ = 30.8 %": GRADIENT_DESIGN,
-            "coupled, minimum mass\n0.234 kg at 1000 rpm": COUPLED_DESIGN,
-            "vehicle-level, maximum range\n3388 km/L": RANGE_DESIGN,
+            "coupled, minimum mass\n0.234 kg of moving mass": COUPLED_DESIGN,
+            "range + reliability\n3395 km/L at $P_f = 1.3\\times10^{-3}$": RELIABLE_DESIGN,
         }
     )
     if not chosen:

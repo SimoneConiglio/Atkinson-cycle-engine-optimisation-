@@ -29,13 +29,24 @@ that quotes none.
 
 ## 1. Parametrisation
 
-The mechanism is a two-shaft linkage. The crankshaft `R1` carries the crank `q1`
-ending at `Q`; the eccentric shaft `R2` carries `q2` ending at `D`. `R2` sits at
-distance `I` from `R1` along direction `θ_r`. A pair of gears of primitive radii
+The mechanism is a two-shaft linkage. Shaft `R1` carries the crank `q1` ending
+at `Q`; shaft `R2` carries `q2` ending at `D`. `R2` sits at distance `I` from
+`R1` along direction `θ_r`. A pair of gears of primitive radii
 
     r₁ = 2I/3      r₂ = I/3      r₁/r₂ = 2
 
-ties the two shafts. The swing rod `a` runs `Q → A`; the **trigonal link** is the
+ties the two shafts, so `R2` turns twice for every turn of `R1`.
+
+**Which shaft is the crankshaft.** The four strokes complete in one turn of
+`R1`, hence in **720°** of `R2` — what a conventional four-stroke crankshaft
+does. `R2` is therefore the crankshaft and the shaft power is taken from; `R1`
+is the half-speed shaft, the same arrangement as the mechanism this topology
+follows. The analysis is nonetheless *parametrised* on `θ₁`, because one turn
+of it is exactly one cycle and the closed-form inversion below is written in it.
+Everything downstream follows: the code's `speed_rpm` is `R1`'s, the engine
+speeds this study quotes are `R2`'s, at twice that, and `M_r` below is the whole
+engine torque referred to `θ₁`, so referring it to `R2` halves it and leaves the
+power alone. The swing rod `a` runs `Q → A`; the **trigonal link** is the
 rigid triangle `A–D–E`; the piston rod `e` runs `E → P`; the piston crown `H` sits
 `p = 16 mm` above `P`, on the cylinder axis `x = x₁`.
 
@@ -87,7 +98,7 @@ difference `T = θ_a − θ_T`:
     δ_c1 = max over θ₁ of |(A² + B² − a² − c²) / (2ac)|
 
 If `δ_c1 ≥ 1` for even one crank angle, the four-bar cannot pass that angle: the
-crankshaft rocks instead of turning. This is the Grashof condition for the
+shafts rock instead of turning. This is the Grashof condition for the
 sub-mechanism `a, c, q₁, I, q₂`, written as something an optimizer can read.
 
 Then, with `q = atan2(a sin T, a cos T + c)`:
@@ -126,7 +137,8 @@ and `P` and `H` stay on `x = x₁`, over the whole revolution.
 
 ## 3. The Atkinson cycle
 
-Over one crankshaft revolution `λ(θ₁)` must have **four monotone phases**: two
+Over one revolution of `R1` — one full cycle — `λ(θ₁)` must have **four
+monotone phases**: two
 maxima (top dead centre, reached twice) and two *different* minima. The deeper
 minimum ends expansion, the shallower one ends intake.
 
@@ -223,7 +235,7 @@ line of action rotates with the shaft axis `θ_r`, not with `α` alone.
 
     η = ∮M_r dθ₁ / (2(STE + STC)·⟨P⟩) = (⟨M_r⟩/⟨P⟩) · π/(STE + STC)
 
-a ratio of two works — the torque's on the crankshaft over the gas force's on the
+a ratio of two works — the torque's on `R1` over the gas force's on the
 piston. It measures the linkage's aptitude for turning force into torque, and it
 grows without bound as the mechanism grows. That unboundedness is exactly why `H`
 and `B` must enter the problem.
@@ -387,7 +399,7 @@ has to be **solved** rather than sequenced.
 
 Without inertia every rod is a **two-force member**: the forces at its two ends
 are equal, opposite and collinear with the rod. That is exactly what lets the
-loads be eliminated one body at a time, piston to crankshaft.
+loads be eliminated one body at a time, piston to shafts.
 
 Add mass and that collapses. A rod with a distributed d'Alembert load has end
 forces that are neither collinear nor equal, so no body can be solved before its
@@ -419,7 +431,7 @@ the inertia forces and, through them, the sizing loop. Angles that accumulate
 whole turns — `theta_2 = −2 theta_1 + theta_f` — are split into ramp plus
 periodic part first (`exlink.derivatives`).
 
-Constant crankshaft speed is assumed throughout, which simplifies the bookkeeping
+Constant shaft speed is assumed throughout, which simplifies the bookkeeping
 in two ways worth stating:
 
 - both shafts turn at constant rate, so neither has angular acceleration and
@@ -605,7 +617,7 @@ disciplines.
 | problem | derivative-free | with gradients |
 |---|---|---|
 | maximise `η` from the published table | — | **η = 30.77 %** (vs 27.76 % reported) |
-| minimise mass, coupled, 1000 rpm | COBYLA moved 0 in 313 s | **1.039 → 0.234 kg** in 148 s |
+| minimise mass, coupled, 2000 rpm | COBYLA moved 0 in 313 s | **1.039 → 0.234 kg** in 148 s |
 
 The coupled optimum reaches a quarter of the mass by moving `W` from 0.981 to
 0.937 — off the singularity, which is exactly where the accelerations, and so the

@@ -915,7 +915,7 @@ DEFAULT_MDA_SETTINGS: dict[str, Any] = {
 """Settings for the inner MDA, chosen against measured cost.
 
 Every objective evaluation runs this MDA to convergence, so its settings set
-the price of the whole optimization.  From a cold start at 1000 rpm and 360
+the price of the whole optimization.  From a cold start at 2000 rev/min and 360
 crank angles:
 
 ==========  =======  ======  ==========================
@@ -1092,7 +1092,7 @@ def minimise_mass(
 
     Budget realistically, and note that the budget depends entirely on whether
     the solver has gradients.  With them (the default) a few dozen evaluations
-    suffice: 40 take the published geometry from 1.04 kg to 0.23 kg at 1000 rpm.
+    suffice: 40 take the published geometry from 1.04 kg to 0.23 kg at 2000 rev/min.
     Without them a derivative-free search over eleven variables needs several
     hundred, and on this feasible set may never move at all.
 

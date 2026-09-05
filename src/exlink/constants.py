@@ -63,7 +63,18 @@ class EngineSpec:
     """``k = P3 / P2``, the instantaneous pressure jump modelling combustion."""
 
     gear_ratio: float = 2.0
-    """``r1 / r2`` between crankshaft and eccentric-shaft gears."""
+    """``r1 / r2`` between the analysis shaft's gear and the output shaft's.
+
+    The kinematics of :mod:`exlink.kinematics` are parametrised on ``theta_1``,
+    the shaft carrying ``q_1`` and the *large* gear, and the four strokes
+    complete in one turn of it.  The second shaft therefore turns
+    ``theta_2 = -2 theta_1 + theta_f``: twice per cycle, or **720 deg**, which is
+    what a conventional four-stroke crankshaft does.  Power is taken from that
+    shaft, so ``theta_1`` is the half-speed member of the pair -- Honda's own
+    arrangement -- and every engine speed the study quotes is the output
+    shaft's, at :attr:`output_revolutions_per_cycle` times the ``speed_rpm``
+    the analysis functions take.
+    """
 
     pressure_angle: float = math.radians(20.0)
     """Gear pressure angle ``alpha``.
@@ -76,6 +87,31 @@ class EngineSpec:
     def piston_area(self) -> float:
         """Cross-section ``pi phi^2 / 4`` on which the gas pressure acts [mm^2]."""
         return math.pi * self.bore**2 / 4.0
+
+    @property
+    def output_revolutions_per_cycle(self) -> float:
+        """Turns of the output shaft per four-stroke cycle [-].
+
+        Two, from :attr:`gear_ratio`, and the same as a conventional engine --
+        which is what makes the comparison of section 6.3 a comparison at equal
+        speed and equal firing rate rather than one needing a correction.
+        """
+        return self.gear_ratio
+
+    def output_speed_rpm(self, speed_rpm: float) -> float:
+        """Output-shaft speed for an analysis speed ``theta_1`` [rev/min]."""
+        return float(speed_rpm) * self.gear_ratio
+
+    def output_torque(self, torque: float) -> float:
+        """Torque referred from ``theta_1`` to the output shaft [N.mm].
+
+        The virtual-work identity of :mod:`exlink.loads` makes ``M_r`` the
+        *whole* engine torque referred to ``theta_1``, so referring it to a
+        shaft turning ``gear_ratio`` times faster divides it by that ratio and
+        leaves the power untouched.  Nothing physical depends on which shaft
+        the reading is taken from; only the numbers on the datasheet do.
+        """
+        return float(torque) / self.gear_ratio
 
 
 @dataclass(frozen=True)

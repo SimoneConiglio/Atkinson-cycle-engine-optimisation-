@@ -20,7 +20,6 @@ from exlink.slidercrank import (
     CAP_SPEED_RPM,
     SliderCrank,
     evaluate_slidercrank,
-    firing_frequency_sensitivity,
     optimise_slidercrank,
     optimise_slidercrank_to_specification,
     side_load_ratio,
@@ -72,50 +71,39 @@ def main() -> None:
     print()
     print("Is the linkage worth seven members?")
     print("=" * 35)
-    # The baseline has to be optimised too, or the comparison measures the
-    # optimization rather than the topology -- and the sign depends on it.
-    hand_set = evaluate_slidercrank(SliderCrank.for_compression_ratio(16.0), 2000.0)
+    # Both engines take 720 deg of their output shaft per cycle, so equal
+    # output speed is equal fuel per minute and the comparison needs no
+    # correction.  The baseline has to be optimised too, or what is measured is
+    # the optimization rather than the topology.
     best = optimise_slidercrank()
     otto = best.comparison
-    sensitivity = firing_frequency_sensitivity(outcome)
-    print(f"  {'mechanism':<38}{'eta_i':>8}{'eta_m':>8}{'km/L':>9}")
+    matched = evaluate_slidercrank(best.mechanism, outcome.output_speed_rpm)
     print(
-        f"  {'slider-crank, hand-set (r/l = 0.30)':<38}"
-        f"{hand_set.indicated_efficiency:>8.3f}{hand_set.mechanical_efficiency:>8.3f}"
-        f"{hand_set.km_per_litre:>9.0f}"
+        f"  the linkage runs at {outcome.output_speed_rpm:.0f} rpm on its output shaft "
+        f"({outcome.cycles_per_minute:.0f} cycles/min)"
     )
+    print(f"  {'mechanism':<40}{'rpm':>7}{'eta_i':>8}{'eta_m':>8}{'km/L':>9}")
     print(
-        f"  {f'slider-crank, optimised (r/l = {best.mechanism.obliquity:.2f})':<38}"
-        f"{otto.indicated_efficiency:>8.3f}{otto.mechanical_efficiency:>8.3f}"
-        f"{otto.km_per_litre:>9.0f}"
-    )
-    print(
-        f"  {'EX-link, 1 cycle per revolution':<38}"
+        f"  {'EX-link':<40}{outcome.output_speed_rpm:>7.0f}"
         f"{outcome.indicated_efficiency:>8.3f}"
-        f"{outcome.friction.mechanical_efficiency:>8.3f}"
-        f"{sensitivity['km_per_litre']:>9.0f}"
+        f"{outcome.friction.mechanical_efficiency:>8.3f}{outcome.km_per_litre:>9.0f}"
     )
-    # Twice the sliding and twice the rotation for the same indicated work,
-    # so twice the friction -- not half the efficiency.
-    doubled = 1.0 - 2.0 * (1.0 - outcome.friction.mechanical_efficiency)
     print(
-        f"  {'EX-link, if it were a 4-stroke':<38}{outcome.indicated_efficiency:>8.3f}"
-        f"{doubled:>8.3f}{sensitivity['km_per_litre_four_stroke']:>9.0f}"
+        f"  {f'slider-crank, optimised (r/l = {best.mechanism.obliquity:.2f})':<40}"
+        f"{best.speed_rpm:>7.0f}{otto.indicated_efficiency:>8.3f}"
+        f"{otto.mechanical_efficiency:>8.3f}{otto.km_per_litre:>9.0f}"
+    )
+    print(
+        f"  {'the same, at the linkage output speed':<40}"
+        f"{matched.speed_rpm:>7.0f}{matched.indicated_efficiency:>8.3f}"
+        f"{matched.mechanical_efficiency:>8.3f}{matched.km_per_litre:>9.0f}"
     )
     print()
-    print(f"  {'against':<38}{'as modelled':>14}{'as a 4-stroke':>16}")
     for label, baseline in (
-        ("the hand-set baseline", hand_set.km_per_litre),
-        ("the optimised baseline", otto.km_per_litre),
+        ("at each engine own best speed", otto.km_per_litre),
+        ("at equal output speed", matched.km_per_litre),
     ):
-        modelled = 100.0 * (sensitivity["km_per_litre"] / baseline - 1.0)
-        four_stroke = 100.0 * (sensitivity["km_per_litre_four_stroke"] / baseline - 1.0)
-        print(f"  {label:<38}{modelled:>13.1f} %{four_stroke:>15.1f} %")
-    print()
-    print("  Removing the one-revolution cycle removes the advantage, so the")
-    print("  advantage is attributable to the firing rate.  That is not the same")
-    print("  as saying the comparison was unfair: the optimised baseline already")
-    print(f"  fires {best.speed_rpm / 2:.0f} times a minute against the EX-link's 1000.")
+        print(f"  {label:<40}{100.0 * (outcome.km_per_litre / baseline - 1.0):>+7.1f} %")
 
     print()
     print("Held to the EX-link's own rod-angle and side-load limits")
@@ -132,7 +120,7 @@ def main() -> None:
     print(f"  range {held.comparison.km_per_litre:.0f} km/L against {otto.km_per_litre:.0f}")
     print(
         f"  EX-link (COUPLED_DESIGN) advantage over it: "
-        f"{100.0 * (sensitivity['km_per_litre'] / held.comparison.km_per_litre - 1.0):.1f} %"
+        f"{100.0 * (outcome.km_per_litre / held.comparison.km_per_litre - 1.0):.1f} %"
     )
     print()
     print("  That optimum sits on its cap, which is where reliability goes:")

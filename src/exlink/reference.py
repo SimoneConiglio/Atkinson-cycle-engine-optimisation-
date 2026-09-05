@@ -31,13 +31,20 @@ recorded figures closely -- ``theta_f = 86 deg``, ``theta_r = -30 deg`` gives
 ``W = 0.9817`` and ``mra = 6.7 deg`` -- so the *model* agrees; it is the vector
 that is not reproducible.
 
-The three results
------------------
+The results
+-----------
 ============================  ==========================================
 :data:`REFINED_DESIGN`        augmented Lagrangian, ``eta = 27.87 %``
 :data:`GRADIENT_DESIGN`       SLSQP with exact gradients, ``eta = 30.77 %``
-:data:`COUPLED_DESIGN`        coupled sizing, ``0.234 kg`` at 1000 rpm
+:data:`COUPLED_DESIGN`        coupled sizing, ``0.234 kg`` of moving mass
+:data:`RANGE_DESIGN`          maximum range, constraints checked at the end
+:data:`RELIABLE_DESIGN`       **the study's result**, ``3395 km/L`` at
+                              ``P_f = 1.3e-3``
 ============================  ==========================================
+
+Speeds are quoted at the output shaft throughout, which turns twice per cycle
+(:attr:`exlink.constants.EngineSpec.output_revolutions_per_cycle`); the
+``speed_rpm`` the analysis functions take is half of it.
 """
 
 from __future__ import annotations
@@ -207,7 +214,7 @@ COUPLED_DESIGN = Design(
     theta_f=86.385886,
     theta_r=-33.363656,
 )
-"""The lightest design the *coupled* problem yields, at 1000 rpm.
+"""The lightest design the *coupled* problem yields, at 2000 rev/min.
 
 SLSQP on the MDF formulation, with exact Jacobians through the sizing/dynamics
 MDA (:mod:`exlink.dynamics_jacobian`), minimising total moving mass subject to
@@ -249,7 +256,7 @@ COUPLED_METRICS: dict[str, float] = {
     "total_mass_kg": 0.2343,
     "peak_bearing_load": 7504.0,
 }
-"""Properties of :data:`COUPLED_DESIGN`, at ``samples=1440`` and 1000 rpm."""
+"""Properties of :data:`COUPLED_DESIGN`, at ``samples=1440``, 2000 rev/min."""
 
 
 RANGE_DESIGN = Design(
@@ -268,7 +275,7 @@ RANGE_DESIGN = Design(
 """The best design the vehicle-level problem produced, and what it does not achieve.
 
 SLSQP on ``neg_range`` with the gear pair pinned to ``m = 0.8``, ``z = 48``
-(hence ``I = 57.6``) at 1000 rpm, started from :data:`COUPLED_DESIGN`.  It
+(hence ``I = 57.6``) at 2000 rev/min, started from :data:`COUPLED_DESIGN`.  It
 reaches **3388 km/L** against 3338, on an engine of 12.47 kg, and it satisfies
 every inequality constraint including the top-dead-centre gap, at
 ``g = 0.0009 mm``.
@@ -318,4 +325,68 @@ stops governing the reliability of the mechanism.  The projected design is then
 the result at 3388 km/L.  Under the 0.01 mm bound as written the best *strictly*
 feasible design remains :data:`COUPLED_DESIGN` at 3338 km/L, and the 1.5 %
 difference is the price of a bound set finer than the model can resolve.
+"""
+
+
+RELIABLE_DESIGN = Design(
+    a=72.2352,
+    c=71.4395,
+    I=57.6000,
+    x_b=70.2676,
+    y_b=-71.2069,
+    x_1=-31.4620,
+    e=129.7043,
+    q_1=9.0337,
+    q_2=23.5170,
+    theta_f=76.6957,
+    theta_r=-52.5420,
+)
+"""The study's result: the best design that also meets a reliability target.
+
+From :func:`exlink.synthesis.maximise_range_from_target` with ``beta_target =
+3``, started at :data:`COUPLED_DESIGN`, with the gear pair pinned to ``m = 0.8``,
+``z = 48`` and every constraint -- geometric, coupled, vehicle and reliability --
+imposed at every step rather than checked at the end.  1352 evaluations, 61
+minutes, stopped at the iteration cap, so it is a lower bound on what the
+formulation reaches.
+
+==============================  ==========
+range                           3395 km/L
+engine mass                     12.94 kg
+output speed                    2000 rev/min (1000 cycles/min)
+system ``P_f`` at IT8           1.3e-3
+system ``beta``                 3.00, on its target
+worst constraint                -2.2e-7
+==============================  ==========
+
+The bounds it was solved against are the relaxed ones :mod:`exlink.robustness`
+identifies -- the top-dead-centre gap at 0.054 mm and both equality bands at
+``+/- 0.15`` -- and the result is insensitive to the first of those: re-scored
+at a 0.1 mm gap the failure probability moves from 1.344e-3 to 1.339e-3, because
+the gap sits at ``beta = 8.1`` either way.  What binds is the band on the
+expansion stroke.
+
+It is the design the figures in the documentation are drawn from.
+"""
+
+RELIABLE_METRICS: dict[str, float] = {
+    "efficiency": 0.251373,
+    "expansion_stroke": 74.0957,
+    "compression_ratio": 16.1179,
+    "rod_angle": 9.67497,
+    "compatibility": 0.936426,
+    "tdc_gap": 1.06805e-04,
+    "clearance": 55.5741,
+    "side_load_ratio": 0.0180587,
+    "height": 237.876,
+    "width": 128.432,
+}
+"""Properties of :data:`RELIABLE_DESIGN` as shipped, at ``samples=1440``.
+
+Of the design *rounded to four decimals*, which is how it is stored.  That
+rounding moves ``g`` by 12 % -- from 9.6e-05 mm to 1.07e-04 -- and nothing else
+by more than a part in ten thousand, which is :mod:`exlink.robustness`'s point
+about that quantity restated on the result itself.  Both figures are four
+orders of magnitude inside any bound the study considers, so it changes nothing
+here; it would matter if ``g`` were still bounded at 0.01 mm.
 """

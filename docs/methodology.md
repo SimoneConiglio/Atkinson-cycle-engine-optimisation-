@@ -231,7 +231,7 @@ slower, it is unavailable.
 coupling strength, $\rho = \lim \|r_{k+1}\|/\|r_k\|$, so the claim is
 measurable rather than asserted. At rest $\rho = 0$ exactly — with no inertia
 there is no path from mass to load and the quasi-static problem is recovered —
-rising to 0.68 at 1500 rpm. §6 tabulates it.
+rising to 0.68 at 3000 rpm. §6 tabulates it.
 
 ## 3.7 Limitation: the gear choice is discrete and pins a design variable
 

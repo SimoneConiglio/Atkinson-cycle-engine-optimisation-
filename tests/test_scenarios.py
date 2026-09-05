@@ -416,6 +416,42 @@ def test_the_coupled_disciplines_report_analytic_jacobians() -> None:
     )
 
 
+def test_the_shipped_result_is_what_the_documentation_claims() -> None:
+    """``RELIABLE_DESIGN`` is the study's answer, so its headline must hold.
+
+    Range, mass and the reliability index are quoted in section 6.4 and in every
+    summary table, and the figures are drawn from this design; if the vector
+    drifts from what produced them the documentation is wrong and nothing else
+    would catch it.  The reliability is checked at the bounds section 6.2
+    identifies, which are the bounds it was solved against.
+    """
+    from dataclasses import replace
+
+    from exlink.constants import DEFAULT_TARGETS
+    from exlink.performance import evaluate
+    from exlink.reference import RELIABLE_DESIGN, RELIABLE_METRICS
+    from exlink.robustness import failure_probability
+
+    metrics = analyse(RELIABLE_DESIGN, samples=1440).metrics
+    for name, expected in RELIABLE_METRICS.items():
+        assert getattr(metrics, name) == pytest.approx(expected, rel=1e-3, abs=1e-6)
+
+    outcome = evaluate(RELIABLE_DESIGN, speed_rpm=1000.0, module=0.8, teeth=48)
+    assert outcome.km_per_litre == pytest.approx(3395.0, rel=2e-3)
+    assert outcome.engine_mass_kg == pytest.approx(12.94, rel=5e-3)
+    # Quoted at the crankshaft, which turns twice per cycle.
+    assert outcome.output_speed_rpm == pytest.approx(2000.0)
+
+    relaxed = replace(DEFAULT_TARGETS, max_tdc_gap=0.1)
+    reliability = failure_probability(
+        RELIABLE_DESIGN,
+        targets=relaxed,
+        band={"expansion_stroke": 0.15, "compression_ratio": 0.15},
+    )
+    assert reliability is not None
+    assert reliability.system_beta == pytest.approx(3.0, abs=0.05)
+
+
 def test_the_coupled_reference_is_lighter_and_feasible() -> None:
     """The design the coupled gradient search produced, checked as shipped."""
     from exlink.reference import COUPLED_DESIGN, COUPLED_METRICS

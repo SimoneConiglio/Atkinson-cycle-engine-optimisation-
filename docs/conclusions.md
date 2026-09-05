@@ -18,7 +18,7 @@ place to be*.
 **Conditioning decides the sign of the inertia effect.** A quasi-statically
 optimised linkage drifts to its transmission-angle singularity, where the lever
 arm is longest and the accelerations are worst; it has no feasible structure
-above 1000 rpm. A well-conditioned slider-crank does the opposite, its peak
+above 2000 rpm. A well-conditioned slider-crank does the opposite, its peak
 bearing load falling with speed by inertia relief. Same physics, opposite sign.
 
 **A relaxation made for numerical reasons is a promise about tolerance.** The
@@ -33,16 +33,15 @@ costs 0.47 % of range. Most of the rest is self-inflicted — a deterministic
 optimizer converges onto its active constraints, and designs beside this one
 halve the probability at no cost in range (§6.2).
 
-**A topology comparison is only as good as its matching, and both sides must be
-optimised the same way.** Against a conventional engine optimised under
-identical models the linkage leads by 13–19 % at matched power strokes per
-minute; removing its one-revolution cycle turns that into a 4.3 % deficit, which
-attributes the benefit to the firing rate rather than to extended expansion; and
-holding the conventional engine to the linkage's own rod-angle and side-load
-caps widens the lead to 37.6 %. Those three span a change of sign and a factor
-of nine in magnitude, and each of them moves if either side is optimised less
-carefully than the other: the constrained baseline alone is 4 % low if its
-search stops a fraction inside the binding cap (§6.3).
+**The topology is worth 17.6 %, and all three terms of the objective
+contribute.** Against a conventional engine sized by identical models and
+optimised over its own degrees of freedom rather than proportioned by hand, the
+linkage reaches 3395 km/L against 2888. Both take 720° of their crankshaft per
+cycle, so the comparison is at equal speed and equal firing rate with nothing to
+correct. Extended expansion — the feature the topology exists for — is the
+smallest of the three contributions, five per cent of indicated efficiency; the
+larger two are a lower side load and a lighter flywheel, which are consequences
+of having eleven dimensions to place rather than two (§6.3).
 
 **Decomposition buys structure, not speed.** Bi-level outer approximation halves
 the sub-solves against enumeration and lands 0.6 % short, on a bound that is not
@@ -62,7 +61,7 @@ Grouped by what would have to change to remove them.
 | Coulomb friction with constant coefficients | absolute FMEP uncertain by ~30 %; rankings robust, since comparisons are at equal coefficients |
 | instantaneous combustion, no heat transfer | indicated efficiency optimistic by several points, equally for both mechanisms |
 | **no gas exchange** | optimistic for both, but **not equally** — see below; it flatters the conventional engine and understates §6.3 |
-| reliability compared across mechanisms of different dimensionality | the slider-crank's two toleranced lengths against the EX-link's eleven is a real difference, not an artefact, but it means §6.3's reliability figures are not like-for-like in the way its range figures are |
+| reliability compared across mechanisms of different dimensionality | the slider-crank's two toleranced lengths against the EX-link's eleven is a real difference, not an artefact, but it means §6.2's reliability figures are not like-for-like in the way §6.3's range figures are |
 | constant crankshaft speed | the flywheel sizing already prices the fluctuation this assumes away |
 | pin-jointed trigonal link | small; it is a stiff triangle either way |
 
@@ -89,12 +88,12 @@ model discards both.
 
 So the simplification removes a loss that is roughly two and a half times
 larger for the conventional engine, and **§6.3's comparison is conservative
-against the EX-link by some margin** -- as, separately, is the fact that its
-headline figure lets the baseline violate two limits the EX-link is held to. How large a margin is not established
-here: a real engine recovers a fraction of the theoretical maximum, and that
+against the EX-link by some margin** — as, separately, is the fact that it lets
+the baseline violate two limits the linkage is held to. How large a margin is
+not established here: a real engine recovers a fraction of the theoretical maximum, and that
 fraction depends on valve timing and port design the model does not represent.
-What can be said is the sign, and that it runs the opposite way to the
-firing-rate attribution of §6.3.
+What can be said is the sign: it runs in the linkage's favour, so §6.3's
+17.6 % is a lower bound on that account.
 
 Modelling it properly needs a valve-timing model and a pumping loop, which is a
 larger change than any other item in this table.
@@ -255,11 +254,13 @@ Full provenance for every design is in §6.0.
 
 | | |
 |---|---|
-| at matched power strokes per minute, 800–1400 | **+13 to +19 %** |
-| optimised as a conventional engine (its own limits) | 2888 km/L, **+15.6 %** |
-| the EX-link with its firing rate removed — an attribution, not a comparison | **−4.3 %** |
-| held to the EX-link's own rod-angle and side-load limits | 2467 km/L, **+37.6 %** |
-| reliability index at IT8, EX-link vs that baseline backed off its cap | 3.00 vs **8.2** |
+| optimised as a conventional engine, both at 720° per cycle | 2888 km/L |
+| against the study's result, 3395 km/L | **+17.6 %** |
+| against `COUPLED_DESIGN`, 3338 km/L | +15.6 % |
+| indicated efficiency | 0.457 → 0.480 |
+| mechanical efficiency | 0.787 → 0.865 |
+| engine mass | 16.9 kg → 12.9 kg |
+| reliability index at IT8, linkage vs baseline off its cap | 3.00 vs **8.2** |
 
 **What the bounds cost**
 

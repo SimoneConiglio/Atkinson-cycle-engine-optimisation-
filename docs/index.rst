@@ -29,19 +29,22 @@ addition to the problem.
 
 Four quantitative results follow. The quasi-statically optimal geometry
 coincides with the transmission-angle singularity at which the inertia loads are
-largest, and admits no feasible structure above 1000 rev/min, whereas a geometry
+largest, and admits no feasible structure above 2000 rev/min, whereas a geometry
 displaced from it attains lower mass and greater range simultaneously. A
 tolerance study conducted against the specification rather than against a design
 identifies which of the stated bounds govern reliability, and prices their
 relaxation at 0.47 % of the objective in exchange for a fall in the probability
-of violating a dimensional requirement from 0.645 to 1.9e-5. The mechanism's
-advantage over a conventional slider-crank -- sized by identical structural and
+of violating a dimensional requirement from 0.645 to 1.9e-5. Power is taken
+from the shaft that turns twice per cycle, as on any four-stroke, so the
+mechanism's advantage
+over a conventional slider-crank -- sized by identical structural and
 tribological models, and optimised over its own degrees of freedom rather than
-proportioned by hand -- is 13 % to 19 % at matched firing rate and 37.6 % when
-that engine is held to the same geometric limits, while attributing the
-advantage between extended expansion and firing rate reverses its sign; which
-comparison is intended must therefore be stated. Finally, imposing the coupled
-and structural constraints throughout the search rather than verifying them on
+proportioned by hand -- is measured at equal speed and equal firing rate and
+amounts to 17.6 %. It decomposes into an indicated efficiency of 0.480 against
+0.457, a mechanical efficiency of 0.865 against 0.787 and an engine mass of
+12.9 kg against 16.9: extended expansion, the feature the topology exists for,
+is the smallest of the three. Finally, imposing the coupled and structural
+constraints throughout the search rather than verifying them on
 its result is worth 4.9 % of the objective under an identical algorithm, and
 constraining a system probability of failure returns 3 % of that in exchange for
 a design meeting its requirements with probability 0.999 -- the deterministic
@@ -89,7 +92,9 @@ sensitivities; extended-expansion engine.
    from exlink import COUPLED_DESIGN, evaluate
    from exlink.robustness import failure_probability, format_reliability
 
+   # speed_rpm is the half-speed shaft's; the crankshaft turns twice per cycle
    outcome = evaluate(COUPLED_DESIGN, speed_rpm=1000.0)
+   print(outcome.output_speed_rpm)      # 2000.0, the speed the study quotes
    print(outcome.km_per_litre)          # 3338.3
    print(outcome.budget.kilograms())    # where the mass actually is
 

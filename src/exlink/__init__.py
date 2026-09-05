@@ -73,6 +73,8 @@ from .reference import (
     PUBLISHED_METRICS,
     RANGE_DESIGN,
     REFINED_DESIGN,
+    RELIABLE_DESIGN,
+    RELIABLE_METRICS,
 )
 from .robustness import ToleranceReport, tolerance_report
 from .sizing import MemberSizing
@@ -102,6 +104,8 @@ __all__ = [
     "PUBLISHED_METRICS",
     "RANGE_DESIGN",
     "REFINED_DESIGN",
+    "RELIABLE_DESIGN",
+    "RELIABLE_METRICS",
     "VARIABLE_DESCRIPTIONS",
     "VARIABLE_NAMES",
     "Analysis",
