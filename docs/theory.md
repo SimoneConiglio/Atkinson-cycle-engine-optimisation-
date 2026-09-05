@@ -50,6 +50,13 @@ power alone. The swing rod `a` runs `Q → A`; the **trigonal link** is the
 rigid triangle `A–D–E`; the piston rod `e` runs `E → P`; the piston crown `H` sits
 `p = 16 mm` above `P`, on the cylinder axis `x = x₁`.
 
+**Angle datums.** `θ_r` is measured from `+x`, but the two crank angles `θ₁` and
+`θ₂` are measured from **`+y`**, so that `R1 → Q = q₁(−sin θ₁, cos θ₁)` and
+`θ₁ = 0` puts the crank straight up. That is what the `q₁ sin θ₁` and
+`−q₁ cos θ₁` of the loop closure (3a) below are saying, and it is easy to read
+past: an arc drawn from `+x` instead misses the member it is meant to measure by
+a right angle.
+
 Describing the triangle by its three sides `b`, `c`, `d` would force the design
 space to respect the triangle inequality, and would leave the sign of `θ_b`
 undetermined. `E` is therefore placed in the frame carried by `c = AD`:

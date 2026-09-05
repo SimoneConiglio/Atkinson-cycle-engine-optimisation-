@@ -14,6 +14,36 @@ def kin():
     return solve(PUBLISHED_DESIGN, samples=720)
 
 
+def test_the_crank_angles_are_measured_from_the_y_axis() -> None:
+    """``theta_1`` and ``theta_2`` are referred to ``+y``, ``theta_r`` to ``+x``.
+
+    The loop closure carries ``q_1 sin(theta_1)`` in its x-projection and
+    ``-q_1 cos(theta_1)`` in its y-projection, which is exactly this convention
+    written down; nothing else in the module states it, and a figure that
+    assumes ``+x`` puts every crank arc a right angle away from the member it
+    measures.  Pinned here so the drawings and the derivations cannot drift
+    apart from the code.
+    """
+    design = PUBLISHED_DESIGN
+    for degrees in (0.0, 45.0, 90.0):
+        angle = np.radians(degrees)
+        frame = solve(design, theta_1=np.array([angle]))
+        crank = frame.Q[0] - frame.R1[0]
+        assert crank == pytest.approx(
+            design.q_1 * np.array([-np.sin(angle), np.cos(angle)]), abs=1e-9
+        )
+        throw = frame.D[0] - frame.R2[0]
+        second = float(frame.theta_2[0])
+        assert throw == pytest.approx(
+            design.q_2 * np.array([-np.sin(second), np.cos(second)]), abs=1e-9
+        )
+        # theta_r, by contrast, is the direction of R1 -> R2 from +x.
+        assert frame.R2[0] == pytest.approx(
+            design.I * np.array([np.cos(design.theta_r_rad), np.sin(design.theta_r_rad)]),
+            abs=1e-9,
+        )
+
+
 def test_every_link_keeps_its_length(kin) -> None:
     """The whole point of a rigid linkage: no bar may stretch.
 

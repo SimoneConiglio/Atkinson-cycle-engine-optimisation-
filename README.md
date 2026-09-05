@@ -90,9 +90,9 @@ print(outcome.budget.kilograms())    # where the mass actually is
 The mechanism and the design brief come from an unpublished student study by the author
 (Université de Technologie de Compiègne, 2015), which set up the kinematics, the idealised
 cycle, the quasi-static load chain and the efficiency measure, and solved the quasi-static
-problem in MATLAB. Everything needed to read, run and check this repository is restated here
-and in [docs/theory.md](docs/theory.md); the document itself is not a citable reference and
-nothing here depends on it.
+problem in MATLAB. Everything needed to read, run and check this repository is restated here;
+the document itself is not a citable reference, and the only things taken from it directly are
+the two parametrisation figures of §5.2 and the two design vectors below.
 
 Two designs carry over from that study as **historical baselines**, and they are labelled as
 such wherever they appear:

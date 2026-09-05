@@ -341,10 +341,27 @@ def _angle_arc(
     label: str,
     radius: float = 26.0,
     colour: str = "#7f8c8d",
+    datum: float = 0.0,
 ) -> None:
-    """Draw an arc from the +x direction to ``angle`` and label it."""
+    """Draw an arc from ``datum`` to ``datum + angle`` and label it.
+
+    The datum is not always ``+x``, and getting it wrong is how a drawing ends
+    up with an arc that does not touch the member it measures.  ``theta_r`` is
+    referred to ``+x``; ``theta_1`` and ``theta_2`` are referred to ``+y``, as
+    the ``q_1 sin(theta_1)`` and ``-q_1 cos(theta_1)`` of the loop closure in
+    :mod:`exlink.kinematics` say.
+
+    Args:
+        ax: Axes to draw on.
+        centre: Vertex of the angle [mm].
+        angle: Signed opening from ``datum`` [rad].
+        label: Text for the arc, normally a LaTeX symbol.
+        radius: Arc radius [mm].
+        colour: Line and text colour.
+        datum: Direction the angle is measured from [rad].
+    """
     origin = np.asarray(centre, dtype=float)
-    sweep = np.linspace(0.0, angle, 64)
+    sweep = datum + np.linspace(0.0, angle, 64)
     ax.plot(
         origin[0] + radius * np.cos(sweep),
         origin[1] + radius * np.sin(sweep),
@@ -354,14 +371,15 @@ def _angle_arc(
         zorder=7,
     )
     ax.plot(
-        [origin[0], origin[0] + 1.35 * radius],
-        [origin[1], origin[1]],
+        [origin[0], origin[0] + 1.35 * radius * np.cos(datum)],
+        [origin[1], origin[1] + 1.35 * radius * np.sin(datum)],
         color=colour,
         lw=0.8,
         ls=":",
         zorder=6,
     )
-    tip = origin + 1.16 * radius * np.array([np.cos(0.5 * angle), np.sin(0.5 * angle)])
+    middle = datum + 0.5 * angle
+    tip = origin + 1.16 * radius * np.array([np.cos(middle), np.sin(middle)])
     ax.text(
         float(tip[0]),
         float(tip[1]),
@@ -554,8 +572,18 @@ def plot_variables(
         _dimension(ax, (0.0, datum), (design.x_1, datum), r"$x_1$", colour="#34495e")
 
         # -- the two angles -------------------------------------------------------
+        # theta_r from +x; theta_1 and theta_2 from +y -- see _angle_arc.
+        upright = 0.5 * math.pi
         _angle_arc(ax, point["R1"], design.theta_r_rad, r"$\theta_r$", radius=34.0)
-        _angle_arc(ax, point["R1"], angle, r"$\theta_1$", radius=19.0, colour="#c0392b")
+        _angle_arc(
+            ax,
+            point["R1"],
+            angle,
+            r"$\theta_1$",
+            radius=19.0,
+            colour="#c0392b",
+            datum=upright,
+        )
         _angle_arc(
             ax,
             point["R2"],
@@ -563,6 +591,7 @@ def plot_variables(
             r"$\theta_2$",
             radius=22.0,
             colour="#16a085",
+            datum=upright,
         )
 
         ax.set_xlabel("x [mm]")
@@ -573,7 +602,7 @@ def plot_variables(
             "\n"
             r"drawn at $\theta_1$ = "
             f"{theta_1:.0f}"
-            r"$^\circ$;"
+            r"$^\circ$ from $+y$;"
             r" the dephasing enters through $\theta_2 = -2\theta_1 + \theta_f$"
         )
         figure.tight_layout()

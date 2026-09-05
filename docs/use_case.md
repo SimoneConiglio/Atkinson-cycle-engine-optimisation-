@@ -59,15 +59,33 @@ the cylinder is at plenum pressure and the piston carries no gas load.
 
 **Design variables** — `X = (a, c, I, x_b, y_b, x_1, e, q_1, q_2, θ_f, θ_r)ᵀ`
 
-![the eleven design variables dimensioned on the mechanism](figures/variables.png)
+![the parametrisation of the mechanism](figures/parametrisation.png)
 
-*Where each entry of `X` sits. The linkage is frozen at `θ₁ = 45°`: `R1` is the
-half-speed shaft, `R2` the crankshaft, and the two dashed circles are the gear
-pitch radii `r₁ = 2I/3` and `r₂ = I/3`. The dephasing `θ_f` is not a length or a
-direction on the drawing but the constant in `θ₂ = −2θ₁ + θ_f`, so both angles
-are marked. `x_b` and `y_b` are drawn in the inset, in the frame carried by
-`AD`, because on the mechanism they fall on top of `c`. Regenerate with `exlink
-plot`.*
+*The parametrisation, from the study this problem comes from (see Provenance).
+`R1` carries the crank `q₁` ending at `Q` and the large gear of pitch radius
+`r₁ = 2I/3`; `R2` carries `q₂` ending at `D` and the small gear `r₂ = I/3`, and
+sits at distance `I` in the direction `θ_r` measured from `+x`. The swing rod
+`a` runs `Q → A`, the trigonal link is the triangle `A–D–E` with sides `b`, `c`,
+`d`, the piston rod `e` runs `E → P`, and the crown `H` sits `p = 16 mm` above
+`P` on the cylinder axis, offset `x₁` from the `R1` axis. Ten of the eleven are
+here; the eleventh, the dephasing `θ_f`, cannot be drawn on a single pose,
+being the constant in `θ₂ = −2θ₁ + θ_f` — and `θ₁` and `θ₂`, the crank angles
+that constant relates, are measured from `+y` rather than from `+x`
+({doc}`theory` §1).*
+
+![E in the frame the trigonal link carries](figures/trigonal_frame.png)
+
+*Two of the eleven replace `b` and `d`. Describing the triangle by its three
+sides would force the design space to respect the triangle inequality and would
+leave the sign of the apex undetermined; placing `E` at `(x_b, y_b)` in the
+frame with origin `A` and first axis along `AD` lets both range freely over ℝ
+and makes the design space a plain box ({doc}`theory` §1).*
+
+![the same variables on the design of §6.4](figures/variables.png)
+
+*The same eleven on `RELIABLE_DESIGN`, the design §6.4 arrives at, frozen at
+`θ₁ = 45°` — proportions to scale rather than schematic, which is why `q₁` is so
+much shorter than the sketch above suggests. Regenerate with `exlink plot`.*
 
 | | |
 |---|---|
