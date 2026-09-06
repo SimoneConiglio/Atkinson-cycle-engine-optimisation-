@@ -406,7 +406,7 @@ attainability limit that decides whether a target is usable at all.
 ### Reliability: imposed, and what it took
 
 Under either of the two forms above the problem is **deterministic**, and the
-reliability analysis of §3.8 is applied to the solution — so §6.2's 0.645 is an
+reliability analysis of §3.8 is applied to the solution — so §6.2's 0.664 is an
 audit of a design obtained without it. The third form closes the loop.
 
 {py:func}`~exlink.scenarios.build_range_scenario` takes a ``beta_target``, which
@@ -458,9 +458,18 @@ reaches $\beta = 3$, so the run states its bounds: the gap at 0.054 mm and both
 bands at $\pm 0.15$. §6.2 prices that widening in range and shows which of the
 two relaxations the result depends on.
 
-With those three in place, the third form reaches 3395 km/L at
-$P_f = 1.3\times10^{-3}$ with every constraint held to $-2.2\times10^{-7}$
-(§6.4). It is the formulation the study's final result comes from.
+With those three in place, the third form reaches 3395 km/L with every
+constraint held to $-2.2\times10^{-7}$ (§6.4). It is the formulation the
+study's final result comes from.
+
+A fourth thing had to be true and was not, and §6.8 found it by sampling: the
+constraint set the solve steers on must contain the constraint the parts
+actually breach. The expansion stroke is a maximum over the two top dead
+centres, this solve drove them together, and the linearisation used the branch
+that attains the maximum rather than the one that binds. The run held
+$\beta = 3$ on that branch and the result is at $\beta = 2.35$ on the corrected
+set. The formulation is unchanged; what changed is which rows
+:mod:`exlink.robustness` puts in it.
 
 ### What sampling showed along the way
 

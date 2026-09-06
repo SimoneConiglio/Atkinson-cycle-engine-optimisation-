@@ -24,7 +24,7 @@ bearing load falling with speed by inertia relief. Same physics, opposite sign.
 **A relaxation made for numerical reasons is a promise about tolerance.** The
 equalities make the feasible set measure zero, forcing a relaxation into bands;
 those bands are then only 1.7 standard deviations wide against the scatter of
-the parts, and the reference design has a 64.5 % chance of missing at least one
+the parts, and the reference design has a 66.4 % chance of missing at least one
 requirement. Which bounds are responsible is not visible in any nominal
 quantity: the top-dead-centre bound is set finer than the model's own
 resolution, and once it is widened the band on the expansion stroke governs
@@ -344,14 +344,14 @@ Full provenance for every design is in §6.0.
 
 | | |
 |---|---|
-| probability the reference design misses a requirement | 64.5 % |
+| probability the reference design misses a requirement | 66.4 % |
 | the same for the best design sampled beside it | 30.8 %, at +0.10 % range |
 | gap bound above which the gap stops binding | 0.054 mm; 0.1 mm adopted |
 | stroke band the *system* then needs | ±0.15 mm against ±0.05 |
 | range given up by widening both | −0.47 % |
 | the same design against all thirteen constraints | $5\times10^{-1}$, binding on the gear pair |
 | with the gear pair the exhaustive search preferred | $1.4\times10^{-3}$, at +0.4 km/L |
-| failure probability bought | 0.645 → $1.9\times10^{-5}$ |
+| failure probability bought | 0.664 → $1.9\times10^{-5}$ |
 
 ---
 

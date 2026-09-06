@@ -30,7 +30,7 @@ weighs half as much and goes further.
 
 **A tolerance study decides which of the stated bounds are real.** The top-dead-centre gap is
 bounded at 0.01 mm and the dimensions producing it scatter by 0.013 mm, so the reference design
-has a **64.5 %** probability of missing at least one requirement. Widening that bound to
+has a **66.4 %** probability of missing at least one requirement. Widening that bound to
 0.1 mm — 2.7 % of the clearance volume, 0.47 % of the range — removes it from the binding set
 entirely, and what governs reliability from there on is the band imposed on the expansion
 stroke.
