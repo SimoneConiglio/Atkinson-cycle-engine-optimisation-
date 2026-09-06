@@ -61,10 +61,12 @@ generalises past one linkage.
 
 .. automodule:: exlink.robustness
 .. automodule:: exlink.uncertainty
+.. automodule:: exlink.sampling
 .. automodule:: exlink.drivecycle
 .. automodule:: exlink.formulations
 .. automodule:: exlink.slidercrank
 .. automodule:: exlink.synthesis
+.. automodule:: exlink.continuation
 
 Mixed-integer design
 --------------------

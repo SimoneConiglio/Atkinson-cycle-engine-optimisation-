@@ -41,6 +41,12 @@ from .constants import (
     EngineSpec,
     PenaltyValues,
 )
+from .continuation import (
+    DEFAULT_SCHEDULE,
+    Continuation,
+    ContinuationStep,
+    reliability_continuation,
+)
 from .coupled import CoupledResult, solve_coupled, solve_for_design
 from .cycle import Phase, PhaseError, Phases, Thermodynamics
 from .design import (
@@ -85,6 +91,7 @@ from .reference import (
     RELIABLE_METRICS,
 )
 from .robustness import ToleranceReport, tolerance_report
+from .sampling import SampledReliability, sampled_reliability
 from .sections import SOLID, TUBULAR, Section
 from .sizing import MemberSizing
 from .slidercrank import (
@@ -111,6 +118,7 @@ __all__ = [
     "DEFAULT_PENALTY",
     "DEFAULT_SAFETY",
     "DEFAULT_SCATTER",
+    "DEFAULT_SCHEDULE",
     "DEFAULT_SPEC",
     "DEFAULT_SPEED_RPM",
     "DEFAULT_TARGETS",
@@ -130,6 +138,8 @@ __all__ = [
     "VARIABLE_NAMES",
     "Analysis",
     "Bounds",
+    "Continuation",
+    "ContinuationStep",
     "CoupledResult",
     "CouplingStrength",
     "CyclePoint",
@@ -156,6 +166,7 @@ __all__ = [
     "Phases",
     "RangeResult",
     "SafetyFactors",
+    "SampledReliability",
     "Section",
     "SliderCrank",
     "SolvedAnalysis",
@@ -174,6 +185,8 @@ __all__ = [
     "lattice_neighbours",
     "optimise_slidercrank",
     "optimise_slidercrank_to_specification",
+    "reliability_continuation",
+    "sampled_reliability",
     "score_cycle",
     "score_slidercrank_cycle",
     "side_load_ratio",
