@@ -50,6 +50,14 @@ from .design import (
     Bounds,
     Design,
 )
+from .drivecycle import (
+    STANDARD_CYCLE,
+    CyclePoint,
+    CycleResult,
+    DriveCycle,
+    score_cycle,
+    score_slidercrank_cycle,
+)
 from .dynamics import DEFAULT_SPEED_RPM, MEMBER_NAMES, DynamicLoads, MassProperties
 from .formulations import (
     CouplingStrength,
@@ -106,14 +114,18 @@ __all__ = [
     "REFINED_DESIGN",
     "RELIABLE_DESIGN",
     "RELIABLE_METRICS",
+    "STANDARD_CYCLE",
     "VARIABLE_DESCRIPTIONS",
     "VARIABLE_NAMES",
     "Analysis",
     "Bounds",
     "CoupledResult",
     "CouplingStrength",
+    "CyclePoint",
+    "CycleResult",
     "Design",
     "DesignTargets",
+    "DriveCycle",
     "DynamicLoads",
     "EngineSpec",
     "FrictionLosses",
@@ -148,6 +160,8 @@ __all__ = [
     "lattice_neighbours",
     "optimise_slidercrank",
     "optimise_slidercrank_to_specification",
+    "score_cycle",
+    "score_slidercrank_cycle",
     "side_load_ratio",
     "size_pair",
     "slidercrank_reliability",

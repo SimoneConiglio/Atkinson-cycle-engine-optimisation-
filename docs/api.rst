@@ -54,9 +54,11 @@ Study of the result
 -------------------
 
 Whether the optimum survives manufacturing tolerance, how strongly coupled the
-problem actually is, and whether the finding generalises past one linkage.
+problem actually is, whether it survives being asked to run at more than one
+speed, and whether the finding generalises past one linkage.
 
 .. automodule:: exlink.robustness
+.. automodule:: exlink.drivecycle
 .. automodule:: exlink.formulations
 .. automodule:: exlink.slidercrank
 .. automodule:: exlink.synthesis

@@ -8,6 +8,7 @@ Commands
 ``optimize``   Maximise efficiency subject to all the constraints.
 ``refine``     Polish a design with the augmented Lagrangian.
 ``pareto``     Approximate the Pareto front of ``(-eta, H, B)``.
+``cycle``      Score a design over a schedule of speeds, not one point.
 
 A design is given either by name (``published``, ``refined``) or as a JSON file
 written by ``--save``, so the commands chain::
@@ -164,6 +165,36 @@ def _cmd_diagram(args: argparse.Namespace) -> int:
     ):
         print(f"written: {path}")
     return 0
+
+
+def _cmd_cycle(args: argparse.Namespace) -> int:
+    from .drivecycle import (
+        STANDARD_CYCLE,
+        format_cycle,
+        score_cycle,
+        score_slidercrank_cycle,
+    )
+
+    design = load_design(args.design)
+    kwargs: dict[str, Any] = {}
+    if args.module is not None:
+        kwargs["module"] = args.module
+    if args.teeth is not None:
+        kwargs["teeth"] = args.teeth
+    result = score_cycle(design, STANDARD_CYCLE, **kwargs)
+    print(format_cycle(result))
+
+    if args.baseline is not None:
+        from .slidercrank import SliderCrank
+
+        mechanism = SliderCrank.for_compression_ratio(args.ratio, args.baseline)
+        rival = score_slidercrank_cycle(mechanism, STANDARD_CYCLE)
+        print()
+        print(format_cycle(rival))
+        if rival.km_per_litre > 0.0:
+            gain = result.km_per_litre / rival.km_per_litre - 1.0
+            print(f"\n  EX-link over the cycle: {gain:+.1%}")
+    return 0 if result.feasible else 1
 
 
 def _cmd_optimize(args: argparse.Namespace) -> int:
@@ -385,6 +416,29 @@ def build_parser() -> argparse.ArgumentParser:
     pareto_parser.add_argument("--dpi", type=int, default=140)
     pareto_parser.add_argument("--save", default=None)
     pareto_parser.set_defaults(func=_cmd_pareto)
+
+    cycle_parser = subparsers.add_parser(
+        "cycle", help="score a design over a schedule of speeds"
+    )
+    add_design(cycle_parser)
+    cycle_parser.add_argument(
+        "--module", type=float, default=None, help="pin the gear module [mm]"
+    )
+    cycle_parser.add_argument(
+        "--teeth", type=int, default=None, help="pin the driven gear's tooth count"
+    )
+    cycle_parser.add_argument(
+        "--baseline",
+        type=float,
+        nargs="?",
+        const=0.195,
+        default=None,
+        help="also score a slider-crank at this obliquity r/l (default 0.195)",
+    )
+    cycle_parser.add_argument(
+        "--ratio", type=float, default=16.0, help="the baseline's compression ratio"
+    )
+    cycle_parser.set_defaults(func=_cmd_cycle)
 
     size_parser = subparsers.add_parser(
         "size", help="size the parts with inertia in the load path"

@@ -39,6 +39,11 @@ row is not a competing comparison: it exists because a baseline forced onto an
 active constraint is what §6.2 needs to show that the dominated-optimum effect
 is not peculiar to the linkage.
 
+Every range in the table is at one operating point. §6.5 re-scores the first
+comparison over a schedule of four, where the same two designs give 3260 km/L
+and 2733 km/L for **+19.3 %**; those two figures are not interchangeable with
+the ones above and are quoted only as a pair.
+
 Speeds are quoted at the crankshaft, which turns twice per cycle on both
 mechanisms; the ``speed_rpm`` the code takes for the linkage is the half-speed
 shaft's, at half the quoted figure (§5.3). Figures are given to four significant
@@ -412,7 +417,125 @@ is conducted on the target. The motion residual ends at 5.53 mm — far from the
 target — because once the range is computable the optimizer abandons the
 prescribed motion entirely. That is how a fallback differs from a constraint.
 
-## 6.5 Supporting measurements
+## 6.5 The result over a schedule, not a point
+
+### Result
+
+Everything above is reported at one crankshaft speed. §7.2 lists that as a
+limitation, and the objection is specific: an optimum found at one point may be
+an artefact of the point. The test is to score the same design over a schedule
+of points, and to score it as one engine — which is the part that is easy to get
+wrong.
+
+A four-point schedule spanning 0.8 to 1.4 times the design speed, weighted
+towards it, gives:
+
+| crankshaft rpm | share | EX-link km/L | slider-crank km/L |
+|---|---|---|---|
+| 1600 | 0.20 | 3347 | 2811 |
+| 2000 | 0.40 | 3315 | 2772 |
+| 2400 | 0.25 | 3243 | 2705 |
+| 2800 | 0.15 | 3046 | 2589 |
+| **cycle** | | **3260** | **2733** |
+| worst / best | | 0.910 | 0.921 |
+| one engine | | 18.85 kg | 29.53 kg |
+| of which flywheel | | 15.84 kg | 28.29 kg |
+
+Neither design was tuned for the schedule; both are the point optima of §6.3
+scored over it. The EX-link gives up 4.0 % of its single-point range and the
+slider-crank 5.4 % of its own, so the advantage does not close but **widens,
+from +17.6 % to +19.3 %**.
+
+### Why the aggregation is a harmonic mean
+
+The figure of merit is distance per unit fuel, so it is *fuel per unit
+distance* that adds. Over points carrying distance shares $w_i$,
+
+$$\frac{1}{R} = \sum_i \frac{w_i}{R_i}, \qquad \sum_i w_i = 1$$
+
+which is the distance-weighted harmonic mean, not the arithmetic mean of the
+$R_i$. The distinction is not cosmetic: the arithmetic mean flatters a design
+whose range collapses at one point, and catching exactly that is what a
+schedule is for. Here it costs 1.5 km/L on the EX-link — small, because no
+point of this schedule collapses, which is itself the finding.
+
+### Why one engine, and which point sizes what
+
+Scoring each point with `evaluate` and averaging is wrong, and wrong in the
+optimistic direction, because it lets the engine change between points: the
+sections shrink where the inertia is small, the flywheel shrinks where the
+speed is high. The sweep in §6.1 reads that way — 12.9 kg at 2000 rpm, 8.1 kg
+at 2800 — and it is a sweep of *different engines*, which is legitimate for
+locating an optimum and illegitimate for scoring a schedule.
+
+One engine has to satisfy every point, and the two ends of the schedule size
+different parts of it, in opposite directions:
+
+- **the fastest point sizes the structure**, because every inertia load grows
+  as $\omega^2$ and the sections follow it;
+- **the slowest point sizes the flywheel**, because the inertia needed to hold
+  a given speed fluctuation goes as $\omega^{-2}$.
+
+`score_cycle` therefore builds the structure at 2800 rpm, takes the flywheel
+requirement from whichever point demands most — 1600 rpm, for both mechanisms —
+and scores every point against that one mass. Composing the two is exact rather
+than conservative in this model: the flywheel is concentric with its shaft, so
+a larger one adds no inertia force and cannot feed back into the member loads.
+
+The composition is what the schedule costs. The EX-link's structure at 2800 rpm
+is 3.0 kg against 2.8 kg at the design point — the sections barely notice — but
+its flywheel goes from 10.1 kg to 15.8 kg, and that is the whole of the 4.0 %.
+An engine specified over a range of speeds is a flywheel problem.
+
+### Why the gap widens
+
+Not because the EX-link's flywheel advantage grows: the two wheels stand in the
+same ratio at every speed, 18.1 kg against 10.1 kg at 2000 rpm and 28.3 against
+15.8 over the schedule, because both scale as $\omega^{-2}$ from a torque curve
+whose shape does not move. The ratio is fixed at 1.79 and the schedule does not
+touch it.
+
+What the schedule changes is the *mix*. The two engines split their mass in
+opposite ways:
+
+| | EX-link | slider-crank |
+|---|---|---|
+| structure, at 2800 rpm | 3.01 kg | 1.25 kg |
+| flywheel, over the schedule | 15.84 kg | 28.29 kg |
+| total | 18.85 kg | 29.53 kg |
+
+The slider-crank is the *lighter* mechanism — two members and no gear pair
+against a trigonal link, a rocker and a pair of gears — and it is the heavier
+engine, because the item it loses on is the flywheel and the flywheel is most
+of both engines. Taking the schedule down to 1600 rpm makes the flywheel a
+larger share of each total: 84 % of the EX-link's mass and 96 % of the
+slider-crank's, against 78 % and 92 % at each engine's own single point. So the comparison is
+weighted further towards the one item the EX-link wins by a factor of 1.79, and
+the total-mass ratio moves from 1.31 at a point to 1.57 over the schedule.
+
+That is a general property, not an accident of this schedule: **the wider the
+speed range an engine must cover, the more of its mass is flywheel, and the
+more a flat torque curve is worth.** The mechanism whose advantage is
+smoothness gains from being asked to work over a range rather than at a point,
+and the slider-crank's structural simplicity buys less the wider that range is.
+
+### What the schedule does not settle
+
+The baseline was given its one remaining freedom back: re-optimising $r/l$
+against the schedule rather than the point moves it from 0.195 to 0.198 and the
+cycle range from 2733.2 to 2733.7 km/L — four parts in ten thousand. Its point
+optimum was already its cycle optimum. The EX-link was **not** re-optimised
+over the schedule, which would be an eleven-variable solve rather than a scalar
+one, so +19.3 % is a lower bound on what a cycle-aware design would reach.
+
+The weights themselves are an assumption, not a measurement. Without a surveyed
+track there is no defensible way to derive them, and a different spread would
+give a different number. What the schedule establishes is not a more accurate
+range but the absence of an artefact: the ratio of worst point to best is 0.91,
+the design that wins at 2000 rpm wins at every point of the schedule, and no
+part of §6.3's conclusion depended on the speed it was measured at.
+
+## 6.6 Supporting measurements
 
 The results above rest on properties of the problem and of the implementation
 that are asserted where they are used and measured here: how strongly the

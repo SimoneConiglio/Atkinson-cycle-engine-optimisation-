@@ -46,6 +46,7 @@ exlink animate --formulations \
 exlink refine --design published --save refined.json   # augmented Lagrangian
 exlink optimize --save best.json     # differential evolution over the full box
 exlink pareto --pop-size 200 --max-gen 60              # NSGA-II front
+exlink cycle --module 0.8 --teeth 48 --baseline        # over a schedule of speeds (§6.5)
 ```
 
 `--design` takes `published`, `refined`, `coupled`, `range`, `reliable` or a path
@@ -126,6 +127,7 @@ src/exlink/
 | sizing, dynamics and the singularity result | `python examples/05_sizing_and_dynamics.py` |
 | the mass budget, loss breakdown and both mechanism comparisons of §6.3 | `python examples/06_range.py` |
 | the N2 chart and the XDSM of §4.2 | `exlink diagram -o docs/figures` |
+| the drive-cycle scores of §6.5 | `python examples/08_drive_cycle.py` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests

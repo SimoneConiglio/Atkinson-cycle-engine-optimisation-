@@ -43,6 +43,13 @@ efficiency accounts for 0.457 → 0.480 of that, mechanical efficiency for 0.787
 engine mass for 16.9 → 12.9 kg — the last two because eleven dimensions can be placed off the
 singularity and two cannot.
 
+**Over a schedule of speeds the advantage widens to 19.3 %.** Scored across four speeds as one
+engine — structure sized at the fastest point, flywheel at the slowest — rather than at a
+single point, both designs lose range and the conventional engine loses more: **3260 km/L
+against 2733**. A wider speed range makes the flywheel a larger share of the mass, 84 % of the
+linkage's and 96 % of the baseline's, and the flywheel is the item the flatter torque curve
+wins by a factor of 1.79.
+
 **Imposing a constraint and checking it are different searches.** Holding every constraint
 *during* the search rather than verifying them afterwards reaches **3501 km/L** against 3338.
 Adding a reliability target gives **3395 km/L at $P_f = 10^{-3}$** — 3 % less range for a

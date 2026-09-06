@@ -43,6 +43,15 @@ smallest of the three contributions, five per cent of indicated efficiency; the
 larger two are a lower side load and a lighter flywheel, which are consequences
 of having eleven dimensions to place rather than two (§6.3).
 
+**A schedule of speeds rewards smoothness, and the advantage widens to 19.3 %.**
+Scored over four speeds as one engine rather than at one point, both designs
+lose range and the conventional engine loses more. The reason is structural: a
+wider speed range makes the flywheel a larger share of the mass — 84 % of the
+linkage's and 96 % of the baseline's — and the flywheel is the item the flat
+torque curve wins by a factor of 1.79. The slider-crank is the lighter
+*mechanism* and the heavier *engine*, and asking it to cover a range rather
+than a point makes that worse (§6.5).
+
 **Decomposition buys structure, not speed.** Bi-level outer approximation halves
 the sub-solves against enumeration and lands 0.6 % short, on a bound that is not
 valid because the sub-problem is nonconvex. What it buys is a mixed-integer
@@ -113,9 +122,12 @@ requires a convex sub-problem, which this problem violates comprehensively.
 but reached feasibility in 0 of 6 attempts on the *range* problem at an
 affordable budget. That question is open, not answered.
 
-**Single operating point.** Everything is reported at one speed with a sweep
-around it. A drive cycle would test whether the optimum is an artefact of the
-point chosen.
+**The schedule is assumed, not measured.** §6.5 answers the single-point
+objection — the design is scored over a four-point schedule as one engine and
+keeps its advantage — but the distance weights are stated rather than derived,
+because no survey of the track exists. A different spread gives a different
+cycle range; what it does not plausibly change is the ranking, since the
+EX-link leads at every point of the one tested.
 
 **Single mechanism family.** Two topologies establish a contrast; three would
 establish a trend.
@@ -132,8 +144,14 @@ bounds as written the mechanism reaches no reliable design at all.
 
 In rough order of value per unit of effort:
 
-1. **A drive cycle** in place of the single operating point. Cheap, and it tests
-   the result most likely to be point-specific.
+1. ~~**A drive cycle** in place of the single operating point.~~ **Done**
+   (§6.5). The design holds across a four-point schedule scored as one engine —
+   worst point at 0.91 of the best — and the advantage over the conventional
+   engine widens from +17.6 % to +19.3 %, because a schedule makes the flywheel
+   a larger share of both engines and the flywheel is where the flat torque
+   curve pays. What remains open is re-optimising the linkage *for* a schedule
+   rather than scoring it over one, which would make +19.3 % a lower bound
+   rather than the answer.
 2. **Tubular sections.** The largest single modelling conservatism, and it
    interacts directly with §6.1.
 3. **A widened uncertainty model**, carrying material, load and friction
@@ -257,6 +275,7 @@ Full provenance for every design is in §6.0.
 | optimised as a conventional engine, both at 720° per cycle | 2888 km/L |
 | against the study's result, 3395 km/L | **+17.6 %** |
 | against `COUPLED_DESIGN`, 3338 km/L | +15.6 % |
+| over a four-point schedule, one engine each | 2733 km/L vs 3260 km/L, **+19.3 %** |
 | indicated efficiency | 0.457 → 0.480 |
 | mechanical efficiency | 0.787 → 0.865 |
 | engine mass | 16.9 kg → 12.9 kg |
