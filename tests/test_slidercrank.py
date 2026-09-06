@@ -425,3 +425,58 @@ def test_the_optimised_baseline_misses_the_ex_links_limits() -> None:
 
     assert math.degrees(math.asin(mechanism.obliquity)) > DEFAULT_TARGETS.max_rod_angle
     assert liner / gas > DEFAULT_TARGETS.max_side_load
+
+
+# -- the offset slider-crank of section 6.9 ------------------------------------
+
+
+def test_a_zero_offset_is_the_centred_mechanism_exactly():
+    """Every number in sections 6.1 to 6.8 must survive the new freedom."""
+    from exlink.slidercrank import SliderCrank, kinematics
+
+    centred = SliderCrank.for_compression_ratio(16.0, 0.195)
+    explicit = SliderCrank.for_compression_ratio(16.0, 0.195, offset=0.0)
+    assert explicit == centred
+    assert explicit.stroke == pytest.approx(2.0 * explicit.crank)
+
+    motion = kinematics(centred, 360)
+    assert motion["lam"] == pytest.approx(
+        centred.crank * np.cos(motion["theta"])
+        + np.sqrt(centred.rod**2 - (centred.crank * np.sin(motion["theta"])) ** 2)
+    )
+
+
+def test_an_offset_keeps_the_compression_ratio_it_was_built_for():
+    """The crank shrinks to hold the swept volume, or the comparison is unfair."""
+    from exlink.constants import DEFAULT_SPEC
+    from exlink.slidercrank import SliderCrank, kinematics
+
+    for offset in (0.1, 0.2, 0.3):
+        mechanism = SliderCrank.for_compression_ratio(16.0, 0.195, offset=offset)
+        assert mechanism.offset == pytest.approx(offset * mechanism.crank)
+        travel = np.ptp(kinematics(mechanism, 720)["lam"])
+        swept = travel * DEFAULT_SPEC.piston_area
+        assert 1.0 + swept / DEFAULT_SPEC.dead_volume == pytest.approx(16.0, rel=1.0e-4)
+
+
+def test_an_offset_moves_the_piston_off_the_crank_axis():
+    from exlink.slidercrank import SliderCrank, kinematics
+
+    mechanism = SliderCrank.for_compression_ratio(16.0, 0.195, offset=0.25)
+    motion = kinematics(mechanism, 360)
+    assert motion["wrist"][:, 0] == pytest.approx(mechanism.offset)
+    # The rod angle is no longer symmetric about zero.
+    assert abs(motion["rod_angle"].max() + motion["rod_angle"].min()) > 1.0e-3
+
+
+def test_the_offset_does_not_make_an_atkinson_engine():
+    """Section 6.9 states this as a limitation; it must be true."""
+    from exlink.slidercrank import SliderCrank, kinematics
+
+    mechanism = SliderCrank.for_compression_ratio(16.0, 0.195, offset=0.30)
+    lam = kinematics(mechanism, 720)["lam"]
+    # One maximum and one minimum per revolution: the piston makes two
+    # identical strokes per cycle whatever the offset, so STE == STC.
+    slope = np.sign(np.diff(np.concatenate([lam, lam[:1]])))
+    turns = int(np.count_nonzero(slope != np.roll(slope, 1)))
+    assert turns == 2

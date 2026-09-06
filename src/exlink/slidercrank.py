@@ -105,10 +105,31 @@ class SliderCrank:
     rod: float
     """Connecting-rod length ``l`` [mm]."""
 
+    offset: float = 0.0
+    """Wrist-pin offset ``d`` from the crank axis [mm].
+
+    Zero is the centred slider-crank the study compares against.  A non-zero
+    offset -- *desaxe*, in the older literature -- is the cheapest extra degree
+    of freedom a conventional engine has, and §6.9 uses it as a third point on
+    the dimensionality axis §7.1's explanation rests on.  It does *not* make an
+    Atkinson engine: the piston still makes two identical strokes per
+    revolution, so the expansion and compression strokes stay equal and the
+    offset buys only a rearranged side load and a slightly asymmetric velocity.
+    """
+
     @property
     def stroke(self) -> float:
-        """Piston travel ``2r`` [mm]."""
-        return 2.0 * self.crank
+        """Piston travel [mm].
+
+        ``2r`` when centred.  With an offset the two dead centres move off the
+        crank axis and the travel is the difference of the two extreme heights,
+        which is slightly more than ``2r``.
+        """
+        if self.offset == 0.0:
+            return 2.0 * self.crank
+        top = math.hypot(self.crank + self.rod, 0.0) ** 2 - self.offset**2
+        bottom = math.hypot(self.rod - self.crank, 0.0) ** 2 - self.offset**2
+        return math.sqrt(max(top, 0.0)) - math.sqrt(max(bottom, 0.0))
 
     @property
     def obliquity(self) -> float:
@@ -128,6 +149,7 @@ class SliderCrank:
         ratio: float,
         obliquity: float = 0.30,
         spec: EngineSpec = DEFAULT_SPEC,
+        offset: float = 0.0,
     ) -> SliderCrank:
         """Build the slider-crank that realises a compression ratio.
 
@@ -139,19 +161,34 @@ class SliderCrank:
             ratio: Required compression ratio ``epsilon``.
             obliquity: ``r / l``.
             spec: Fixed engine data.
+            offset: Wrist-pin offset, as a fraction of the crank radius.
 
         Returns:
             The mechanism.
         """
         swept = spec.dead_volume * (ratio - 1.0)
         crank = 0.5 * swept / spec.piston_area
-        return cls(crank=crank, rod=crank / obliquity)
+        if offset == 0.0:
+            return cls(crank=crank, rod=crank / obliquity)
+        # With an offset the stroke exceeds 2r, so the crank has to shrink to
+        # keep the swept volume -- and hence the compression ratio -- fixed.
+        # One Newton step on ``stroke(r) = swept / A_p`` is enough: the
+        # correction is a fraction of a percent at any usable offset.
+        wanted = swept / spec.piston_area
+        for _ in range(8):
+            trial = cls(crank=crank, rod=crank / obliquity, offset=offset * crank)
+            error = trial.stroke - wanted
+            if abs(error) < 1.0e-12:
+                break
+            crank -= error / (trial.stroke / crank)
+        return cls(crank=crank, rod=crank / obliquity, offset=offset * crank)
 
 
 def kinematics(mechanism: SliderCrank, samples: int = 720) -> dict[str, FloatArray]:
     """Piston motion and rod angle over one crankshaft revolution.
 
-    .. math:: \\lambda(\\theta) = r \\cos\\theta + \\sqrt{l^2 - r^2 \\sin^2\\theta}
+    .. math:: \\lambda(\\theta) = r \\cos\\theta
+              + \\sqrt{l^2 - (r \\sin\\theta - d)^2}
 
     Args:
         mechanism: The slider-crank.
@@ -161,12 +198,15 @@ def kinematics(mechanism: SliderCrank, samples: int = 720) -> dict[str, FloatArr
         ``theta``, ``lam``, ``rod_angle``, and the two joint trajectories.
     """
     theta = np.linspace(0.0, 2.0 * np.pi, samples, endpoint=False)
-    r, length = mechanism.crank, mechanism.rod
-    sin_phi = r * np.sin(theta) / length
+    r, length, offset = mechanism.crank, mechanism.rod, mechanism.offset
+    # With the bore offset by d, the rod must span the lateral distance
+    # r sin(theta) - d rather than r sin(theta); d = 0 recovers the centred
+    # mechanism exactly.
+    sin_phi = (r * np.sin(theta) - offset) / length
     phi = np.arcsin(np.clip(sin_phi, -1.0, 1.0))
     lam = r * np.cos(theta) + length * np.cos(phi)
     crank_pin = np.stack([r * np.sin(theta), r * np.cos(theta)], axis=-1)
-    wrist = np.stack([np.zeros_like(theta), lam], axis=-1)
+    wrist = np.stack([np.full_like(theta, offset), lam], axis=-1)
     return {
         "theta": theta,
         "lam": lam,
