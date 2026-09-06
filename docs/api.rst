@@ -67,6 +67,8 @@ generalises past one linkage.
 .. automodule:: exlink.slidercrank
 .. automodule:: exlink.synthesis
 .. automodule:: exlink.continuation
+.. automodule:: exlink.restoration
+.. automodule:: exlink.secondorder
 
 Mixed-integer design
 --------------------

@@ -90,6 +90,7 @@ from .reference import (
     RELIABLE_DESIGN,
     RELIABLE_METRICS,
 )
+from .restoration import Restoration, restore
 from .robustness import ToleranceReport, tolerance_report
 from .sampling import SampledReliability, sampled_reliability
 from .sections import SOLID, TUBULAR, Section
@@ -165,6 +166,7 @@ __all__ = [
     "PhaseError",
     "Phases",
     "RangeResult",
+    "Restoration",
     "SafetyFactors",
     "SampledReliability",
     "Section",
@@ -186,6 +188,7 @@ __all__ = [
     "optimise_slidercrank",
     "optimise_slidercrank_to_specification",
     "reliability_continuation",
+    "restore",
     "sampled_reliability",
     "score_cycle",
     "score_slidercrank_cycle",
