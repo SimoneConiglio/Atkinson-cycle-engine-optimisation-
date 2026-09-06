@@ -150,6 +150,12 @@ reporting tool rather than something the optimizer can call.
 **The mixed-integer bound is not a bound.** Outer approximation's guarantee
 requires a convex sub-problem, which this problem violates comprehensively.
 
+**Neither reported optimum is converged.** §6.4's run stopped at its
+iteration cap and so did the re-solve that followed it, at 2633 evaluations and
+nearly six hours. Both figures are lower bounds; the second is 0.13 % above the
+first, which bounds how much the cap hides without saying where the formulation
+ends.
+
 **The global optimum is not established.** Uniform multistart is inapplicable
 (§3.4); manifold-projected restarts showed the *efficiency* optimum was local
 but reached feasibility in 0 of 6 attempts on the *range* problem at an
@@ -265,11 +271,19 @@ In rough order of value per unit of effort:
    improves the one term its topology leaves open — mechanical efficiency,
    0.787 to 0.792 — and cannot touch the other two at any number of
    dimensions.
-9. **Converging §6.4.** Both solves there stopped at their iteration cap, not
-   at a convergence test, so 3395 km/L and 3501 km/L are lower bounds on what
-   the formulation reaches. Running them to convergence, and from several
-   starts, is the cheapest remaining gain in the study. The functional IDF §7.4
-   sets out is a larger question again and would need its own study.
+9. ~~**Converging §6.4.**~~ **Attempted; the cap held** (§6.4). Re-solved on
+   §6.8's corrected constraint set with a 200-iteration budget — 2633
+   evaluations, 5 h 45 min — SLSQP still stopped at the cap. The result
+   dominates the shipped one on both objectives, 3399 km/L at
+   $P_f = 4.1\times10^{-3}$ against 3395 at $9.4\times10^{-3}$, so 3395 was
+   indeed a lower bound; but 3399 is one too. What the run settles is that the
+   cap is not hiding much — nearly six hours of extra budget bought 0.13 % of
+   range — and what it leaves open is where the formulation tops out. It also
+   showed the steered quantity and the target parting company: the search drove
+   *three* indices to exactly 3.00 and the system index sat at 2.64, which is
+   §3.8's inequality made visible and gets worse the better the convergence.
+   The functional IDF §7.4 sets out is a larger question again and would need
+   its own study.
 
 ## 7.4 What the prescribed motion taught
 

@@ -375,6 +375,54 @@ a measurement of the design, not of the estimator, and every figure in §6.3,
 §6.5 and §6.6 stands. What does not stand is the claim that this design meets a
 reliability requirement. The re-solve under the corrected constraint is below.
 
+### Re-solved on the corrected constraint set
+
+§7.3 also asks for §6.4 to be run to convergence rather than stopped at its
+iteration cap. Re-solving from `COUPLED_DESIGN` with §6.8's branch-aware
+constraints and a 200-iteration budget — 2633 evaluations, 5 h 45 min:
+
+| | `RELIABLE_DESIGN` | the re-solve |
+|---|---|---|
+| range | 3394.9 km/L | **3399.2 km/L** |
+| system $P_f$ | $9.4\times10^{-3}$ | **$4.1\times10^{-3}$** |
+| system $\beta$ | 2.35 | 2.64 |
+| engine mass | 12.94 kg | 13.43 kg |
+| top-dead-centre gap | $1.1\times10^{-4}$ mm | $1.6\times10^{-2}$ mm |
+| stopped because | iteration cap | iteration cap |
+
+It dominates the shipped result on both objectives — longer ranged *and* less
+than half as likely to miss a requirement — for half a kilogram. Three things
+about it are worth more than the numbers.
+
+**It did exactly what it was told, and that is not the same as meeting the
+target.** The search steers on $\min_i \beta_i$ (§3.10), and it drove *three*
+constraints to that value simultaneously: `stroke_upper_1` at 3.003,
+`ratio_upper_2` at 3.005, `ratio_upper_1` at 3.042. The steered quantity is met
+to three decimal places and the system index is 2.64, because the union of
+three constraints each at $\beta = 3$ is likelier to be missed than any one of
+them. That is §3.8's inequality — $\min_i \beta_i \ge t$ is weaker than
+$\beta_{\text{sys}} \ge t$ — stated there as an argument and visible here as a
+0.36 discrepancy. Converging *harder* widens it, because a better-converged
+optimum pushes more constraints onto the boundary.
+
+**The design left the kink of its own accord.** Its top-dead-centre gap is
+0.016 mm rather than $1.1\times10^{-4}$ — two orders of magnitude clear of the
+tie that §6.8 is about. Nothing asked it to move: with both stroke branches
+priced, collapsing the two top dead centres no longer buys anything, so the
+optimizer stopped doing it. The formulation that made the estimate correct also
+removed the incentive that had put the design where the estimate was wrong.
+
+**And it still stopped at the cap.** 200 iterations, 5 h 45 min, and SLSQP had
+not converged; the entry in §7.3 asked for a converged run and does not get
+one. 3399 km/L remains a lower bound, as 3395 was. What the re-solve settles is
+that the cap is not hiding much — five and three quarter hours of extra budget
+bought 0.13 % of range — and what it does not settle is where the formulation
+actually tops out.
+
+For that reason this design is reported rather than adopted. Promoting an
+unconverged result to be the study's answer, and redrawing every figure from
+it, would trade a documented lower bound for an undocumented one.
+
 ### What the reliability requirement costs
 
 Imposing the constraints *without* it reaches 3501 km/L, 3 % more. It gets
