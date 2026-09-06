@@ -218,7 +218,9 @@ In rough order of value per unit of effort:
    exact builds put the study's result at $9.3\times10^{-3}$ against FORM's
    $1.3\times10^{-3}$. The cause is that the expansion stroke is a *maximum*
    over two top dead centres, and the optimizer had driven those two to within
-   eleven nanometres of each other, so the linearisation used the branch that
+   0.107 μm of each other — a fifth of a wavelength of light, and
+   seventy-five times finer than the scatter of the parts — so the
+   linearisation used the branch that
    attained the maximum while the parts breached the other. Carrying both
    branches — one extra row of a Jacobian already being computed — brings FORM
    to within 1 % of sampling at every design tested. What remains is to run the

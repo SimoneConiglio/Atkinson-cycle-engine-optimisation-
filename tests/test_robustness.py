@@ -556,14 +556,30 @@ def test_the_branch_the_maximum_attains_is_not_the_one_that_binds():
 
 
 def test_the_two_top_dead_centres_of_the_study_result_are_numerically_coincident():
-    """Which is why the maximum is not differentiable there."""
+    """Which is why the maximum is not differentiable there.
+
+    Judged against the *scatter of the parts* rather than a fixed threshold.
+    The gap is a difference of two refined extrema and moves with the crank
+    grid -- 2e-3 mm at 180 stations, 1e-4 at 1440 and beyond -- so what matters
+    is not its value but that it is orders of magnitude below the tolerance the
+    reliability analysis propagates.
+    """
     from exlink.model import analyse
     from exlink.reference import COUPLED_DESIGN, RELIABLE_DESIGN
+    from exlink.robustness import SIGMA_PER_HALF_WIDTH, tolerance_half_widths
 
-    tight = analyse(RELIABLE_DESIGN).require_solved().thermodynamics.phases
-    loose = analyse(COUPLED_DESIGN).require_solved().thermodynamics.phases
-    assert abs(tight.expansion_strokes[0] - tight.expansion_strokes[1]) < 1.0e-4
-    assert abs(loose.expansion_strokes[0] - loose.expansion_strokes[1]) > 1.0e-3
+    scatter = float(np.mean(tolerance_half_widths(RELIABLE_DESIGN)[:9]) / SIGMA_PER_HALF_WIDTH)
+    tight = analyse(RELIABLE_DESIGN, samples=1440).require_solved().thermodynamics.phases
+    loose = analyse(COUPLED_DESIGN, samples=1440).require_solved().thermodynamics.phases
+
+    on_the_kink = abs(tight.expansion_strokes[0] - tight.expansion_strokes[1])
+    clear_of_it = abs(loose.expansion_strokes[0] - loose.expansion_strokes[1])
+    # Two orders of magnitude apart, either side of the scatter: the study's
+    # result sits at 1.5 % of one standard deviation from the tie, the coupled
+    # reference at 96 % of one.
+    assert on_the_kink < 0.05 * scatter
+    assert clear_of_it > 0.5 * scatter
+    assert clear_of_it > 50.0 * on_the_kink
     assert tight.expansion_stroke == max(tight.expansion_strokes)
 
 

@@ -510,8 +510,8 @@ The expansion stroke is
 :math:`\\max(\\lambda_{tdc,1}, \\lambda_{tdc,2}) - \\min\\lambda`, a maximum of
 two smooth functions, and a maximum is differentiable only away from the tie.
 Linearising it uses the branch that attains the maximum *at the nominal
-design*; the parts, whose dimensions scatter by microns, straddle a tie of
-:math:`10^{-5}` mm and breach whichever branch is nearer.  At
+design*; the parts, whose dimensions scatter by some 8 um, straddle a tie of
+0.107 um and breach whichever branch is nearer.  At
 ``RELIABLE_DESIGN`` the attaining branch has :math:`\beta = 3.00` and the other
 :math:`\beta = 2.36`, and it is the second that decides: sampling 150 000 exact
 builds gives :math:`9.3\times10^{-3}`, against :math:`1.3\times10^{-3}` from the

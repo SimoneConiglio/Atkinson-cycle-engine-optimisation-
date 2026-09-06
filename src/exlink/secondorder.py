@@ -20,7 +20,7 @@ gradient** rather than of a second derivative.  A finer crank-angle grid does
 not change it, so it is not discretisation.
 
 The jump is a branch switch.  The expansion stroke is a maximum over the two
-top dead centres, and the design §6.4 arrives at has them eleven nanometres
+top dead centres, and the design §6.4 arrives at has them 0.107 um
 apart, so perturbing any dimension by a fraction of a micron swaps which one
 attains the maximum and moves :math:`\\partial STE/\\partial a` by a factor of 56.
 The surface is not curved, it is **kinked**, and no order of Taylor expansion

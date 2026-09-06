@@ -29,7 +29,7 @@ referred to rather than restated.
 | `COUPLED_DESIGN` | 3338 km/L | minimum coupled mass; the strictly feasible reference | **yes** |
 | `RANGE_DESIGN` | 3388 km/L | range, constraints bound at the end | no, by $1.5\times10^{-4}$ |
 | range, constraints imposed | 3501 km/L | §3.10's second form, nominal only | no, by $2\times10^{-4}$ |
-| **range + reliability, relaxed bounds** | **3395 km/L** | **§3.10's third form; $P_f = 1.3\times10^{-3}$** | no — relaxed spec |
+| **range + reliability, relaxed bounds** | **3395 km/L** | **§3.10's third form; $P_f = 9.4\times10^{-3}$ (§6.8)** | no — relaxed spec |
 | slider-crank, optimised | 2888 km/L | the baseline of §6.3, optimised over its own two freedoms | its own limits |
 | slider-crank, capped | 2467 km/L | the same, held to the linkage's limits; §6.2 only | yes, on the cap |
 
@@ -353,12 +353,26 @@ gap at 0.054 mm and both bands at $\pm 0.15$:
 | | start (`COUPLED_DESIGN`) | result (`RELIABLE_DESIGN`) |
 |---|---|---|
 | range | 3338 km/L | **3395 km/L** |
-| system $P_f$ | $1.0\times10^{-3}$ | $1.3\times10^{-3}$ |
-| system $\beta$ | 3.08 | **3.00**, on its target |
 | worst constraint | — | $-2.2\times10^{-7}$ |
+| system $\beta$ **as the solve measured it** | 3.08 | 3.00, on its target |
+| system $\beta$ **as §6.8 corrects it** | 4.12 | **2.35** |
+| system $P_f$, corrected | $1.9\times10^{-5}$ | $9.4\times10^{-3}$ |
 
 1352 evaluations, 61 minutes, the iteration cap reached rather than a
-convergence test — so this is a lower bound.
+convergence test.
+
+The two $\beta$ rows are the important part of this table, and the second is
+the one to believe: it is confirmed against 150 000 exact builds at
+$9.28\times10^{-3}$ (§6.8). The solve did hold its target — on the constraint
+set it was given, which linearised the expansion stroke on the branch that
+attains the maximum. It is the *other* branch the parts breach, and on the
+corrected set the result stands at $\beta = 2.35$ and **misses the
+$10^{-3}$ target by an order of magnitude**.
+
+Two things follow, and they pull apart. The range is unaffected: 3395 km/L is
+a measurement of the design, not of the estimator, and every figure in §6.3,
+§6.5 and §6.6 stands. What does not stand is the claim that this design meets a
+reliability requirement. The re-solve under the corrected constraint is below.
 
 ### What the reliability requirement costs
 
@@ -371,22 +385,25 @@ the two figures answer different questions: 3501 is the best nominal design,
 ### Which relaxation the result depends on
 
 Only the band. Re-scoring the same design against the 0.1 mm gap accepted in
-§6.2 gives $P_f = 1.339\times10^{-3}$ against $1.344\times10^{-3}$ at 0.054 mm —
-a difference of four parts in a thousand, because the gap sits at $\beta = 8.1$
+§6.2 gives $P_f = 9.382\times10^{-3}$ against $9.393\times10^{-3}$ at 0.054 mm —
+a difference of one part in a thousand, because the gap sits at $\beta = 8.1$
 either way and contributes nothing. The band is a different matter: at
-$\pm 0.05$ this design is not admissible at all, and at $\pm 0.12$ the target
-would have to be $\beta = 3.09$ rather than 3.00.
+$\pm 0.05$ this design is not admissible at all, at $\pm 0.12$ it reaches only
+$\beta = 0.19$, and at $\pm 0.20$ it would reach 4.53.
 
 | | value at the solution | $\sigma$ | $\beta$ |
 |---|---|---|---|
-| `stroke_upper` | $-0.054$ mm | 0.018 | **3.00** |
-| `ratio_upper` | $-0.032$ | 0.005 | 6.94 |
+| `stroke_upper_2` | $-0.054$ mm | 0.023 | **2.36** |
+| `stroke_upper_1` | $-0.054$ mm | 0.018 | 3.00 |
+| `ratio_upper_2` | $-0.032$ | 0.006 | 5.14 |
 | `tdc_gap` (at 0.1 mm) | $-0.100$ mm | 0.012 | 8.12 |
-| every other constraint | — | — | $> 13$ |
+| every other constraint | — | — | $> 10$ |
 
-One constraint is active in the reliability sense and the rest are spectators,
-which is the shape a reliability-constrained optimum should have and a useful
-check that the index is being steered rather than merely reported.
+Two constraints are active in the reliability sense and they are the same
+requirement measured from the two top dead centres — which is the whole of
+§6.8. The solve steered on the second row and the first is what governs. Everything
+below $\beta = 5$ is a spectator, which is otherwise the shape a
+reliability-constrained optimum should have.
 
 ### Three defects stood in the way, and one generalises
 
@@ -710,7 +727,8 @@ complete enough, and §6.8 says one of the *constraints* was linearised at a
 kink.
 
 **What was not priced decides the design.** The system probability goes from
-$1.3\times10^{-3}$ to $5.0\times10^{-1}$, and all of it is one constraint:
+$9.4\times10^{-3}$ — the geometric figure, §6.8's corrected one — to
+$5.0\times10^{-1}$, and all of it is one constraint:
 
 | constraint | $\beta$ | dominant source of its variance |
 |---|---|---|
@@ -749,14 +767,16 @@ itself on the two:
 | gear pair | range | engine mass | $P_f$ | binding constraint |
 |---|---|---|---|---|
 | $m = 0.8$, $z = 48$ (pinned, the master's) | 3394.9 km/L | 12.94 kg | $5.0\times10^{-1}$ | gear, $\beta = 0.00$ |
-| $m = 1.0$, $z = 39$ (the exhaustive answer) | 3395.3 km/L | 12.91 kg | $1.4\times10^{-3}$ | stroke, $\beta = 3.00$ |
-| $m = 2.0$, $z = 19$ (chosen by the sizing rule) | 3396.0 km/L | 12.86 kg | $1.3\times10^{-3}$ | stroke, $\beta = 3.00$ |
+| $m = 1.0$, $z = 39$ (the exhaustive answer) | 3395.3 km/L | 12.91 kg | $9.4\times10^{-3}$ | stroke, $\beta = 2.36$ |
+| $m = 2.0$, $z = 19$ (chosen by the sizing rule) | 3396.0 km/L | 12.86 kg | $9.4\times10^{-3}$ | stroke, $\beta = 2.36$ |
 
 The ordering is the same on every column. The pinned pair is the shortest
-ranged, the heaviest, and the only one whose gear constraint binds; the pair
-the sizing rule picks unaided — face width 2.4 modules against a limit of 12 —
-recovers the dimensional-only probability exactly, because with the gear
-constraint at $\beta = 12$ the widened model has nothing left to add.
+ranged, the heaviest, and the only one whose gear constraint binds; either of
+the other two recovers the geometric probability exactly, because with the gear
+constraint at $\beta \ge 4$ the widened model has nothing left to add. That
+geometric figure is $9.4\times10^{-3}$ rather than the $1.3\times10^{-3}$ this
+section originally reported, for a reason that has nothing to do with widening
+the uncertain vector — see §6.8.
 
 There is no trade to negotiate here; the pinned choice was simply worse on all
 three counts, and the range gap of 0.03 % is far too small to have revealed it.
@@ -764,7 +784,7 @@ Only the widened model could.
 
 The recommendation is one line: **the study's result should not be built with
 the pair the master returned.** Its range is 3395 km/L whichever pair is
-fitted, to four figures, and its reliability is either $1.3\times10^{-3}$ or a
+fitted, to four figures, and its reliability is either $9.4\times10^{-3}$ or a
 coin flip depending on which.
 
 ### Where each uncertainty actually goes
@@ -842,7 +862,7 @@ branch attains it at the nominal design.
 `COUPLED_DESIGN` has its two top dead centres 6.7 μm apart, which is comfortably
 more than the scatter can bridge, so one branch attains the maximum in
 essentially every build and linearising it is right. `RELIABLE_DESIGN` has them
-**0.011 μm** apart — and it has them there because driving the top-dead-centre
+**0.107 μm** apart — and it has them there because driving the top-dead-centre
 gap to zero is exactly what its own $g$ constraint rewards. The parts, whose
 dimensions scatter by some 8 μm, straddle that tie in every single build.
 
@@ -856,7 +876,7 @@ Measuring the two branches separately, analytically and by sampling, settles it:
 
 Each *branch* is Gaussian to two decimal places in its skew, which is to say
 FORM is exactly right on either one. What FORM did was linearise **branch 1**,
-which attains the maximum by eleven nanometres and is 27 % less sensitive than
+which attains the maximum by a tenth of a micron and is 27 % less sensitive than
 branch 2. The parts breach branch 2.
 
 So the estimator was never wrong. The *formulation* was: it presented a maximum
@@ -932,7 +952,7 @@ the linearisation it was self-consistent.
 
 **Optimisation drives designs onto the non-smooth features of their own
 constraints.** The tie was not bad luck. §6.4's objective rewards a small
-top-dead-centre gap, so the optimizer closed it to eleven nanometres, which is
+top-dead-centre gap, so the optimizer closed it to a tenth of a micron, which is
 the same as saying it put the design exactly on the ridge where the stroke
 constraint stops being differentiable. Any deterministic optimum should be
 suspected of sitting on whatever non-smoothness its formulation contains, and

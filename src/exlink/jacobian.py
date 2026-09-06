@@ -327,7 +327,7 @@ theorem gives them exactly instead.
 The four numbered rows are the two strokes measured from *each* top dead centre
 rather than from the higher of the two. ``expansion_stroke`` and
 ``stroke_error`` are derivatives of a maximum, which exist only away from the
-tie -- and §6.8 shows a design of this study sitting eleven nanometres from it,
+tie -- and §6.8 shows a design of this study sitting 0.107 um from it,
 where the reported derivative is that of a branch the parts do not stay on.
 
 ``efficiency``, ``height``, ``width`` and ``clearance`` are left to finite
