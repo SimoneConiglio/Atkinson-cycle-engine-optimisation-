@@ -131,7 +131,7 @@ src/exlink/
 | the drive-cycle scores of §6.5 | `python examples/08_drive_cycle.py` |
 | what tubular sections are worth, §6.6 | `python examples/09_tubular_sections.py` |
 | the widened uncertainty model of §6.7 | `python examples/10_widened_uncertainty.py` |
-| the sampling check of §6.8 | `exlink.sampling.sampled_reliability` (see its docstring) |
+| the sampling check of §6.8 | `python examples/11_sampling_check.py` |
 | the third point on the dimensionality axis, §6.9 | `exlink.slidercrank.SliderCrank(offset=...)` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
