@@ -265,20 +265,7 @@ def sampled_reliability(
             for column in range(len(RELIABILITY_NAMES))
         ]
     else:
-        # Unweighted, so the package's own estimator applies and is used:
-        # ``Probability`` is the statistic a sampling-based U-MDO formulation
-        # would attach to each constraint, and going through it rather than
-        # writing ``mean(g > 0)`` again keeps the check on the same footing as
-        # the rest of the GEMSEO stack.
-        from gemseo_umdo.formulations._statistics.sampling.probability import (
-            Probability,
-        )
-
-        rates = list(
-            np.atleast_1d(
-                Probability(threshold=0.0, greater=True).estimate_statistic(collected)
-            )
-        )
+        rates = list(np.atleast_1d(_exceedance_rate(collected)))
 
     return SampledReliability(
         names=RELIABILITY_NAMES,
@@ -289,6 +276,33 @@ def sampled_reliability(
         unbuildable=unbuildable,
         importance=bool(importance),
         effective_draws=effective,
+    )
+
+
+def _exceedance_rate(values: FloatArray) -> FloatArray:
+    """Fraction of unweighted draws in which each constraint is violated.
+
+    Routed through ``gemseo-umdo``'s own ``Probability`` estimator when that
+    plugin is installed -- it is the statistic a sampling-based U-MDO
+    formulation would attach to each constraint, and going through it keeps the
+    check on the same footing as the rest of the GEMSEO stack.  The plugin is
+    the project's optional ``uq`` extra, so the one-line equivalent is used
+    when it is absent; the two agree exactly, and a test pins that they do.
+
+    Args:
+        values: ``(n_draws, n_constraints)`` constraint values.
+
+    Returns:
+        One rate per constraint.
+    """
+    try:
+        from gemseo_umdo.formulations._statistics.sampling.probability import (
+            Probability,
+        )
+    except ImportError:
+        return np.asarray((values >= 0.0).mean(axis=0), dtype=float)
+    return np.asarray(
+        Probability(threshold=0.0, greater=True).estimate_statistic(values), dtype=float
     )
 
 

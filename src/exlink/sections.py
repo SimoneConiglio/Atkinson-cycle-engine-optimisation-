@@ -11,18 +11,17 @@ finding is most sensitive to.
 
 What a tube changes, and what it does not
 -----------------------------------------
-Write ``k = d_i / d_o`` for the bore ratio.  Against a solid bar of the same
-outer diameter:
+Write ``k = d_i / d_o`` for the bore ratio and ``R^2`` for ``r_o^2 + r_i^2``.
+Against a solid bar of the same outer diameter:
 
-============  ==========================  ==============
-quantity      formula                     factor
-============  ==========================  ==============
-area          ``pi d^2 (1 - k^2) / 4``    ``1 - k^2``
-section mod.  ``pi d^3 (1 - k^4) / 32``   ``1 - k^4``
-second mom.   ``pi d^4 (1 - k^4) / 64``   ``1 - k^4``
-transverse I  ``m (3 (r_o^2 + r_i^2) +     ``1 + k^2`` on
-              L^2) / 12``                 the radial term
-============  ==========================  ==============
+============  =========================  ==================
+quantity      formula                    factor
+============  =========================  ==================
+area          ``pi d^2 (1 - k^2) / 4``   ``1 - k^2``
+section mod.  ``pi d^3 (1 - k^4) / 32``  ``1 - k^4``
+second mom.   ``pi d^4 (1 - k^4) / 64``  ``1 - k^4``
+transverse I  ``m (3 R^2 + L^2) / 12``   ``1 + k^2`` on R^2
+============  =========================  ==================
 
 Four constants, and the whole of the change.  Nothing about the *form* of any
 stress, utilisation or derivative moves: every quantity that was proportional to

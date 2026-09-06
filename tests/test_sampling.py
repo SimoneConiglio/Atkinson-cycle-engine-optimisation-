@@ -116,12 +116,58 @@ def test_importance_sampling_is_unbiased_where_crude_sampling_can_check_it():
 
 
 @pytest.mark.slow
-def test_form_is_optimistic_at_the_study_result():
-    """Section 6.8's finding, at a sample count that can see it."""
+def test_form_agrees_with_sampling_at_the_study_result():
+    """Section 6.8's payoff, at a sample count that can see it.
+
+    This test used to assert the opposite — that FORM was optimistic by more
+    than a factor of three — and it was right when it was written.  §6.8 traced
+    that to the expansion stroke being a *maximum* over two top dead centres
+    linearised at the tie, and carrying both branches fixed it.  What is worth
+    pinning now is the agreement, because it is what would break if the
+    branch-aware rows of :data:`~exlink.robustness.RELIABILITY_NAMES` were ever
+    collapsed back to one.
+    """
     form = failure_probability(RELIABLE_DESIGN, targets=TARGETS, band=BAND)
     outcome = sampled_reliability(
         RELIABLE_DESIGN, draws=20_000, targets=TARGETS, band=BAND, importance=False
     )
     assert outcome is not None
-    assert outcome.system > 3.0 * form.system
-    assert not outcome.agrees_with(form.system)
+    assert outcome.agrees_with(form.system, factor=1.5)
+    low, high = outcome.interval
+    assert low <= form.system <= high
+
+
+def test_the_exceedance_rate_is_the_same_with_or_without_the_uq_plugin():
+    """``gemseo-umdo`` is the project's optional ``uq`` extra, not a dependency.
+
+    The crude path routes its per-constraint rates through that plugin's own
+    ``Probability`` estimator when it is installed, and falls back to the
+    one-line equivalent when it is not.  CI installs ``[dev,moea,minlp]``, so
+    the fallback is the branch it exercises — this checks the two agree
+    exactly, whichever of them the run has available.
+    """
+    import builtins
+
+    from exlink.sampling import _exceedance_rate
+
+    rng = np.random.default_rng(0)
+    values = rng.normal(size=(500, len(RELIABILITY_NAMES)))
+
+    available = _exceedance_rate(values)
+    assert available == pytest.approx((values >= 0.0).mean(axis=0))
+
+    real_import = builtins.__import__
+
+    def without_the_plugin(name, *args, **kwargs):
+        if name.startswith("gemseo_umdo"):
+            msg = "no module named 'gemseo_umdo'"
+            raise ImportError(msg)
+        return real_import(name, *args, **kwargs)
+
+    builtins.__import__ = without_the_plugin
+    try:
+        fallback = _exceedance_rate(values)
+    finally:
+        builtins.__import__ = real_import
+
+    assert np.array_equal(available, fallback)
