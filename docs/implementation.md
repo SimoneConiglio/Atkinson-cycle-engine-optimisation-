@@ -133,6 +133,7 @@ src/exlink/
 | the widened uncertainty model of §6.7 | `python examples/10_widened_uncertainty.py` |
 | the sampling check of §6.8 | `python examples/11_sampling_check.py` |
 | the third point on the dimensionality axis, §6.9 | `exlink.slidercrank.SliderCrank(offset=...)` |
+| the restoration of §6.10 | `exlink.restoration.restore` (see its docstring) |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests

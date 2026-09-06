@@ -153,7 +153,9 @@ requires a convex sub-problem, which this problem violates comprehensively.
 **The global optimum is not established.** Uniform multistart is inapplicable
 (§3.4); manifold-projected restarts showed the *efficiency* optimum was local
 but reached feasibility in 0 of 6 attempts on the *range* problem at an
-affordable budget. That question is open, not answered.
+affordable budget. §6.10 removes the obstacle — restoration takes the same six
+starts to 6 of 6 — without answering the question, which needs a range solve
+from each. It is open, and now cheaply askable.
 
 **The schedule is assumed, not measured.** §6.5 answers the single-point
 objection — the design is scored over a four-point schedule as one engine and
@@ -233,8 +235,16 @@ In rough order of value per unit of effort:
    to within 1 % of sampling at every design tested. What remains is to run the
    check at more designs, and to automate it: nothing in a FORM output signals
    that it is being evaluated at a kink.
-6. **A feasibility-restoration phase before each restart**, which is what would
-   make the multistart of §3.9 conclusive on the range problem.
+6. ~~**A feasibility-restoration phase before each restart**~~ **Done**
+   (§6.10), for the phase itself: six starts drawn as §6.11's were, 0 of 6
+   feasible as drawn and **6 of 6** after, at about 290 evaluations each. The
+   epigraph form — maximise $t$ subject to $c_i \ge t$ — works where the range
+   solve does not because it has no objective to trade against the constraints,
+   so its QP always has an admissible step; starts as far as 14.9 outside
+   restore no more slowly than starts 1.5 outside. What this does *not* settle
+   is the question behind the entry: six restored starts make the multistart
+   answerable, and answering it needs six range solves from them, at six times
+   the cost of §6.4's own run. Whether that optimum is global is still open.
 7. ~~**Second-order derivatives of the constraints.**~~ **Attempted, and the
    wrong instrument** (§6.8). Differencing the analytic gradient gives a matrix
    whose norm scales exactly as $1/h$ over two decades of step and is 100 %

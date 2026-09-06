@@ -2,7 +2,7 @@
 
 The measurement this answers
 ----------------------------
-§6.10 reports that manifold-projected restarts reached feasibility in **0 of 6
+§6.11 reports that manifold-projected restarts reached feasibility in **0 of 6
 attempts** on the range problem at an affordable budget, which is why §3.9's
 multistart is inconclusive there: it is not that the restarts found worse
 optima, it is that they never found the feasible set at all, so there was

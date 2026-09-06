@@ -1031,7 +1031,62 @@ it asked for a third topology and what §7.1 implied when it explained the
 result by counting them.
 
 
-## 6.10 Supporting measurements
+## 6.10 Restoration makes the multistart answerable
+
+### Result
+
+§6.11 reports that manifold-projected restarts reached feasibility in **0 of 6**
+attempts on the range problem, which is why §3.9's multistart is inconclusive
+there: not that the restarts found worse optima, but that they never found the
+feasible set, so there was nothing to compare. §7.3 asks for a restoration
+phase. Six starts drawn the same way — 5 % scatter about `COUPLED_DESIGN` —
+put through the epigraph problem {py:func}`~exlink.restoration.restore` solves:
+
+| start | worst margin as drawn | after restoration | evaluations |
+|---|---|---|---|
+| 0 | $-1.54$ | $+7.84\times10^{-3}$ | 302 |
+| 1 | $-14.9$ | $+5.81\times10^{-3}$ | 296 |
+| 2 | $-6.64$ | $+5.64\times10^{-3}$ | 282 |
+| 3 | $-5.01$ | $+5.14\times10^{-3}$ | 285 |
+| 4 | $-9.39$ | $+6.46\times10^{-3}$ | 289 |
+| 5 | $-5.28$ | $+2.43\times10^{-3}$ | 312 |
+
+**0 of 6 feasible as drawn, 6 of 6 after**, at about 290 evaluations each —
+1766 in total, 42 minutes.
+
+### Why it works when the range solve does not
+
+The two solves are asked different questions. A range-maximising SLSQP run
+started outside the feasible set has to improve an objective *and* find the
+set, and its QP subproblem is built around a point where no step satisfies the
+linearised constraints; §3.10 records that it responds by reporting a positive
+directional derivative and stopping. The restoration problem has no objective
+to trade against — only
+
+$$\max_{X,\,t} \; t \quad \text{s.t.} \quad c_i(X) \ge t$$
+
+— so every constraint pulls the same way and the QP always has somewhere to go.
+The starts here begin as far as 14.9 outside, and it makes no difference: the
+worst of the six needed 312 evaluations rather than 282.
+
+### What the restored points are, and are not
+
+They are inside, and barely. The margins land between $2.4\times10^{-3}$ and
+$7.8\times10^{-3}$, which is what §3.4's thinness means in practice — the
+interior of this feasible set is a few thousandths of a millimetre wide, and a
+restoration that maximises the smallest margin still stops there. That is
+enough for a gradient method to start from, which is the whole purpose, and it
+is not enough to call the design robust: §6.2 is about exactly that distinction.
+
+What has **not** been measured here is the second half of the claim. Six
+restored starts make the multistart *answerable*; whether the answers agree —
+whether the range optimum of §6.4 is global — needs six range solves from these
+points, which is six times the cost of §6.4's own run and is not attempted.
+The entry in §7.3 is therefore struck for the phase it asked for and the
+question behind it stays open.
+
+
+## 6.11 Supporting measurements
 
 The results above rest on properties of the problem and of the implementation
 that are asserted where they are used and measured here: how strongly the
