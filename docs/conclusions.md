@@ -31,7 +31,7 @@ resolution, and once it is widened the band on the expansion stroke governs
 everything, over four orders of magnitude of failure probability. Widening both
 costs 0.47 % of range. Most of the rest is self-inflicted — a deterministic
 optimizer converges onto its active constraints, and designs beside this one
-halve the probability at no cost in range (§6.2).
+cut the probability by 41 % at no cost in range (§6.2).
 
 **The topology is worth 17.6 %, and all three terms of the objective
 contribute.** Against a conventional engine sized by identical models and
@@ -372,7 +372,7 @@ Full provenance for every design is in §6.0.
 | | |
 |---|---|
 | probability the reference design misses a requirement | 66.4 % |
-| the same for the best design sampled beside it | 30.8 %, at +0.10 % range |
+| the same for the best design sampled beside it | 39.3 %, at +0.05 % range |
 | gap bound above which the gap stops binding | 0.054 mm; 0.1 mm adopted |
 | stroke band the *system* then needs | ±0.15 mm against ±0.05 |
 | range given up by widening both | −0.47 % |

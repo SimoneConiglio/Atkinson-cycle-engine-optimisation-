@@ -203,18 +203,19 @@ it buys is that the number is a probability rather than a bound.
 ### Most of this probability is avoidable, and free
 
 The 0.664 is not the price of the requirements. It is the price of *ignoring
-them while optimising*. Sampling 2500 designs about the reference and checking
+them while optimising*. Sampling 1200 designs about the reference and checking
 the best by reliability against the full constraint set (§3.10) gives:
 
-| | $\beta$ | $P_f$ | range |
+| | worst $\beta_i$ | system $P_f$ | range |
 |---|---|---|---|
-| the reference design | $-0.373$ | 0.645 | 3338 km/L |
-| best sampled, fully feasible | $+0.502$ | **0.308** | 3342 km/L |
+| the reference design | $+0.213$ | 0.664 | 3338 km/L |
+| best sampled, fully feasible | $+0.610$ | **0.393** | 3340 km/L |
 
-The failure probability more than halves, every one of the twenty-five best
-candidates is feasible, and the range does not fall — the best is 0.10 % higher
-than the design it replaces. **The deterministic optimum is dominated on both
-objectives at once.**
+The failure probability falls by **41 %**, all twenty-five of the best
+candidates are feasible against the full model, and the range does not fall —
+the best is 0.05 % higher than the design it replaces. **The deterministic
+optimum is dominated on both objectives at once**, and the margin on range is
+small enough to say the reliability is had for nothing rather than bought.
 
 That is the standard argument for reliability-based design optimization,
 measured on this problem rather than asserted: a deterministic optimizer

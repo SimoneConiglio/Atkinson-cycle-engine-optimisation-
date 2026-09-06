@@ -425,7 +425,7 @@ the constrained problem could be solved, and each was found by a run that
 failed:
 
 **The other constraints must be imposed too.** From the coupled reference design
-at $\beta = -0.373$, SLSQP under the first form returns its starting point
+at $\beta_{\text{sys}} = -0.422$, SLSQP under the first form returns its starting point
 unchanged — not only for a demanding target but for $\beta \ge -0.2$, a step of
 0.17 — reporting a positive directional derivative for the line search. The
 reliability gradient is not at fault: central differences on $\beta$ are smooth
@@ -433,10 +433,10 @@ in all eleven variables there. What defeats the line search is the thinness §3.
 measures. A step of 0.05 mm along the normalised $\nabla\beta$ leaves the
 geometric constraint set entirely:
 
-| step along $\nabla\beta$ [mm] | $\beta$ | nominally feasible |
+| step along $\nabla\beta$ [mm] | $\beta_{\text{sys}}$ | nominally feasible |
 |---|---|---|
-| 0.00 | $-0.373$ | yes |
-| 0.05 | $-2.570$ | no |
+| 0.00 | $-0.422$ | yes |
+| 0.05 | $-3.631$ | no |
 | 0.10 and beyond | $-8.210$ | no |
 
 **The system index is the wrong quantity to steer on.** The last row of that
@@ -474,19 +474,18 @@ set. The formulation is unchanged; what changed is which rows
 ### What sampling showed along the way
 
 That better reliability was available near the deterministic optimum was shown
-by sampling rather than by descent, and the margin is not small. Drawing 2500
-designs at 0.05 % to 1 % relative scatter about the reference, scoring each by
-$\beta$, and then checking the twenty-five best against the *full* constraint
-set:
+by sampling rather than by descent. Drawing 1200 designs at 0.05 % to 1 %
+relative scatter about the reference, scoring each by $\min_i \beta_i$, and then
+checking the twenty-five best against the *full* constraint set:
 
-| | $\beta$ | $P_f$ | range |
+| | worst $\beta_i$ | system $P_f$ | range |
 |---|---|---|---|
-| the reference design | $-0.373$ | 0.645 | 3338 km/L |
-| best sampled, fully feasible | $\mathbf{+0.502}$ | **0.308** | **3342 km/L** |
+| the reference design | $+0.213$ | 0.664 | 3338 km/L |
+| best sampled, fully feasible | $\mathbf{+0.610}$ | **0.393** | **3340 km/L** |
 
-All twenty-five are feasible. The probability of missing a requirement is more
-than halved, and it costs **nothing**: the best of them is 0.10 % *better* in
-range than the design it replaces.
+All twenty-five are feasible. The probability of missing a requirement falls by
+41 %, and it costs **nothing**: the best of them is 0.05 % *better* in range
+than the design it replaces.
 
 **The deterministic optimum is therefore dominated, not merely unreliable.**
 There is no reliability-against-range trade-off to negotiate here — a random
