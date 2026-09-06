@@ -844,8 +844,11 @@ covariance, each analysed in full — and it does not agree:
 
 | design | specification | FORM | sampled, 150 000 builds | ratio |
 |---|---|---|---|---|
-| `COUPLED_DESIGN` | as written | 0.6454 | 0.6650 ± 0.0012 | 0.97 |
-| `RELIABLE_DESIGN` | §6.2's bounds | $1.35\times10^{-3}$ | $9.28\times10^{-3} \pm 0.05$ | **0.145** |
+| `COUPLED_DESIGN` | as written | 0.6454 | $0.6650 \pm 0.0012$ | 0.97 |
+| `RELIABLE_DESIGN` | §6.2's bounds | $1.35\times10^{-3}$ | $(9.28 \pm 0.25)\times10^{-3}$ | **0.145** |
+
+(Standard errors, so the second row's 95 % interval is
+$[8.79, 9.77]\times10^{-3}$ — nowhere near FORM's figure.)
 
 FORM is accurate on one design and optimistic by a factor of seven on the
 other, and the difference between them turns out to be the whole finding.
