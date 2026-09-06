@@ -40,8 +40,13 @@ linkage reaches 3395 km/L against 2888. Both take 720° of their crankshaft per
 cycle, so the comparison is at equal speed and equal firing rate with nothing to
 correct. Extended expansion — the feature the topology exists for — is the
 smallest of the three contributions, five per cent of indicated efficiency; the
-larger two are a lower side load and a lighter flywheel, which are consequences
-of having eleven dimensions to place rather than two (§6.3).
+larger two are a lower side load and a lighter flywheel (§6.3).
+
+An earlier version of this paragraph attributed those two to "having eleven
+dimensions to place rather than two", and §6.9 shows that reading is wrong by a
+factor of four. Handing the conventional engine a third freedom buys 0.51 %,
+which extrapolates to 4.6 % over nine, not 17.6 %. The dimensions are what let
+the linkage exploit its topology; they are not what give it the advantage.
 
 **The largest stated modelling conservatism is worth 0.9 %, and only above the
 design speed.** Solid round bars looked like the study's weakest assumption, and
@@ -158,7 +163,9 @@ cycle range; what it does not plausibly change is the ranking, since the
 EX-link leads at every point of the one tested.
 
 **Single mechanism family.** Two topologies establish a contrast; three would
-establish a trend.
+establish a trend. §6.9 adds a third point on the dimensionality axis rather
+than a third topology, which settles that the trend does not simply run with
+the variable count but leaves the topological question open.
 
 ### Scope
 
@@ -238,7 +245,17 @@ In rough order of value per unit of effort:
    still be worth having for the exact $\partial\beta/\partial x$ of §3.10's
    steered quantity, but they must be taken away from the tie, and that is a
    different piece of work from the one this entry asked for.
-8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
+8. ~~**A third mechanism topology**, to turn the contrast of §6.3 into a
+   trend.~~ **Partly done** (§6.9), and it undercut the reason the entry was
+   written. A third *topology* is still missing — a genuine one needs its own
+   internal 2:1 ratio, which is what unequal strokes require — but a third
+   point on the *dimensionality* axis was cheap, and it shows the trend cannot
+   be assumed to run with the number of design variables. A wrist-pin offset
+   gives the conventional engine a third freedom and buys 0.51 %; extrapolated,
+   nine such freedoms would buy 4.6 % against the linkage's 17.6 %. The offset
+   improves the one term its topology leaves open — mechanical efficiency,
+   0.787 to 0.792 — and cannot touch the other two at any number of
+   dimensions.
 9. **Converging §6.4.** Both solves there stopped at their iteration cap, not
    at a convergence test, so 3395 km/L and 3501 km/L are lower bounds on what
    the formulation reaches. Running them to convergence, and from several
@@ -338,7 +355,8 @@ Full provenance for every design is in §6.0.
 | indicated efficiency | 0.457 → 0.480 |
 | mechanical efficiency | 0.787 → 0.865 |
 | engine mass | 16.9 kg → 12.9 kg |
-| reliability index at IT8, linkage vs baseline off its cap | 3.00 vs **8.2** |
+| reliability index at IT8, linkage vs baseline off its cap | 2.35 vs **8.2** |
+| the same baseline given a third freedom (wrist offset) | 2903 km/L, +0.51 % |
 
 **What the bounds cost**
 

@@ -965,7 +965,70 @@ one sampling run and produced a fix that is exact, free, and applies at every
 design rather than only at the one checked.
 
 
-## 6.9 Supporting measurements
+## 6.9 A third point on the dimensionality axis
+
+### Result
+
+§7.1 explains the linkage's 17.6 % as a consequence of "having eleven
+dimensions to place rather than two", and §7.3 asks for a third topology to
+turn that contrast into a trend. The explanation is testable without inventing
+one: give the conventional engine a third freedom and see whether the range
+moves in proportion.
+
+The wrist-pin offset is the cheapest freedom a real engine has. Optimised over
+its own variables, at the same compression ratio and through the same code:
+
+| | freedoms | $r/l$ | speed | $d/r$ | mech. eff. | mass | range |
+|---|---|---|---|---|---|---|---|
+| slider-crank, centred | 2 | 0.1954 | 2151 rpm | — | 0.7867 | 16.93 kg | 2887.7 km/L |
+| slider-crank, offset | 3 | 0.1943 | 2157 rpm | $+0.156$ | 0.7921 | 16.84 kg | **2902.5 km/L** |
+| EX-link | 11 | — | 2000 rpm | — | 0.865 | 12.94 kg | 3394.9 km/L |
+
+The third freedom is worth **+0.51 %**.
+
+### The dimension count is not the mechanism
+
+Take the explanation literally and it predicts badly. One extra freedom buys
+0.51 %, so nine of them, extrapolated, would buy about 4.6 % — against the
+17.6 % the linkage actually reaches. Dimension-counting under-predicts the
+topology by a factor of nearly four, which is enough to say that *counting
+dimensions is not the explanation*, only a proxy for it.
+
+What the offset does is instructive precisely because it is so narrow. It moves
+one term of the three §6.3 decomposes the advantage into, and moves it a
+little:
+
+| | centred → offset | centred → EX-link |
+|---|---|---|
+| indicated efficiency | 0.457 → 0.457 | 0.457 → 0.480 |
+| mechanical efficiency | 0.787 → **0.792** | 0.787 → **0.865** |
+| engine mass | 16.93 → 16.84 kg | 16.9 → 12.9 kg |
+
+The offset rearranges the side load, so the mechanical efficiency improves and
+the mass follows it slightly. It cannot touch the indicated efficiency, because
+the piston still makes two identical strokes per revolution however far the pin
+is moved: there is no extended expansion to be had from a slider-crank at any
+number of dimensions. And it cannot touch the flywheel, because there is no
+half-speed shaft to hang one on.
+
+So the honest statement is narrower than §7.1's and stronger for it. **The
+eleven dimensions are what let the linkage exploit its topology, not what give
+it the advantage.** A conventional engine handed more freedoms improves along
+the one axis its topology leaves open, and stops.
+
+### What this is not
+
+It is a third point on the dimensionality axis, and not a third
+extended-expansion mechanism. Two topologies still establish the contrast of
+§6.3, and a genuine third — one carrying its own internal 2:1 ratio, which is
+what unequal strokes require — would still be needed to make it a trend. What
+has been settled here is only that the trend cannot be *assumed* to run with
+the number of design variables, which is what the limitation list implied when
+it asked for a third topology and what §7.1 implied when it explained the
+result by counting them.
+
+
+## 6.10 Supporting measurements
 
 The results above rest on properties of the problem and of the implementation
 that are asserted where they are used and measured here: how strongly the

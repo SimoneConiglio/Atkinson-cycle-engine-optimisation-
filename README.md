@@ -40,8 +40,13 @@ engines complete four strokes in 720° of their crankshaft, so the comparison is
 and equal firing rate with nothing to correct: **3395 km/L against 2888** for a conventional
 engine sized by identical models and optimised over its own degrees of freedom. Indicated
 efficiency accounts for 0.457 → 0.480 of that, mechanical efficiency for 0.787 → 0.865, and
-engine mass for 16.9 → 12.9 kg — the last two because eleven dimensions can be placed off the
-singularity and two cannot.
+engine mass for 16.9 → 12.9 kg.
+
+That last clause used to read "because eleven dimensions can be placed off the singularity and
+two cannot", and measuring it showed the reading is wrong by a factor of four: handing the
+conventional engine a third freedom — a wrist-pin offset — buys 0.51 %, which extrapolates to
+4.6 % over nine, not 17.6 %. It improves the one term its topology leaves open and cannot touch
+the other two at any number of dimensions.
 
 **Over a schedule of speeds the advantage widens to 19.3 %.** Scored across four speeds as one
 engine — structure sized at the fastest point, flywheel at the slowest — rather than at a
