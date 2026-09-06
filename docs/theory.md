@@ -450,7 +450,7 @@ in two ways worth stating:
 
 ### 9.3 Failure modes
 
-Each link is a solid round bar whose diameter is solved for — the smallest
+Each link is a round bar whose outer diameter is solved for — the smallest
 section satisfying all three modes over the whole revolution:
 
 | mode | criterion |
@@ -467,6 +467,17 @@ swing between tension and compression every revolution.
 
 The required diameter comes from bisection, not a closed form: the fatigue size
 factor `k_b` itself depends on the diameter being solved for.
+
+**Solid or hollow.** The study is reported with solid bars, but the members that
+would really be made from tube — the rods and the trigonal link, not the crank
+throws — may be bored to a ratio `k = d_i/d_o`. That changes four constants and
+nothing else: `A` and the member mass by `1 − k²`, `Z` and `I` by `1 − k⁴`, and
+the radial term of the transverse inertia by `1 + k²` per unit mass. Every
+quantity proportional to a power of `d` keeps that power, so the analytic
+derivatives of §10.2 are unchanged in form — the shape factor cancels out of
+`d(1/A)/dd = −2/(Ad)` and `d(1/Z)/dd = −3/(Zd)`. A wall floor `2t/(1 − k)` puts
+a lower bound on the outer diameter, which is what stops the model discovering
+free mass at small sections. §6.6 measures what it is worth.
 
 **Internal loads.** For a member spanning two joints, the force and moment at a
 section a fraction `s` along it follow from the free body of `[0, s]`. Because a
@@ -609,7 +620,7 @@ coupled derivative from local Jacobians instead of differencing the fixed point.
 | piece | route |
 |---|---|
 | accelerations | `D²` is linear, so `da/dp = Ω² D²(dr/dp)` |
-| mass properties | direct; `m = ρ(πd²/4)L`, centres of mass mass-weighted |
+| mass properties | direct; `m = ρ(πd²/4)(1 − k²)L`, centres of mass mass-weighted |
 | 18×18 solve | `dx/dp = A⁻¹(db/dp − dA/dp·x)`, reusing the factorisation |
 | internal loads | closed form; the trigonal truss via `dz = (MᵀM)⁻¹Mᵀ(dr − dM z)` |
 | sizing bisection | implicit function theorem on `U(d, N, M) = 1` |

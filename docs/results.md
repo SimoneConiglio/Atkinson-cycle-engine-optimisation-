@@ -39,10 +39,12 @@ row is not a competing comparison: it exists because a baseline forced onto an
 active constraint is what §6.2 needs to show that the dominated-optimum effect
 is not peculiar to the linkage.
 
-Every range in the table is at one operating point. §6.5 re-scores the first
-comparison over a schedule of four, where the same two designs give 3260 km/L
-and 2733 km/L for **+19.3 %**; those two figures are not interchangeable with
-the ones above and are quoted only as a pair.
+Every range in the table is at one operating point, with solid round members.
+Two later sections re-score the first comparison under a changed assumption and
+report their own pairs, which are not interchangeable with the figures above:
+§6.5 over a schedule of four speeds (3260 against 2733 km/L, **+19.3 %**) and
+§6.6 with tubular members on both engines, each re-optimised (3425 against
+2929 km/L, **+17.0 %**).
 
 Speeds are quoted at the crankshaft, which turns twice per cycle on both
 mechanisms; the ``speed_rpm`` the code takes for the linkage is the half-speed
@@ -535,7 +537,145 @@ range but the absence of an artefact: the ratio of worst point to best is 0.91,
 the design that wins at 2000 rpm wins at every point of the schedule, and no
 part of §6.3's conclusion depended on the speed it was measured at.
 
-## 6.6 Supporting measurements
+## 6.6 What tubes are worth, and why the answer is a speed
+
+### Result
+
+§7.2 named solid round bars the largest single modelling conservatism and put
+the cost at "perhaps 30 % of mass". Boring the members — the rods and the
+trigonal link, not the crank throws, which are forgings — measures it, and the
+guess is wrong in both directions at once.
+
+It is wrong about the mass, because the members are not where the mass is:
+
+| item | mass | share |
+|---|---|---|
+| flywheel | 10.13 kg | 78.3 % |
+| crankcase | 1.01 kg | 7.8 % |
+| shafts | 0.62 kg | 4.8 % |
+| bearings | 0.46 kg | 3.6 % |
+| cylinder head | 0.26 kg | 2.0 % |
+| gears | 0.25 kg | 1.9 % |
+| **the seven members** | **0.17 kg** | **1.3 %** |
+| piston | 0.04 kg | 0.3 % |
+
+Thirty per cent of 1.3 % is four grams of a 12.9 kg engine. If tubes mattered
+here it would have to be for some reason other than their own weight.
+
+They do matter, and it is for another reason. Against crankshaft speed, with
+`RELIABLE_DESIGN` unchanged and the bore at $k = 0.6$:
+
+| crankshaft rpm | solid km/L | tubular km/L | gain | members solid | members tubular |
+|---|---|---|---|---|---|
+| 1200 | 3206 | 3205 | −0.0 % | 123 g | 134 g |
+| 1600 | 3350 | 3350 | 0.0 % | 130 g | 134 g |
+| 2000 | 3395 | 3411 | +0.5 % | 167 g | 134 g |
+| 2400 | 3363 | 3423 | +1.8 % | 250 g | 149 g |
+| 2800 | 3181 | 3385 | +6.4 % | 405 g | 193 g |
+| 3200 | 2482 | 3249 | **+30.9 %** | 702 g | 276 g |
+
+Nothing below the design speed, everything above it.
+
+### Why
+
+The member sections are set by two loads that scale differently. The gas load
+does not change with speed and a bore does not reduce it, so at the bottom of
+the range the sections are what they were and the bore only forces the wall
+floor to grow them slightly. The inertia load is the member's own mass times an
+acceleration proportional to $\Omega^2$, and there a bore is compound interest:
+lighter members need less section, less section is lighter still, and the
+sizing/inertia fixed point of §3.5 converges somewhere else entirely.
+
+Which is to say the tube is not a mass improvement that happens to help at
+speed. It is a *conditioning* improvement, and it acts on exactly the mechanism
+§6.1 is about.
+
+### It does not repeal §6.1
+
+Sizing the quasi-static optimum `REFINED_DESIGN`, which sits at $W = 0.981$:
+
+| crankshaft rpm | solid, moving mass | peak bearing | tubular, moving mass | peak bearing |
+|---|---|---|---|---|
+| 0 | 0.16 kg | 7 726 N | 0.16 kg | 7 726 N |
+| 2000 | 0.96 kg | 12 629 N | 0.37 kg | 6 356 N |
+| 3000 | 8.34 kg | 244 805 N | 2.66 kg | 74 225 N |
+| 4000 | *no section is thick enough* | | *no section is thick enough* | |
+
+At 3000 rpm the tube cuts the mass by a factor of three and the bearing load by
+3.3, and at 4000 rpm it changes nothing at all: the design is still
+unbuildable. That is the correct shape of the result. The sixth-power
+divergence of §6.1 is a property of the *conditioning* — the acceleration ratio
+of 75 between joint $A$ and the crank pin — and a constant factor on the member
+mass moves where the divergence bites without removing it. **The clearest
+finding in the study survives its largest modelling conservatism being
+removed**, which is more than could be said for it before this was measured.
+
+### Why the bore ratio has an interior optimum
+
+A bore ratio is not free to grow, because a bored member has a wall, and a wall
+has a minimum. At $k$ and a floor $t$, no member may be drawn below
+$2t/(1-k)$; at $t = 1.5$ mm this is 6 mm at $k = 0.5$ and 15 mm at $k = 0.8$,
+and most of this linkage's members are smaller than that when solid. So past
+some ratio the floor rather than the load sizes the light members and the
+section grows back:
+
+| $k$ | wall floor | km/L at 2400 rpm | members |
+|---|---|---|---|
+| 0.0 | — | 3363 | 250 g |
+| 0.3 | 4.3 mm | 3387 | 210 g |
+| 0.5 | 6.0 mm | 3415 | 161 g |
+| **0.6** | 7.5 mm | **3423** | 149 g |
+| 0.7 | 10.0 mm | 3406 | 174 g |
+| 0.8 | 15.0 mm | 3322 | 256 g |
+
+Optimising range over the bore ratio and the speed together lands at
+$k = 0.579$ at 2276 rpm, giving 3425 km/L. Against the solid optimum of
+3395 km/L at 2000 rpm that is **+0.9 %** — and the engine is 10.4 kg rather
+than 12.9 kg, which is where the improvement mostly goes: not into range, into
+being able to run 300 rpm faster for the same range.
+
+### The comparison, with both engines tubed
+
+A modelling change that flatters one mechanism and not the other would move
+§6.3 without being about the engines at all, so the baseline gets the same
+bore, under the same rule — its rod may be tube, its crank throw may not — and
+the same freedom to re-optimise:
+
+| | slider-crank | EX-link |
+|---|---|---|
+| solid | 2888 km/L at $r/l$ = 0.195, 2151 rpm | 3395 km/L at 2000 rpm |
+| tubular, re-optimised | 2929 km/L at $r/l$ = 0.176, 2232 rpm | 3425 km/L at 2276 rpm |
+| the bore is worth | +1.4 % | +0.9 % |
+
+so the advantage narrows slightly, **+17.6 % to +17.0 %**. The bore helps the
+conventional engine marginally more, and for the reason §6.3 already gives: its
+two members are a larger share of a smaller mechanism, so removing metal from
+them is a larger relative change. It is a sixth of a percentage point of the
+17, which is the right size for a conservatism that acts on 1.3 % of one engine
+and 0.4 % of the other.
+
+### Discussion
+
+Three things are worth separating.
+
+The first is that a modelling conservatism was priced rather than argued about,
+and priced in the currency of the objective. "Members 30 % lighter" was true and
+useless; "0.9 % of range, and only above the design speed" is the statement a
+design decision can be made against.
+
+The second is that the *shape* of the answer was not guessable from the
+conservatism itself. A bore acts on 1.3 % of the engine mass and moves the
+optimum operating speed by 300 rpm, because in a coupled problem the size of an
+effect is not the size of the thing it acts on. Anything that reads the mass
+budget alone would have ruled tubes out.
+
+The third is a limit. The model prices a tube through mass, stiffness and a wall
+floor, and not through anything else: it has no local buckling of the wall, no
+joint or end-fitting mass where a tube must become solid to take a pin, and no
+account of what a bored trigonal link costs to make. All three of those work
+against the tube, so +0.9 % is an upper bound on a real one.
+
+## 6.7 Supporting measurements
 
 The results above rest on properties of the problem and of the implementation
 that are asserted where they are used and measured here: how strongly the

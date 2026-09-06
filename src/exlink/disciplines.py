@@ -68,9 +68,11 @@ from .model import (
     inequality_constraints,
 )
 from .reference import PUBLISHED_DESIGN
+from .sections import SOLID, Section, area_factor
 from .sizing import (
     MAX_DIAMETER,
     MEMBER_IS_SLENDER,
+    MEMBER_KINDS,
     STATIONS,
     member_lengths,
     member_loads,
@@ -442,6 +444,7 @@ class DynamicsDiscipline(Discipline):
         material: Material = DEFAULT_MATERIAL,
         safety: SafetyFactors = DEFAULT_SAFETY,
         spec: EngineSpec = DEFAULT_SPEC,
+        section: Section = SOLID,
         name: str = "",
     ) -> None:
         super().__init__(name=name)
@@ -451,6 +454,7 @@ class DynamicsDiscipline(Discipline):
         self.material = material
         self.safety = safety
         self.spec = spec
+        self.section = section
 
         self.input_grammar.update_from_names([*VARIABLE_NAMES, COUPLING_DIAMETERS])
         self.output_grammar.update_from_names(
@@ -504,6 +508,7 @@ class DynamicsDiscipline(Discipline):
             self.material.density,
             piston,
             self.spec,
+            self.section,
         )
         loads = solve_dynamics(
             solved.kinematics,
@@ -571,6 +576,7 @@ class DynamicsDiscipline(Discipline):
             self.stations,
             self.material,
             self.spec,
+            self.section,
         )
         flat_axial = derivatives.axial.reshape(size, N_PARAMETERS)
         flat_bending = derivatives.bending.reshape(size, N_PARAMETERS)
@@ -616,6 +622,7 @@ class StructureDiscipline(Discipline):
         material: Material = DEFAULT_MATERIAL,
         safety: SafetyFactors = DEFAULT_SAFETY,
         spec: EngineSpec = DEFAULT_SPEC,
+        section: Section = SOLID,
         name: str = "",
     ) -> None:
         super().__init__(name=name)
@@ -624,6 +631,7 @@ class StructureDiscipline(Discipline):
         self.material = material
         self.safety = safety
         self.spec = spec
+        self.section = section
 
         self.input_grammar.update_from_names(
             [*VARIABLE_NAMES, COUPLING_AXIAL, COUPLING_BENDING, "piston_mass"]
@@ -656,7 +664,15 @@ class StructureDiscipline(Discipline):
         bending = np.asarray(data[COUPLING_BENDING], dtype=float).reshape(shape)
         lengths = member_lengths(design)
 
-        sizing = size_from_arrays(axial, bending, lengths, self.material, self.safety)
+        sizing = size_from_arrays(
+            axial,
+            bending,
+            lengths,
+            self.material,
+            self.safety,
+            ratios=self.section.ratios(MEMBER_KINDS),
+            floor=self.section.minimum_diameter(MEMBER_KINDS),
+        )
         diameters = np.array([sizing[n].diameter for n in MEMBER_NAMES])
         self._state = (design, axial, bending, lengths, diameters)
         masses = np.array([sizing[n].mass for n in MEMBER_NAMES])
@@ -710,7 +726,9 @@ class StructureDiscipline(Discipline):
         assert self._state is not None
         design, axial, bending, lengths, diameters = self._state
 
-        sizing = sizing_jacobian(axial, bending, diameters, lengths, self.material, self.safety)
+        sizing = sizing_jacobian(
+            axial, bending, diameters, lengths, self.material, self.safety, self.section
+        )
         n_members = len(MEMBER_NAMES)
         size = n_members * self.samples * self.stations
         length_rows = member_length_jacobian(design)
@@ -726,10 +744,11 @@ class StructureDiscipline(Discipline):
         # d(diameter)/dX, through the member lengths only.
         d_design = sizing.d_length[:, None] * length_rows
 
-        area = np.pi * diameters**2 / 4.0
+        hollow = area_factor(self.section.ratios(MEMBER_KINDS))
+        area = np.pi * diameters**2 / 4.0 * hollow
         density = self.material.density
-        # m_k = rho (pi d_k^2 / 4) L_k, and d_k itself depends on the loads.
-        mass_from_diameter = density * np.pi * diameters / 2.0 * lengths
+        # m_k = rho (pi d_k^2 / 4)(1 - k_k^2) L_k, and d_k depends on the loads.
+        mass_from_diameter = density * np.pi * diameters / 2.0 * hollow * lengths
         d_mass_axial = mass_from_diameter[:, None] * d_axial
         d_mass_bending = mass_from_diameter[:, None] * d_bending
         d_mass_design = (
@@ -845,6 +864,7 @@ class RangeDiscipline(Discipline):
         material: Material = DEFAULT_MATERIAL,
         safety: SafetyFactors = DEFAULT_SAFETY,
         spec: EngineSpec = DEFAULT_SPEC,
+        section: Section = SOLID,
         step: float = 1.0e-6,
         name: str = "",
     ) -> None:
@@ -858,6 +878,7 @@ class RangeDiscipline(Discipline):
         self.material = material
         self.safety = safety
         self.spec = spec
+        self.section = section
         self.step = step
 
         # The gear pair enters as *inputs* rather than as fixed construction
@@ -914,7 +935,7 @@ class RangeDiscipline(Discipline):
             solved.thermodynamics, self.material, self.safety, self.spec
         )
         properties = mass_properties(
-            solved.kinematics, sections, self.material.density, piston, self.spec
+            solved.kinematics, sections, self.material.density, piston, self.spec, self.section
         )
         loads = solve_dynamics(
             solved.kinematics,

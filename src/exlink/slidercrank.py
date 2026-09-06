@@ -82,6 +82,7 @@ from .materials import (
     Material,
     SafetyFactors,
 )
+from .sections import SOLID, Section, area_factor
 from .sizing import (
     MEMBER_FIXITY,
     internal_loads,
@@ -427,6 +428,7 @@ def solve(
     spec: EngineSpec = DEFAULT_SPEC,
     tolerance: float = 1.0e-6,
     max_iterations: int = 200,
+    section: Section = SOLID,
 ) -> SliderCrankResult:
     """Solve the slider-crank's sizing/dynamics fixed point.
 
@@ -444,10 +446,17 @@ def solve(
         spec: Fixed engine data.
         tolerance: Convergence tolerance on the diameter change [mm].
         max_iterations: Sweep limit.
+        section: The member cross-section.  The rod may be bored and the crank
+            throw may not, which is the same rule :mod:`exlink.sections` applies
+            to the linkage: a rod is tube, a crank throw is a forging.
 
     Returns:
         The converged result.
     """
+    kinds = ("cantilever", "link")
+    bores = section.ratios(kinds)
+    floor = section.minimum_diameter(kinds)
+    hollow = area_factor(bores)
     motion = kinematics(mechanism, samples)
     cycle = otto_cycle(motion["lam"], spec)
     gas = np.asarray(cycle["piston_force"], dtype=float)
@@ -468,7 +477,7 @@ def solve(
     converged = False
 
     for _ in range(max_iterations):
-        area = math.pi * diameters**2 / 4.0
+        area = math.pi * diameters**2 / 4.0 * hollow
         masses = {
             "crank": float(material.density * area[0] * lengths[0]),
             "rod": float(material.density * area[1] * lengths[1]),
@@ -507,6 +516,8 @@ def solve(
             safety,
             fixity=np.array([MEMBER_FIXITY[0], MEMBER_FIXITY[1]]),
             names=("crank", "rod"),
+            ratios=bores,
+            floor=floor,
         )
         updated = np.array([sized["crank"].diameter, sized["rod"].diameter])
         residual = float(np.max(np.abs(updated - diameters)))
@@ -515,7 +526,7 @@ def solve(
             converged = True
             break
 
-    area = math.pi * diameters**2 / 4.0
+    area = math.pi * diameters**2 / 4.0 * hollow
     member_mass = {
         "crank": float(material.density * area[0] * lengths[0]),
         "rod": float(material.density * area[1] * lengths[1]),

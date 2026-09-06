@@ -57,6 +57,12 @@ from .materials import (
     SafetyFactors,
     goodman_utilisation,
 )
+from .sections import (
+    SOLID,
+    Section,
+    area_factor,
+    modulus_factor,
+)
 
 FloatArray = NDArray[np.float64]
 
@@ -287,24 +293,27 @@ def _utilisations(
     fixity: FloatArray,
     material: Material,
     safety: SafetyFactors,
+    ratios: FloatArray | None = None,
 ) -> tuple[FloatArray, FloatArray, FloatArray]:
     """Static, fatigue and buckling utilisations for a vector of diameters.
 
     Args:
-        diameter: One diameter per member, ``(n_members,)`` [mm].
+        diameter: One *outer* diameter per member, ``(n_members,)`` [mm].
         axial: ``(n_members, n_angles, n_stations)`` [N], tension positive.
         bending: Same shape [N.mm].
         lengths: Member lengths ``(n_members,)`` [mm].
         fixity: Euler end-fixity factor per member ``(n_members,)``.
         material: The material.
         safety: The design factors.
+        ratios: Bore ratio ``d_i / d_o`` per member; solid bars if omitted.
 
     Returns:
         ``(static, fatigue, buckling)``, each ``(n_members,)`` and ``<= 1`` when safe.
     """
-    area = np.pi * diameter**2 / 4.0
-    modulus = np.pi * diameter**3 / 32.0
-    second_moment = np.pi * diameter**4 / 64.0
+    bore = np.zeros_like(diameter) if ratios is None else np.asarray(ratios, dtype=float)
+    area = np.pi * diameter**2 / 4.0 * area_factor(bore)
+    modulus = np.pi * diameter**3 / 32.0 * modulus_factor(bore)
+    second_moment = np.pi * diameter**4 / 64.0 * modulus_factor(bore)
 
     direct = axial / area[:, None, None]
     flexural = bending / modulus[:, None, None]
@@ -320,7 +329,9 @@ def _utilisations(
     alternating = 0.5 * (highest - lowest)
     mean = 0.5 * (highest + lowest)
     # ``alternating`` is (fibre, member, station); the endurance limit varies
-    # only with the member's diameter.
+    # only with the member's diameter.  The size factor is taken on the *outer*
+    # diameter for a tube: it is a statement about how much surface is exposed
+    # to the peak stress, and a bore does not reduce that.
     endurance = material.endurance_limit(diameter)[None, :, None]
     utilisation = goodman_utilisation(alternating, mean, endurance, material.ultimate_strength)
     fatigue = np.max(utilisation, axis=(0, 2)) * safety.fatigue
@@ -338,6 +349,9 @@ def member_lengths(design: object) -> FloatArray:
 
 #: Euler end-fixity factor of each member, in the order of :data:`MEMBERS`.
 MEMBER_FIXITY: FloatArray = np.array([END_FIXITY[m.kind] for m in MEMBERS])
+
+#: Kind of each member, in the order of :data:`MEMBERS`; decides which may be bored.
+MEMBER_KINDS: tuple[str, ...] = tuple(m.kind for m in MEMBERS)
 
 #: Whether a member's slenderness is worth policing, in the order of :data:`MEMBERS`.
 #:
@@ -357,6 +371,8 @@ def size_from_arrays(
     safety: SafetyFactors = DEFAULT_SAFETY,
     fixity: FloatArray | None = None,
     names: Sequence[str] | None = None,
+    ratios: FloatArray | None = None,
+    floor: FloatArray | None = None,
 ) -> dict[str, MemberSizing]:
     """Solve for the smallest safe diameter, from raw internal-load arrays.
 
@@ -376,6 +392,10 @@ def size_from_arrays(
         safety: The design factors.
         fixity: Euler end-fixity factor per member; the EX-link's if omitted.
         names: Member names; the EX-link's if omitted.
+        ratios: Bore ratio per member; solid bars if omitted.
+        floor: Smallest outer diameter each member may take [mm], which is what
+            holds a tube's wall above :attr:`~exlink.sections.Section.min_wall`;
+            :data:`MIN_DIAMETER` throughout if omitted.
 
     Returns:
         ``{member name: MemberSizing}``.
@@ -383,24 +403,28 @@ def size_from_arrays(
     fixity = MEMBER_FIXITY if fixity is None else np.asarray(fixity, dtype=float)
     labels = tuple(MEMBER_NAMES) if names is None else tuple(names)
     count = len(labels)
+    bore = np.zeros(count) if ratios is None else np.asarray(ratios, dtype=float)
+    smallest = np.full(count, MIN_DIAMETER)
+    if floor is not None:
+        smallest = np.maximum(smallest, np.asarray(floor, dtype=float))
 
-    low = np.full(count, MIN_DIAMETER)
+    low = smallest.copy()
     high = np.full(count, MAX_DIAMETER)
     for _ in range(BISECTION_STEPS):
         middle = 0.5 * (low + high)
         static, fatigue, buckling = _utilisations(
-            middle, axial, bending, lengths, fixity, material, safety
+            middle, axial, bending, lengths, fixity, material, safety, bore
         )
         safe = np.maximum(np.maximum(static, fatigue), buckling) <= 1.0
         high = np.where(safe, middle, high)
         low = np.where(safe, low, middle)
 
-    diameter = high
+    diameter = np.maximum(high, smallest)
     static, fatigue, buckling = _utilisations(
-        diameter, axial, bending, lengths, fixity, material, safety
+        diameter, axial, bending, lengths, fixity, material, safety, bore
     )
-    area = np.pi * diameter**2 / 4.0
-    modulus = np.pi * diameter**3 / 32.0
+    area = np.pi * diameter**2 / 4.0 * area_factor(bore)
+    modulus = np.pi * diameter**3 / 32.0 * modulus_factor(bore)
     peak = np.max(
         np.abs(axial / area[:, None, None]) + np.abs(bending / modulus[:, None, None]),
         axis=(1, 2),
@@ -429,6 +453,7 @@ def size_members(
     material: Material = DEFAULT_MATERIAL,
     safety: SafetyFactors = DEFAULT_SAFETY,
     stations: int = STATIONS,
+    section: Section = SOLID,
 ) -> dict[str, MemberSizing]:
     """Solve for the smallest safe diameter of every member.
 
@@ -437,6 +462,7 @@ def size_members(
         material: The material.
         safety: The design factors.
         stations: Sections evaluated along each member.
+        section: The cross-section shape; solid round bars by default.
 
     Returns:
         ``{member name: MemberSizing}``.
@@ -448,6 +474,8 @@ def size_members(
         member_lengths(loads.kinematics.design),
         material,
         safety,
+        ratios=section.ratios(MEMBER_KINDS),
+        floor=section.minimum_diameter(MEMBER_KINDS),
     )
 
 

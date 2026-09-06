@@ -50,6 +50,13 @@ against 2733**. A wider speed range makes the flywheel a larger share of the mas
 linkage's and 96 % of the baseline's, and the flywheel is the item the flatter torque curve
 wins by a factor of 1.79.
 
+**A modelling conservatism is worth what the objective says, not what it looks like.** Solid
+round bars were the study's largest stated conservatism. The seven members turn out to be
+**1.3 %** of the engine, so boring them is worth 0.9 % of range — all of it *above* the design
+speed, where a bore removes inertia from the load path rather than weight. It moves the best
+operating speed up 300 rpm and the engine from 12.9 kg to 10.4 kg, and it does not repeal the
+result of §6.1: the quasi-statically optimised design is still unbuildable at 4000 rpm.
+
 **Imposing a constraint and checking it are different searches.** Holding every constraint
 *during* the search rather than verifying them afterwards reaches **3501 km/L** against 3338.
 Adding a reliability target gives **3395 km/L at $P_f = 10^{-3}$** — 3 % less range for a

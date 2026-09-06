@@ -49,6 +49,7 @@ from .dynamics import (
 from .dynamics import solve as solve_dynamics
 from .kinematics import Kinematics
 from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY, Material, SafetyFactors
+from .sections import SOLID, Section
 from .sizing import MAX_DIAMETER, MemberSizing, piston_mass, size_members
 
 INITIAL_DIAMETER = 8.0
@@ -140,6 +141,7 @@ def solve_coupled(
     tolerance: float = DEFAULT_TOLERANCE,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
     relaxation: float = DEFAULT_RELAXATION,
+    section: Section = SOLID,
 ) -> CoupledResult:
     """Solve the sizing / dynamics coupling by relaxed fixed-point iteration.
 
@@ -161,6 +163,10 @@ def solve_coupled(
         tolerance: Convergence tolerance on the diameter change [mm].
         max_iterations: Sweep limit.
         relaxation: Under-relaxation in ``(0, 1]``.
+        section: The member cross-section; solid round bars by default.
+            A bore changes both sides of this fixed point at once -- less
+            mass to accelerate, less section to carry it -- so it is passed
+            in here rather than applied afterwards.
 
     Returns:
         The converged sections and the load case that goes with them.  Check
@@ -180,16 +186,18 @@ def solve_coupled(
     diameters = dict(initial_diameters or dict.fromkeys(MEMBER_NAMES, INITIAL_DIAMETER))
     history: list[float] = []
     residual = float("inf")
-    properties = mass_properties(kinematics, diameters, material.density, piston, spec)
+    properties = mass_properties(kinematics, diameters, material.density, piston, spec, section)
     loads = solve_dynamics(kinematics, thermodynamics.piston_force, properties, speed, spec)
     sizing: dict[str, MemberSizing] = {}
 
     # ``iteration`` is read after the loop, to report how many sweeps it took.
     iteration = 0
     for iteration in range(1, max_iterations + 1):  # noqa: B007
-        properties = mass_properties(kinematics, diameters, material.density, piston, spec)
+        properties = mass_properties(
+            kinematics, diameters, material.density, piston, spec, section
+        )
         loads = solve_dynamics(kinematics, thermodynamics.piston_force, properties, speed, spec)
-        sizing = size_members(loads, material, safety)
+        sizing = size_members(loads, material, safety, section=section)
 
         updated = {
             name: (1.0 - relaxation) * diameters[name] + relaxation * sizing[name].diameter
@@ -201,7 +209,7 @@ def solve_coupled(
         if residual <= tolerance:
             break
 
-    properties = mass_properties(kinematics, diameters, material.density, piston, spec)
+    properties = mass_properties(kinematics, diameters, material.density, piston, spec, section)
     return CoupledResult(
         diameters=diameters,
         sizing=sizing,

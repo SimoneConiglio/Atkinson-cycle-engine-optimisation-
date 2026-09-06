@@ -58,6 +58,7 @@ from numpy.typing import NDArray
 from .constants import DEFAULT_SPEC, EngineSpec
 from .derivatives import ramp_derivative, spectral_derivative
 from .kinematics import Kinematics
+from .sections import HOLLOW_KINDS, SOLID, Section
 
 FloatArray = NDArray[np.float64]
 
@@ -249,19 +250,22 @@ def mass_properties(
     density: float,
     piston_mass: float,
     spec: EngineSpec = DEFAULT_SPEC,
+    section: Section = SOLID,
 ) -> MassProperties:
     """Assemble body masses, centres of mass and inertias from member sections.
 
-    Every member is a solid round bar of the given diameter, so its mass and
-    inertia follow from its length; a body's centre of mass is the mass-weighted
-    mean of its members' midpoints, and its inertia the parallel-axis sum.
+    Every member is a round bar -- solid, or bored to ``section.bore_ratio``
+    where its kind allows it -- so its mass and inertia follow from its length;
+    a body's centre of mass is the mass-weighted mean of its members'
+    midpoints, and its inertia the parallel-axis sum.
 
     Args:
         kinematics: A solved mechanism, supplying the joint trajectories.
-        diameters: Section diameter of each member of :data:`MEMBERS` [mm].
+        diameters: Outer diameter of each member of :data:`MEMBERS` [mm].
         density: Material density [tonne/mm^3].
         piston_mass: Mass of the piston assembly [tonne].
         spec: Fixed engine data.
+        section: The cross-section shape; solid round bars by default.
 
     Returns:
         The mass properties of all six moving bodies.
@@ -275,12 +279,17 @@ def mass_properties(
     for member in MEMBERS:
         length = abs(float(getattr(design, member.length_attribute)))
         diameter = float(diameters[member.name])
-        area = np.pi * diameter**2 / 4.0
+        bore = section.bore_ratio if member.kind in HOLLOW_KINDS else 0.0
+        area = np.pi * diameter**2 / 4.0 * (1.0 - bore**2)
         mass = density * area * length
         member_mass[member.name] = mass
         member_midpoint[member.name] = 0.5 * (joints[member.start] + joints[member.end])
-        # Solid cylinder about a transverse axis through its own centroid.
-        member_own_inertia[member.name] = mass * (0.75 * diameter**2 + length**2) / 12.0
+        # A cylinder about a transverse axis through its own centroid.  A bore
+        # takes metal from the axis, so the radial term grows by 1 + k^2 per
+        # unit mass even as the mass itself falls by 1 - k^2.
+        member_own_inertia[member.name] = (
+            mass * (0.75 * diameter**2 * (1.0 + bore**2) + length**2) / 12.0
+        )
 
     body_mass: dict[str, float] = {}
     body_com: dict[str, FloatArray] = {}

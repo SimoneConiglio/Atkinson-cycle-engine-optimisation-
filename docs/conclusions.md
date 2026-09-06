@@ -43,6 +43,16 @@ smallest of the three contributions, five per cent of indicated efficiency; the
 larger two are a lower side load and a lighter flywheel, which are consequences
 of having eleven dimensions to place rather than two (§6.3).
 
+**The largest stated modelling conservatism is worth 0.9 %, and only above the
+design speed.** Solid round bars looked like the study's weakest assumption, and
+the members turn out to be 1.3 % of the engine. Boring them buys nothing at all
+below 2000 rpm and 31 % of range at 3200, because what a bore takes out is not
+weight but inertia in the load path, which is the quantity §6.1's sizing fixed
+point is made of. Given to both engines the comparison of §6.3 moves from
++17.6 % to +17.0 %, and §6.1's divergence still bites — three times later, and
+just as hard (§6.6). In a coupled problem the size of an effect is not the size
+of the thing it acts on.
+
 **A schedule of speeds rewards smoothness, and the advantage widens to 19.3 %.**
 Scored over four speeds as one engine rather than at one point, both designs
 lose range and the conventional engine loses more. The reason is structural: a
@@ -66,7 +76,7 @@ Grouped by what would have to change to remove them.
 
 | limitation | effect if relaxed |
 |---|---|
-| solid round bars for every member | mass falls perhaps 30 % with tubes; changes the mass/inertia balance driving §6.1 |
+| ~~solid round bars for every member~~ | **measured** (§6.6): the members are 1.3 % of the engine, so a bore is worth 0.9 % of range and only above the design speed, where it acts on the inertia in the load path rather than on weight. It moves where §6.1's divergence bites, not whether it happens. |
 | Coulomb friction with constant coefficients | absolute FMEP uncertain by ~30 %; rankings robust, since comparisons are at equal coefficients |
 | instantaneous combustion, no heat transfer | indicated efficiency optimistic by several points, equally for both mechanisms |
 | **no gas exchange** | optimistic for both, but **not equally** — see below; it flatters the conventional engine and understates §6.3 |
@@ -152,8 +162,15 @@ In rough order of value per unit of effort:
    curve pays. What remains open is re-optimising the linkage *for* a schedule
    rather than scoring it over one, which would make +19.3 % a lower bound
    rather than the answer.
-2. **Tubular sections.** The largest single modelling conservatism, and it
-   interacts directly with §6.1.
+2. ~~**Tubular sections.**~~ **Done** (§6.6), and the answer was not the one
+   the entry assumed. The members are 1.3 % of the engine, so boring them is
+   worth 0.9 % of range — but all of it above the design speed, because what a
+   bore removes is inertia in the load path, not weight. The optimum operating
+   speed moves up 300 rpm and the engine falls from 12.9 kg to 10.4 kg. §6.1
+   survives it: the quasi-static optimum is still unbuildable at 4000 rpm with
+   tubes. What is still missing is a wall-buckling check, end-fitting mass, and
+   a bore ratio treated as a design variable rather than scanned — all three of
+   which work against the tube, so 0.9 % is an upper bound.
 3. **A widened uncertainty model**, carrying material, load and friction
    scatter alongside the dimensional tolerances. This is the prerequisite for
    everything else on the reliability side: $\Sigma$ currently holds only ISO 286
@@ -276,6 +293,7 @@ Full provenance for every design is in §6.0.
 | against the study's result, 3395 km/L | **+17.6 %** |
 | against `COUPLED_DESIGN`, 3338 km/L | +15.6 % |
 | over a four-point schedule, one engine each | 2733 km/L vs 3260 km/L, **+19.3 %** |
+| with tubular members on both, each re-optimised | 2929 km/L vs 3425 km/L, **+17.0 %** |
 | indicated efficiency | 0.457 → 0.480 |
 | mechanical efficiency | 0.787 → 0.865 |
 | engine mass | 16.9 kg → 12.9 kg |

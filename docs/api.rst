@@ -23,6 +23,7 @@ static, fatigue and buckling failure, and the fixed point that couples them.
 
 .. automodule:: exlink.derivatives
 .. automodule:: exlink.materials
+.. automodule:: exlink.sections
 .. automodule:: exlink.dynamics
 .. automodule:: exlink.sizing
 .. automodule:: exlink.coupled

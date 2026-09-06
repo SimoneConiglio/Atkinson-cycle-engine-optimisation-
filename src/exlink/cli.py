@@ -9,6 +9,7 @@ Commands
 ``refine``     Polish a design with the augmented Lagrangian.
 ``pareto``     Approximate the Pareto front of ``(-eta, H, B)``.
 ``cycle``      Score a design over a schedule of speeds, not one point.
+``size``       Size the parts, solid or tubular (``--bore``).
 
 A design is given either by name (``published``, ``refined``) or as a JSON file
 written by ``--save``, so the commands chain::
@@ -35,6 +36,7 @@ from .diagrams import RENDER_DPI
 from .dynamics import DEFAULT_SPEED_RPM
 from .model import analyse
 from .reference import PUBLISHED_DESIGN
+from .sections import DEFAULT_MIN_WALL
 
 NAMED_DESIGNS = ("published", "refined", "coupled", "range", "reliable")
 
@@ -238,6 +240,7 @@ def _cmd_refine(args: argparse.Namespace) -> int:
 def _cmd_size(args: argparse.Namespace) -> int:
     from .coupled import solve_for_design
     from .scenarios import format_coupled
+    from .sections import Section
 
     design = load_design(args.design)
     result = solve_for_design(
@@ -246,6 +249,7 @@ def _cmd_size(args: argparse.Namespace) -> int:
         samples=args.samples,
         max_iterations=args.max_iterations,
         relaxation=args.relaxation,
+        section=Section(bore_ratio=args.bore, min_wall=args.min_wall),
     )
     crankshaft = DEFAULT_SPEC.output_speed_rpm(args.rpm)
     print(format_coupled(result, f"sizing at {crankshaft:.0f} rpm"))
@@ -460,6 +464,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="under-relaxation in (0, 1]; below 1 damps a stiff loop",
+    )
+    size_parser.add_argument(
+        "--bore",
+        type=float,
+        default=0.0,
+        help="bore ratio d_i/d_o of the rods and the trigonal link; 0 is solid bar",
+    )
+    size_parser.add_argument(
+        "--min-wall",
+        type=float,
+        default=DEFAULT_MIN_WALL,
+        dest="min_wall",
+        help="thinnest wall a bored member may be drawn with [mm]",
     )
     size_parser.add_argument("--plot", default=None, help="write a sizing figure here")
     size_parser.add_argument("--dpi", type=int, default=140)

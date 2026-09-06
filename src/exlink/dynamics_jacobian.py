@@ -50,6 +50,7 @@ from .dynamics import BODY_MEMBERS, MEMBER_NAMES, MEMBERS, DynamicLoads, MassPro
 from .jacobian import INDEX, KinematicJacobian
 from .kinematics import Kinematics
 from .materials import Material, SafetyFactors
+from .sections import SOLID, Section, area_factor, gyration_factor, modulus_factor
 
 FloatArray = NDArray[np.float64]
 
@@ -113,6 +114,7 @@ def mass_property_jacobian(
     properties: MassProperties,
     diameters: dict[str, float],
     density: float,
+    section: Section = SOLID,
 ) -> MassJacobian:
     """Differentiate the body masses, centres of mass and inertias.
 
@@ -121,8 +123,11 @@ def mass_property_jacobian(
         kinematics: The solved kinematics.
         kinematic: Its derivatives from :func:`exlink.jacobian.kinematic_jacobian`.
         properties: The mass properties being differentiated.
-        diameters: Section diameter of each member [mm].
+        diameters: Outer diameter of each member [mm].
         density: Material density [tonne/mm^3].
+        section: The cross-section shape.  A bore enters as two constant
+            factors -- ``1 - k^2`` on the mass and ``1 + k^2`` on the radial
+            term of the transverse inertia -- and changes nothing else here.
 
     Returns:
         The derivatives of every inertial quantity.
@@ -133,13 +138,18 @@ def mass_property_jacobian(
 
     lengths = np.array([abs(float(getattr(design, m.length_attribute))) for m in MEMBERS])
     widths = np.array([float(diameters[m.name]) for m in MEMBERS])
+    bores = section.ratios([m.kind for m in MEMBERS])
+    hollow = area_factor(bores)
+    radial = gyration_factor(bores)
 
-    # m_k = rho * (pi d_k^2 / 4) * L_k
+    # m_k = rho * (pi d_k^2 / 4) (1 - k_k^2) * L_k
     d_member_mass = np.zeros((N_DIAMETERS, N_PARAMETERS))
-    area = np.pi * widths**2 / 4.0
+    area = np.pi * widths**2 / 4.0 * hollow
     d_member_mass[:, DESIGN_SLICE] = density * area[:, None] * length_jacobian
     for row in range(N_DIAMETERS):
-        d_member_mass[row, N_DESIGN + row] = density * np.pi * widths[row] / 2.0 * lengths[row]
+        d_member_mass[row, N_DESIGN + row] = (
+            density * np.pi * widths[row] / 2.0 * hollow[row] * lengths[row]
+        )
 
     # Midpoints move with the linkage but not with the sections.
     d_midpoint: dict[str, FloatArray] = {}
@@ -174,13 +184,13 @@ def mass_property_jacobian(
         d_com = weighted / total - com[..., None] * d_total[None, None, :] / total
         d_body_com[body] = d_com
 
-        # I = sum_k [ m_k (3 d_k^2/4 + L_k^2)/12 + m_k |mid_k - G|^2 ]
+        # I = sum_k [ m_k (3 d_k^2 (1 + k_k^2)/4 + L_k^2)/12 + m_k |mid_k - G|^2 ]
         derivative = np.zeros(N_PARAMETERS)
         for k, (row, name) in enumerate(zip(rows, names, strict=True)):
-            own = (0.75 * widths[row] ** 2 + lengths[row] ** 2) / 12.0
+            own = (0.75 * widths[row] ** 2 * radial[row] + lengths[row] ** 2) / 12.0
             d_own = np.zeros(N_PARAMETERS)
             d_own[DESIGN_SLICE] = 2.0 * lengths[row] * length_jacobian[row] / 12.0
-            d_own[N_DESIGN + row] = 1.5 * widths[row] / 12.0
+            d_own[N_DESIGN + row] = 1.5 * widths[row] * radial[row] / 12.0
 
             offset = midpoint[name] - com
             d_offset = d_midpoint[name] - d_com
@@ -714,6 +724,7 @@ def sizing_jacobian(
     lengths: FloatArray,
     material: Material,
     safety: SafetyFactors,
+    section: Section = SOLID,
 ) -> SizingJacobian:
     """Differentiate the sizing solve, without differentiating the bisection.
 
@@ -736,15 +747,21 @@ def sizing_jacobian(
         lengths: Member lengths ``(n_members,)`` [mm].
         material: The :class:`~exlink.materials.Material`.
         safety: The :class:`~exlink.materials.SafetyFactors`.
+        section: The cross-section shape.  A bore rescales ``A``, ``Z`` and
+            ``I`` by constants, so it moves the *values* below but none of the
+            slopes: the logarithmic derivatives ``d(1/A)/dd = -2/(A d)``,
+            ``d(1/Z)/dd = -3/(Z d)`` and ``dI/dd = 4 I / d`` are the same for a
+            tube as for a bar, and the shape factor cancels out of every one.
 
     Returns:
         The derivative of each diameter with respect to its loads and length.
     """
-    from .sizing import MEMBER_FIXITY, _utilisations
+    from .sizing import MEMBER_FIXITY, MEMBER_KINDS, _utilisations
 
     n_members = diameters.size
-    area = np.pi * diameters**2 / 4.0
-    modulus = np.pi * diameters**3 / 32.0
+    bores = section.ratios(MEMBER_KINDS[:n_members])
+    area = np.pi * diameters**2 / 4.0 * area_factor(bores)
+    modulus = np.pi * diameters**3 / 32.0 * modulus_factor(bores)
 
     direct = axial / area[:, None, None]
     flexural = bending / modulus[:, None, None]
@@ -752,7 +769,7 @@ def sizing_jacobian(
     signs = np.array([1.0, -1.0])
 
     static, fatigue, buckling = _utilisations(
-        diameters, axial, bending, lengths, MEMBER_FIXITY, material, safety
+        diameters, axial, bending, lengths, MEMBER_FIXITY, material, safety, bores
     )
 
     d_axial = np.zeros_like(axial)
@@ -848,7 +865,7 @@ def sizing_jacobian(
         else:  # Euler buckling
             flat = int(np.argmin(axial[member]))
             angle, station = (int(v) for v in np.unravel_index(flat, axial[member].shape))
-            second_moment = np.pi * diameter**4 / 64.0
+            second_moment = np.pi * diameter**4 / 64.0 * modulus_factor(bores[member])
             critical = (
                 np.pi**2
                 * material.youngs_modulus
@@ -894,6 +911,7 @@ def coupled_jacobian(
     stations: int,
     material: Material,
     spec: EngineSpec = DEFAULT_SPEC,
+    section: Section = SOLID,
 ) -> CoupledJacobian:
     """Assemble the dynamics discipline's local Jacobian, end to end.
 
@@ -909,6 +927,8 @@ def coupled_jacobian(
         stations: Sections evaluated along each member.
         material: The material, for its density.
         spec: Fixed engine data.
+        section: The cross-section shape, which enters through the member
+            masses and inertias.
 
     Returns:
         The derivatives the discipline reports.
@@ -926,7 +946,7 @@ def coupled_jacobian(
 
     kinematic = kinematic_jacobian(design, kinematics, spec)
     mass = mass_property_jacobian(
-        design, kinematics, kinematic, properties, diameters, material.density
+        design, kinematics, kinematic, properties, diameters, material.density, section
     )
     acceleration = acceleration_jacobian(kinematic, mass, loads.speed, kinematics.theta_1.size)
 

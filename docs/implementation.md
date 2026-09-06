@@ -47,6 +47,7 @@ exlink refine --design published --save refined.json   # augmented Lagrangian
 exlink optimize --save best.json     # differential evolution over the full box
 exlink pareto --pop-size 200 --max-gen 60              # NSGA-II front
 exlink cycle --module 0.8 --teeth 48 --baseline        # over a schedule of speeds (§6.5)
+exlink size --rpm 1400 --bore 0.6                     # tubular members (§6.6)
 ```
 
 `--design` takes `published`, `refined`, `coupled`, `range`, `reliable` or a path
@@ -128,6 +129,7 @@ src/exlink/
 | the mass budget, loss breakdown and both mechanism comparisons of §6.3 | `python examples/06_range.py` |
 | the N2 chart and the XDSM of §4.2 | `exlink diagram -o docs/figures` |
 | the drive-cycle scores of §6.5 | `python examples/08_drive_cycle.py` |
+| what tubular sections are worth, §6.6 | `python examples/09_tubular_sections.py` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests

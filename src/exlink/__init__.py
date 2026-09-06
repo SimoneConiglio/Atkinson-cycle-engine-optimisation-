@@ -85,6 +85,7 @@ from .reference import (
     RELIABLE_METRICS,
 )
 from .robustness import ToleranceReport, tolerance_report
+from .sections import SOLID, TUBULAR, Section
 from .sizing import MemberSizing
 from .slidercrank import (
     SliderCrank,
@@ -114,7 +115,9 @@ __all__ = [
     "REFINED_DESIGN",
     "RELIABLE_DESIGN",
     "RELIABLE_METRICS",
+    "SOLID",
     "STANDARD_CYCLE",
+    "TUBULAR",
     "VARIABLE_DESCRIPTIONS",
     "VARIABLE_NAMES",
     "Analysis",
@@ -144,6 +147,7 @@ __all__ = [
     "Phases",
     "RangeResult",
     "SafetyFactors",
+    "Section",
     "SliderCrank",
     "SolvedAnalysis",
     "TargetMotion",
