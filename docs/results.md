@@ -1031,9 +1031,14 @@ it asked for a third topology and what §7.1 implied when it explained the
 result by counting them.
 
 
-## 6.10 Restoration makes the multistart answerable
+## 6.10 Getting the search where it needs to go
 
-### Result
+Two instruments were built for two obstructions §7.3 records. One removes
+its obstruction; the other turns out not to have one to remove, and both
+answers are here because a method that was not needed is as much a result as
+a method that was.
+
+### Restoration: 0 of 6 becomes 6 of 6
 
 §6.11 reports that manifold-projected restarts reached feasibility in **0 of 6**
 attempts on the range problem, which is why §3.9's multistart is inconclusive
@@ -1084,6 +1089,42 @@ whether the range optimum of §6.4 is global — needs six range solves from the
 points, which is six times the cost of §6.4's own run and is not attempted.
 The entry in §7.3 is therefore struck for the phase it asked for and the
 question behind it stays open.
+
+### Continuation: an instrument for an obstruction that is no longer there
+
+§7.3's other request was a way to *reach* the reliable region, on the evidence
+that SLSQP with a reliability target attached returns its starting point
+unchanged — not for a demanding target but for a step of 0.17. A continuation
+in $\beta$, warm-starting each rung from the last, is the natural instrument:
+it replaces one impossible step with several possible ones.
+
+Measured against a single solve at the same iteration budget, from
+`RANGE_DESIGN` at the bounds §6.2 settles on:
+
+| | evaluations | steered $\min_i\beta_i$ | range | verdict |
+|---|---|---|---|---|
+| one solve, 150 iterations | 1435 | **3.000** | 3388.4 km/L | on target |
+| five rungs, 30 iterations each | 2060 | 2.651 | 3402.1 km/L | short |
+
+The ladder is beaten on both counts: 44 % more evaluations for the same 150
+iterations, and it ends 0.35 short of a target the single solve reaches
+exactly. The rungs themselves behave as designed — each moves, and the climb is
+monotone in reliability from $\beta = 0.001$ to 2.651 while the range *rises*
+from 3388 to 3402 km/L — but thirty iterations is not enough for any rung to
+converge, so the budget is spent restarting rather than arriving.
+
+The reason is not that continuation is a bad instrument. It is that **the
+obstruction it was built for is absent**. §3.10's non-movement was measured
+under the first of that section's three forms, with the coupled and vehicle
+constraints bound only at the end; under the second form, with everything
+imposed and the branch-aware constraint set of §6.8, the search moves freely
+from the same start and reaches its target unaided. Given a search that can
+move, subdividing its target only fragments its budget.
+
+That is worth recording precisely because §7.3 asked for it. The entry
+diagnosed a search failure and proposed a search fix; the fault was in the
+constraint set, and §6.8's one extra Jacobian row did more for reachability
+than a homotopy does.
 
 
 ## 6.11 Supporting measurements

@@ -210,18 +210,17 @@ In rough order of value per unit of effort:
    What remains is a correlated model of the two strengths (independence is
    conservative here) and second-order treatment of ``saturation``, which is a
    threshold on a fixed point and the least linear constraint in the set.
-4. **A way to reach the reliable region**, which is now known to be worth
-   reaching. The loop itself is closed --
-   ``build_range_scenario(beta_target=...)`` constrains the reliability index
-   -- but SLSQP from the deterministic optimum does not move, while sampling
-   beside it finds fully feasible designs that halve $P_f$ at no cost in range
-   (§3.10, §6.2). The deterministic optimum is dominated, so this is the
-   cheapest improvement on the list in engineering terms and the most clearly
-   algorithmic in nature: what is missing is not the constraint, nor a
-   trade-off to negotiate, but a search able to cross a thin feasible region --
-   a restoration phase, a continuation in $\beta$ from a sampled start, or the
-   prescribed-motion generator of §7.4 supplying starts already on the
-   manifold.
+4. ~~**A way to reach the reliable region**, which is now known to be worth
+   reaching.~~ **Done, and it was not needed** (§6.10). The continuation is
+   built and measured; against a single solve at the same iteration budget it
+   costs 44 % more evaluations and lands 0.35 short of a target the single
+   solve reaches exactly. The reason is that the obstruction the entry
+   describes is gone: §3.10's non-movement was measured under the first of that
+   section's three forms, and under the second, with the branch-aware
+   constraint set of §6.8, the search moves freely from the deterministic
+   optimum and reaches $\beta = 3$ unaided. The entry diagnosed a search
+   failure and proposed a search fix; the fault was in the constraint set, and
+   one extra Jacobian row did more for reachability than a homotopy does.
 5. ~~**Sampling-based reliability as an outer check.**~~ **Done** (§6.8), and
    it did not confirm the first-order estimate — it overturned it. 150 000
    exact builds put the study's result at $9.3\times10^{-3}$ against FORM's

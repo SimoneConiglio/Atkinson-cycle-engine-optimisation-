@@ -36,7 +36,25 @@ What it does not do
 A continuation cannot cross a gap.  If the admissible set at some rung is
 disconnected from the current point, the rung fails and every rung above it
 fails with it, and the run says so rather than reporting the last success as
-the answer.  Section 6.8 reports which rungs moved.
+the answer.
+
+What it did not do here
+-----------------------
+§6.10 measures this against a single solve at the same iteration budget and
+the ladder loses on both counts: 2060 evaluations against 1435, ending at
+``min_i beta_i = 2.651`` where the single solve reaches 3.000 exactly.  The
+rungs behave as designed -- each moves, and the climb is monotone in
+reliability while the range *rises* -- but thirty iterations is not enough for
+any rung to converge, so the budget goes on restarting rather than arriving.
+
+The instrument is not at fault; the obstruction is absent.  The non-movement
+this module was written for was measured under the first of §3.10's three
+forms, with the coupled and vehicle constraints bound only at the end.  Under
+the second form, with the branch-aware constraint set §6.8 introduced, the
+search moves freely from the same start.  Given a search that can move,
+subdividing its target only fragments its budget.  The code is kept because
+the measurement is the finding, and because a problem whose feasible set is
+genuinely disconnected from its start would need exactly this.
 """
 
 from __future__ import annotations
