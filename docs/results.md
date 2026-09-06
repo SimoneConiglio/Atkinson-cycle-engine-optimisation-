@@ -81,7 +81,7 @@ speed**:
 
 This is the clearest result in the study and the least fragile. It rests on the
 equilibrium solve, which is verified against virtual work to machine precision
-(§4.4), and the mechanism is understood rather than merely observed.
+(§4.5), and the mechanism is understood rather than merely observed.
 
 It also generalises. A well-conditioned slider-crank shows the *opposite* sign:
 its peak main-bearing load **falls** with speed, 4735 N at rest to 2985 N at

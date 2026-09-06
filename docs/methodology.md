@@ -32,7 +32,7 @@ newton-millimetre of torque ripple is worth a fixed mass of flywheel.
 ## 3.2 Evaluating the objective
 
 The objective of §3.1 is not a formula but a chain. Each link is a first-order
-model; each is checked in §4.4 against a result computed independently of it.
+model; each is checked in §4.5 against a result computed independently of it.
 
 ### 3.2.1 Motion and cycle
 

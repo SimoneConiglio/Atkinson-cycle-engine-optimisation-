@@ -37,6 +37,9 @@ dependencies = [
     "gemseo>=6.0,<7",
     "matplotlib>=3.7",
     "numpy>=1.24",
+    # Cropping the rasterised XDSM in ``exlink.diagrams``; matplotlib pulls it
+    # in anyway, but this module imports it directly.
+    "pillow>=10.0",
     "scipy>=1.10",
 ]
 

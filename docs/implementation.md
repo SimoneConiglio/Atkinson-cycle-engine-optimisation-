@@ -39,6 +39,7 @@ NSGA-II. Everything except `exlink pareto` works without it.
 exlink analyse                       # the study's result; see --design below
 exlink analyse --design published    # the historical baseline design (see Provenance)
 exlink plot -o figures               # motion, p-V cycle, torque, mechanism, variables
+exlink diagram -o figures            # GEMSEO's N2 chart and XDSM of the coupled problem
 exlink animate -o figures/exlink.gif # animated mechanism + live cycle and torque
 exlink animate --formulations \
   -o figures/formulations.gif        # each formulation's final design, side by side
@@ -124,6 +125,7 @@ src/exlink/
 | the efficiency/size trade-off | `python examples/04_pareto.py` |
 | sizing, dynamics and the singularity result | `python examples/05_sizing_and_dynamics.py` |
 | the mass budget, loss breakdown and both mechanism comparisons of §6.3 | `python examples/06_range.py` |
+| the N2 chart and the XDSM of §4.2 | `exlink diagram -o docs/figures` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests

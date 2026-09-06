@@ -82,6 +82,7 @@ Visualisation
 
 .. automodule:: exlink.plots
 .. automodule:: exlink.animation
+.. automodule:: exlink.diagrams
 
 Command line
 ------------

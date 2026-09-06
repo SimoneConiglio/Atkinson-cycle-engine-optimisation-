@@ -30,6 +30,7 @@ from typing import Any
 
 from .constants import DEFAULT_SPEC
 from .design import GLOBAL_BOUNDS, VARIABLE_DESCRIPTIONS, VARIABLE_NAMES, Bounds, Design
+from .diagrams import RENDER_DPI
 from .dynamics import DEFAULT_SPEED_RPM
 from .model import analyse
 from .reference import PUBLISHED_DESIGN
@@ -147,6 +148,20 @@ def _cmd_plot(args: argparse.Namespace) -> int:
     for name, figure in figures.items():
         path = outdir / f"{name}.png"
         figure.savefig(path, dpi=args.dpi, bbox_inches="tight")
+        print(f"written: {path}")
+    return 0
+
+
+def _cmd_diagram(args: argparse.Namespace) -> int:
+    """Write the N2 chart and the XDSM of the range problem."""
+    from .diagrams import build_published_scenario, write_n2, write_xdsm
+
+    outdir = Path(args.outdir)
+    scenario = build_published_scenario(design=load_design(args.design))
+    for path in (
+        write_n2(outdir / "n2.png", scenario=scenario),
+        write_xdsm(outdir, scenario=scenario, dpi=args.dpi),
+    ):
         print(f"written: {path}")
     return 0
 
@@ -312,6 +327,16 @@ def build_parser() -> argparse.ArgumentParser:
     plot_parser.add_argument("--samples", type=int, default=720)
     plot_parser.add_argument("--dpi", type=int, default=140)
     plot_parser.set_defaults(func=_cmd_plot)
+
+    diagram_parser = subparsers.add_parser(
+        "diagram", help="write GEMSEO's N2 chart and XDSM of the coupled problem"
+    )
+    add_design(diagram_parser, " to build the scenario at")
+    diagram_parser.add_argument("-o", "--outdir", default="figures")
+    diagram_parser.add_argument(
+        "--dpi", type=int, default=RENDER_DPI, help="resolution for the rasterised XDSM"
+    )
+    diagram_parser.set_defaults(func=_cmd_diagram)
 
     optimize_parser = subparsers.add_parser("optimize", help="maximise efficiency")
     add_design(optimize_parser, " to start from")

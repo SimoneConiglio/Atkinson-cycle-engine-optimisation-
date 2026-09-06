@@ -302,7 +302,7 @@ those strands rather than of extending any one of them.
    them.
 
 The problem is deliberately small enough that every claim above is checked
-against a closed-form or sampled reference (§4.4), which is what makes it usable
+against a closed-form or sampled reference (§4.5), which is what makes it usable
 as a demonstration rather than only as a design.
 
 ---
