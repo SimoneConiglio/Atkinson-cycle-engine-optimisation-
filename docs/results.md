@@ -105,7 +105,7 @@ down before any part existed. A tolerance study at IT8 says which of them this
 mechanism can hold, and only two are in question — the top-dead-centre gap $g$
 and the band each equality is relaxed into. Widening the gap from 0.01 to
 0.1 mm and the bands from $\pm 0.05$ to $\pm 0.15$ takes the reference design
-from a 0.645 probability of missing a requirement to $1.9\times10^{-5}$. The
+from a 0.664 probability of missing a requirement to $1.9\times10^{-5}$. The
 physical price is **0.47 % of range**, all of it from the gap: a wider band
 relaxes a constraint and cannot cost anything, whereas a dead-centre mismatch
 of 0.1 mm is 2.7 % of the clearance volume and is felt by the cycle.
@@ -177,14 +177,14 @@ $\pm 0.2$ % of the stroke.
 
 ### What widening them buys
 
-§3.8 computes a probability rather than a margin, over the seven constraints
-whose uncertainty $\Sigma$ actually carries. Evaluated on `COUPLED_DESIGN`:
+§3.8 computes a probability rather than a margin, over the constraints whose
+uncertainty $\Sigma$ actually carries. Evaluated on `COUPLED_DESIGN`:
 
 | gap bound | band | system $P_f$ | $\beta$ | binding |
 |---|---|---|---|---|
-| 0.010 mm | $\pm 0.05$ | 0.645 | $-0.37$ | `tdc_gap` |
-| 0.054 mm | $\pm 0.05$ | 0.251 | 0.67 | `stroke_lower` |
-| 0.100 mm | $\pm 0.05$ | 0.250 | 0.67 | `stroke_lower` |
+| 0.010 mm | $\pm 0.05$ | 0.664 | $-0.42$ | `tdc_gap` |
+| 0.054 mm | $\pm 0.05$ | 0.329 | 0.44 | `stroke_lower` |
+| 0.100 mm | $\pm 0.05$ | 0.328 | 0.44 | `stroke_lower` |
 | 0.100 mm | $\pm 0.12$ | $1.0\times10^{-3}$ | 3.09 | `stroke_lower` |
 | 0.100 mm | $\pm 0.15$ | $1.9\times10^{-5}$ | 4.12 | `stroke_lower` |
 
@@ -194,14 +194,15 @@ differ from the third only in the band, and they span four orders of magnitude
 of failure probability. What sets the reliability of this mechanism is not the
 gap but how nearly the expansion stroke is required to equal 74 mm.
 
-Keeping the correlation is not a formality and does not always reassure: at the
-first row the two largest contributors are *anti*-correlated, so the system
-probability, 0.645, comes out **above** the 0.563 an independence assumption
-gives.
+Keeping the correlation is not a formality, though on this design it works in
+the reassuring direction: at the first row the system probability is 0.664
+against the 0.680 an independence assumption gives, and by the last row the two
+agree to three figures. What the correlation costs is one matrix product; what
+it buys is that the number is a probability rather than a bound.
 
 ### Most of this probability is avoidable, and free
 
-The 0.645 is not the price of the requirements. It is the price of *ignoring
+The 0.664 is not the price of the requirements. It is the price of *ignoring
 them while optimising*. Sampling 2500 designs about the reference and checking
 the best by reliability against the full constraint set (§3.10) gives:
 
@@ -701,8 +702,12 @@ constraints turns out to be 100 % dimensional to the last figure reported:
 
 That is exact and not approximate, and deliberately so: the widened model takes
 these rows from the same analytic Jacobian rather than differencing them, so a
-disagreement here would have been physics rather than a step size. §6.2's
-0.47 % and §6.4's $P_f = 1.3\times10^{-3}$ stand as reported.
+disagreement here would have been physics rather than a step size. Widening the
+uncertain vector therefore changes nothing about the geometric constraints —
+which is not to say those constraints were right, and §6.8 shows one of them
+was not. The two findings are independent: this section says the *inputs* were
+complete enough, and §6.8 says one of the *constraints* was linearised at a
+kink.
 
 **What was not priced decides the design.** The system probability goes from
 $1.3\times10^{-3}$ to $5.0\times10^{-1}$, and all of it is one constraint:
@@ -807,7 +812,140 @@ constraint gets, though at $\beta = 460$ its linearisation error is not what
 decides anything.
 
 
-## 6.8 Supporting measurements
+## 6.8 What sampling found in the reliability estimate
+
+### Result
+
+Every probability in §6.2, §6.4 and §6.7 is first order: the constraints are
+linearised at the nominal design and the failure probability read off a
+multivariate-normal orthant. §7.2 lists that as a limitation and §7.3 asks for
+a sampling check. The check was run — 150 000 exact builds drawn from the same
+covariance, each analysed in full — and it does not agree:
+
+| design | specification | FORM | sampled, 150 000 builds | ratio |
+|---|---|---|---|---|
+| `COUPLED_DESIGN` | as written | 0.6454 | 0.6650 ± 0.0012 | 0.97 |
+| `RELIABLE_DESIGN` | §6.2's bounds | $1.35\times10^{-3}$ | $9.28\times10^{-3} \pm 0.05$ | **0.145** |
+
+FORM is accurate on one design and optimistic by a factor of seven on the
+other, and the difference between them turns out to be the whole finding.
+
+### Why
+
+The expansion stroke is
+$STE = \max(\lambda_{tdc,1}, \lambda_{tdc,2}) - \min \lambda$: the piston has
+two top dead centres per cycle and the stroke is measured from the higher,
+because that is the one that sets the clearance volume. **A maximum of two
+smooth functions is not smooth at the tie**, and linearising it uses whichever
+branch attains it at the nominal design.
+
+`COUPLED_DESIGN` has its two top dead centres 6.7 μm apart, which is comfortably
+more than the scatter can bridge, so one branch attains the maximum in
+essentially every build and linearising it is right. `RELIABLE_DESIGN` has them
+**0.011 μm** apart — and it has them there because driving the top-dead-centre
+gap to zero is exactly what its own $g$ constraint rewards. The parts, whose
+dimensions scatter by some 8 μm, straddle that tie in every single build.
+
+Measuring the two branches separately, analytically and by sampling, settles it:
+
+| | $\sigma$, analytic | $\sigma$, sampled | skew | $\beta$ | $P$ |
+|---|---|---|---|---|---|
+| stroke from TDC 1 | 0.01814 | 0.01817 | $-0.01$ | 3.00 | $1.4\times10^{-3}$ |
+| stroke from TDC 2 | 0.02304 | 0.02306 | $-0.02$ | 2.36 | $9.1\times10^{-3}$ |
+| the maximum of the two | — | 0.02016 | $+0.11$ | — | $9.3\times10^{-3}$ |
+
+Each *branch* is Gaussian to two decimal places in its skew, which is to say
+FORM is exactly right on either one. What FORM did was linearise **branch 1**,
+which attains the maximum by eleven nanometres and is 27 % less sensitive than
+branch 2. The parts breach branch 2.
+
+So the estimator was never wrong. The *formulation* was: it presented a maximum
+as if it were a single differentiable function, and handed the linearisation the
+branch that happened to be on top.
+
+### The fix costs one Jacobian row
+
+Carry both branches as separate constraints instead of the one that attains the
+maximum. For the upper bounds this is not merely safe but exactly right: the
+realised stroke exceeds its bound when *either* branch does, which is a union
+over correlated normals, and a union over correlated normals is precisely what
+the orthant integral already computes. (For the two lower bounds the honest
+statement is an intersection, so carrying both is conservative there; both sit
+above $\beta = 10$ at every design in this study, so it costs nothing.)
+
+With that one change:
+
+| design | FORM, one branch | FORM, both branches | sampled | error |
+|---|---|---|---|---|
+| `COUPLED_DESIGN` | 0.6454 | 0.6636 | 0.6650 | **0.2 %** |
+| `RELIABLE_DESIGN` | $1.35\times10^{-3}$ | $9.38\times10^{-3}$ | $9.28\times10^{-3}$ | **1.1 %** |
+
+No sampling, no second derivatives, no extra analyses — one more row of a
+Jacobian that was already being computed.
+
+### Second derivatives are the wrong instrument, and the wrongness is measurable
+
+The natural first guess is curvature, and §7.3 asks for $\nabla^2 g$ to correct
+for it. That guess is wrong here and it can be shown to be wrong.
+
+Differencing the *analytic* gradient — which is the well-conditioned way to a
+Hessian, since the first derivatives are exact — separates the maximum from its
+branches in one table. Norms are in the standard normal space, so they are
+comparable across rows:
+
+| step | $\lVert\nabla^2 g\rVert$ | asym. | norm × step | | $\lVert\nabla^2 g\rVert$ | asym. | norm × step |
+|---|---|---|---|---|---|---|---|
+| | **the maximum** | | | | **branch 2 alone** | | |
+| 0.50 | 0.006568 | 1.00 | 0.0032840 | | 0.000010 | 0.00 | 0.0000050 |
+| 0.20 | 0.016416 | 1.00 | 0.0032832 | | 0.000010 | 0.00 | 0.0000020 |
+| 0.10 | 0.032830 | 1.00 | 0.0032830 | | 0.000010 | 0.00 | 0.0000010 |
+| 0.05 | 0.065657 | 1.00 | 0.0032828 | | 0.000010 | 0.00 | 0.0000005 |
+| 0.02 | 0.164135 | 1.00 | 0.0032827 | | 0.000010 | 0.00 | 0.0000002 |
+| 0.01 | 0.328270 | 1.00 | 0.0032827 | | 0.000010 | 0.00 | 0.0000001 |
+
+On the maximum, *norm × step* is constant to five significant figures across a
+fiftyfold range of steps and the matrix is 100 % asymmetric at every one of
+them. That is a fixed jump in the gradient divided by a shrinking step — there
+is no second derivative there to find. A finer crank-angle grid does not change
+it, which rules out discretisation.
+
+On the branch, the norm is constant, the matrix is exactly symmetric, and the
+value is five orders of magnitude smaller: a genuine second derivative, and a
+negligible one. The branches are as close to linear over the tolerance as
+anything in this model.
+
+The jump is the branch switch: perturbing $a$ by 0.3 μm moves
+$\partial STE/\partial a$ from 0.0093 to 0.52, a factor of 56. **The constraint
+surface is not curved, it is kinked**, and no order of Taylor expansion repairs
+a kink. What was needed was not a second derivative but a first one, of the
+other branch.
+
+### Discussion
+
+Three things generalise past this problem.
+
+**A sampling check is not a refinement, it is a control.** It was run to put an
+error bar on a first-order estimate and it found a factor of seven. Nothing in
+the FORM output — not the index, not the correlation, not the per-constraint
+breakdown — carried any sign that the estimate was wrong, because from inside
+the linearisation it was self-consistent.
+
+**Optimisation drives designs onto the non-smooth features of their own
+constraints.** The tie was not bad luck. §6.4's objective rewards a small
+top-dead-centre gap, so the optimizer closed it to eleven nanometres, which is
+the same as saying it put the design exactly on the ridge where the stroke
+constraint stops being differentiable. Any deterministic optimum should be
+suspected of sitting on whatever non-smoothness its formulation contains, and
+that is the first place a reliability estimate will fail.
+
+**Diagnosis beats correction.** The correction the limitation list called for —
+second derivatives — would have cost eleven extra Jacobian evaluations per
+design point and produced noise. Finding out *why* the estimate was wrong cost
+one sampling run and produced a fix that is exact, free, and applies at every
+design rather than only at the one checked.
+
+
+## 6.9 Supporting measurements
 
 The results above rest on properties of the problem and of the implementation
 that are asserted where they are used and measured here: how strongly the

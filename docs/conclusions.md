@@ -128,10 +128,13 @@ larger change than any other item in this table.
 
 ### Method
 
-**The reliability estimator is first order.** FORM under-predicts the most
-nonlinear constraint, 0.42 against 0.54 sampled. Its derivatives are finite
-differences because the exact route needs $\nabla^2 g$, which the package does
-not compute.
+**The reliability estimator is first order, and first order is enough here —
+once it is applied to the right function.** §6.8 found FORM optimistic by a
+factor of seven at the study's result and traced it to a maximum being
+linearised at a tie, not to curvature; with both branches carried, FORM agrees
+with 150 000 sampled builds to 1 %. What is *not* settled is that the same trap
+is absent elsewhere: the check has been run at two designs, and there is no
+automatic warning when a constraint is a maximum evaluated near its tie.
 
 **The uncertain vector was too narrow, and now is not.** §6.7 widens it from
 eleven dimensions to seventeen and prices every constraint. What is left is
@@ -210,14 +213,29 @@ In rough order of value per unit of effort:
    a restoration phase, a continuation in $\beta$ from a sampled start, or the
    prescribed-motion generator of §7.4 supplying starts already on the
    manifold.
-5. **Sampling-based reliability as an outer check.** The first-order constraint
-   is what is affordable per iteration; `gemseo-umdo`'s `Probability` statistic
-   would bound the error the linearisation makes.
+5. ~~**Sampling-based reliability as an outer check.**~~ **Done** (§6.8), and
+   it did not confirm the first-order estimate — it overturned it. 150 000
+   exact builds put the study's result at $9.3\times10^{-3}$ against FORM's
+   $1.3\times10^{-3}$. The cause is that the expansion stroke is a *maximum*
+   over two top dead centres, and the optimizer had driven those two to within
+   eleven nanometres of each other, so the linearisation used the branch that
+   attained the maximum while the parts breached the other. Carrying both
+   branches — one extra row of a Jacobian already being computed — brings FORM
+   to within 1 % of sampling at every design tested. What remains is to run the
+   check at more designs, and to automate it: nothing in a FORM output signals
+   that it is being evaluated at a kink.
 6. **A feasibility-restoration phase before each restart**, which is what would
    make the multistart of §3.9 conclusive on the range problem.
-7. **Second-order derivatives of the constraints**, which would make the
-   reliability margin exactly differentiable and remove the one place where
-   finite differences enter a tight constraint.
+7. ~~**Second-order derivatives of the constraints.**~~ **Attempted, and the
+   wrong instrument** (§6.8). Differencing the analytic gradient gives a matrix
+   whose norm scales exactly as $1/h$ over two decades of step and is 100 %
+   asymmetric at every step — the signature of a discontinuous gradient rather
+   than of a second derivative. The constraint surface at the study's result is
+   not curved but *kinked*, and no order of Taylor expansion repairs a kink.
+   The fix was a first derivative of the other branch. Second derivatives may
+   still be worth having for the exact $\partial\beta/\partial x$ of §3.10's
+   steered quantity, but they must be taken away from the tie, and that is a
+   different piece of work from the one this entry asked for.
 8. **A third mechanism topology**, to turn the contrast of §6.3 into a trend.
 9. **Converging §6.4.** Both solves there stopped at their iteration cap, not
    at a convergence test, so 3395 km/L and 3501 km/L are lower bounds on what

@@ -304,6 +304,10 @@ ANALYTIC_OUTPUTS: tuple[str, ...] = (
     "compression_ratio",
     "stroke_error",
     "compression_ratio_error",
+    "expansion_stroke_1",
+    "expansion_stroke_2",
+    "compression_ratio_1",
+    "compression_ratio_2",
     "tdc_gap_margin",
     "compatibility",
     "compatibility_margin",
@@ -319,6 +323,12 @@ finite-difference gradients are worst, because each is an extremum over the
 crank angle: the grid point attaining it switches as the design moves, so a
 difference quotient straddles the switch and reports nonsense. The envelope
 theorem gives them exactly instead.
+
+The four numbered rows are the two strokes measured from *each* top dead centre
+rather than from the higher of the two. ``expansion_stroke`` and
+``stroke_error`` are derivatives of a maximum, which exist only away from the
+tie -- and §6.8 shows a design of this study sitting eleven nanometres from it,
+where the reported derivative is that of a branch the parts do not stay on.
 
 ``efficiency``, ``height``, ``width`` and ``clearance`` are left to finite
 differences: they are smooth, none of them is tight, and the first carries
@@ -450,6 +460,20 @@ def metric_jacobian(
     top = top_1 if values[top_1] >= values[top_2] else top_2
     d_expansion = d_lam_at[top] - d_lam_at[deep]
     d_compression = d_lam_at[top] - d_lam_at[shallow]
+    # The same two strokes measured from *each* top dead centre rather than
+    # from the higher one.  ``d_expansion`` above is the derivative of a
+    # maximum, which is only the derivative of whichever branch attains it --
+    # and at a design whose two top dead centres coincide, that is a
+    # derivative of something the parts do not have.  §6.8 measures what it
+    # costs; these rows are what a smooth reformulation would use.
+    d_expansion_branches = (
+        d_lam_at[top_1] - d_lam_at[deep],
+        d_lam_at[top_2] - d_lam_at[deep],
+    )
+    d_compression_branches = (
+        d_lam_at[top_1] - d_lam_at[shallow],
+        d_lam_at[top_2] - d_lam_at[shallow],
+    )
     d_ratio = area / spec.dead_volume * d_compression
     gap_sign = np.sign(values[top_1] - values[top_2])
     d_gap = gap_sign * (d_lam_at[top_1] - d_lam_at[top_2])
@@ -474,8 +498,12 @@ def metric_jacobian(
     return {
         "expansion_stroke": d_expansion,
         "stroke_error": d_expansion,
+        "expansion_stroke_1": d_expansion_branches[0],
+        "expansion_stroke_2": d_expansion_branches[1],
         "compression_ratio": d_ratio,
         "compression_ratio_error": d_ratio,
+        "compression_ratio_1": area / spec.dead_volume * d_compression_branches[0],
+        "compression_ratio_2": area / spec.dead_volume * d_compression_branches[1],
         "tdc_gap_margin": d_gap,
         "compatibility": d_compatibility,
         "compatibility_margin": d_compatibility,

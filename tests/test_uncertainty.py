@@ -50,7 +50,8 @@ def test_the_uncertain_vector_is_the_eleven_dimensions_plus_six():
 def test_the_widened_model_covers_five_constraints_the_narrow_one_cannot():
     assert WIDENED_NAMES[: len(RELIABILITY_NAMES)] == RELIABILITY_NAMES
     assert set(COUPLED_NAMES).isdisjoint(RELIABILITY_NAMES)
-    assert len(WIDENED_NAMES) == 13
+    assert len(COUPLED_NAMES) == 5
+    assert len(WIDENED_NAMES) == len(RELIABILITY_NAMES) + 5
 
 
 def test_the_constraint_vector_agrees_with_the_analytic_one_where_they_overlap():
@@ -88,7 +89,7 @@ def test_each_of_the_five_new_constraints_is_driven_by_a_parameter(widened):
 
 def test_the_variance_split_is_exact_rather_than_attributed(widened):
     _moments, shares = widened
-    assert shares.shares.shape == (13, 7)
+    assert shares.shares.shape == (len(WIDENED_NAMES), 7)
     rows = shares.shares.sum(axis=1)
     assert rows == pytest.approx(np.ones_like(rows))
 

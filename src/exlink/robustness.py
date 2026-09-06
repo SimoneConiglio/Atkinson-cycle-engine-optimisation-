@@ -491,11 +491,41 @@ CONSTRAINT_ROWS_FOR_RELIABILITY: dict[str, str] = {
     "compatibility": "compatibility_margin",
     "tdc_gap": "tdc_gap_margin",
     "side_load": "side_load_margin",
-    "stroke_upper": "stroke_error",
-    "stroke_lower": "stroke_error",
-    "ratio_upper": "compression_ratio_error",
-    "ratio_lower": "compression_ratio_error",
+    "stroke_upper_1": "expansion_stroke_1",
+    "stroke_upper_2": "expansion_stroke_2",
+    "stroke_lower_1": "expansion_stroke_1",
+    "stroke_lower_2": "expansion_stroke_2",
+    "ratio_upper_1": "compression_ratio_1",
+    "ratio_upper_2": "compression_ratio_2",
+    "ratio_lower_1": "compression_ratio_1",
+    "ratio_lower_2": "compression_ratio_2",
 }
+"""Which Jacobian row each reliability constraint is built from.
+
+The two strokes appear **once per top dead centre**, and that is not a
+refinement -- it is the difference between an estimate that agrees with
+sampling and one that is optimistic by a factor of seven.
+
+The expansion stroke is
+:math:`\\max(\\lambda_{tdc,1}, \\lambda_{tdc,2}) - \\min\\lambda`, a maximum of
+two smooth functions, and a maximum is differentiable only away from the tie.
+Linearising it uses the branch that attains the maximum *at the nominal
+design*; the parts, whose dimensions scatter by microns, straddle a tie of
+:math:`10^{-5}` mm and breach whichever branch is nearer.  At
+``RELIABLE_DESIGN`` the attaining branch has :math:`\beta = 3.00` and the other
+:math:`\beta = 2.36`, and it is the second that decides: sampling 150 000 exact
+builds gives :math:`9.3\times10^{-3}`, against :math:`1.3\times10^{-3}` from the
+attaining branch alone and :math:`9.1\times10^{-3}` from the other (§6.8).
+
+Carrying both is also the *right* probability statement for the upper bounds,
+not merely a safe one: the realised stroke exceeds its bound when **either**
+branch does, which is a union, and a union over correlated normals is exactly
+what the orthant integral of :func:`failure_probability` computes.  For the two
+*lower* bounds the honest statement is an intersection rather than a union, so
+carrying both there is conservative; both sit above :math:`\beta = 10` at every
+design in this study, so the conservatism costs nothing and is left in rather
+than special-cased.
+"""
 
 RELIABILITY_NAMES: tuple[str, ...] = tuple(CONSTRAINT_ROWS_FOR_RELIABILITY)
 
@@ -633,20 +663,36 @@ def constraint_jacobian(
     ratio = metrics.compression_ratio - targets.compression_ratio
     band_stroke, band_ratio = (float(width) for width in _band_widths(band))
 
+    # The two strokes measured from each top dead centre; see
+    # CONSTRAINT_ROWS_FOR_RELIABILITY for why both are carried.
+    phases = analysis.require_solved().thermodynamics.phases
+    branch_stroke = tuple(
+        value - targets.expansion_stroke for value in phases.expansion_strokes
+    )
+    branch_ratio = tuple(
+        1.0 + spec.piston_area * value / spec.dead_volume - targets.compression_ratio
+        for value in phases.compression_strokes
+    )
+
     values = {
         "rod_angle": metrics.rod_angle - targets.max_rod_angle,
         "compatibility": metrics.compatibility - targets.max_transmission,
         "tdc_gap": metrics.tdc_gap - targets.max_tdc_gap,
         "side_load": metrics.side_load_ratio - targets.max_side_load,
-        "stroke_upper": stroke - band_stroke,
-        "stroke_lower": -stroke - band_stroke,
-        "ratio_upper": ratio - band_ratio,
-        "ratio_lower": -ratio - band_ratio,
+        "stroke_upper_1": branch_stroke[0] - band_stroke,
+        "stroke_upper_2": branch_stroke[1] - band_stroke,
+        "stroke_lower_1": -branch_stroke[0] - band_stroke,
+        "stroke_lower_2": -branch_stroke[1] - band_stroke,
+        "ratio_upper_1": branch_ratio[0] - band_ratio,
+        "ratio_upper_2": branch_ratio[1] - band_ratio,
+        "ratio_lower_1": -branch_ratio[0] - band_ratio,
+        "ratio_lower_2": -branch_ratio[1] - band_ratio,
     }
+    del stroke, ratio
     gradients = []
     for name, source in CONSTRAINT_ROWS_FOR_RELIABILITY.items():
         gradient = np.asarray(rows[source], dtype=float)
-        gradients.append(-gradient if name.endswith("_lower") else gradient)
+        gradients.append(-gradient if "_lower" in name else gradient)
     return (
         np.array([values[name] for name in RELIABILITY_NAMES]),
         np.stack(gradients),

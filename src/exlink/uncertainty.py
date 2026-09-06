@@ -94,7 +94,12 @@ COUPLED_NAMES: tuple[str, ...] = ("saturation", "slenderness", "bearing", "runs"
 """The five constraints the dimensional-only model cannot price."""
 
 WIDENED_NAMES: tuple[str, ...] = (*RELIABILITY_NAMES, *COUPLED_NAMES)
-"""All thirteen, in the order this module's vectors use."""
+"""Every constraint, in the order this module's vectors use.
+
+The geometric ones first, in :data:`~exlink.robustness.RELIABILITY_NAMES` order
+-- which since §6.8 carries the two strokes once per top dead centre -- then the
+five that only exist once the loads are dynamic and the car is in the problem.
+"""
 
 
 @dataclass(frozen=True)
@@ -174,7 +179,7 @@ def constraint_vector(
     targets: DesignTargets = DEFAULT_TARGETS,
     band: dict[str, float] | None = None,
 ) -> FloatArray | None:
-    """All thirteen constraints of one evaluation, negative meaning satisfied.
+    """Every constraint of one evaluation, negative meaning satisfied.
 
     The eight of :data:`~exlink.robustness.RELIABILITY_NAMES` in their usual
     form, then the five that only exist once the loads are dynamic and the car
@@ -187,7 +192,7 @@ def constraint_vector(
         band: Half-widths of the two relaxed equalities.
 
     Returns:
-        Thirteen values, or ``None`` if the design was never sized.
+        The constraint vector, or ``None`` if the design was never sized.
     """
     coupled = performance.coupled
     friction = performance.friction
@@ -195,9 +200,16 @@ def constraint_vector(
         return None
 
     metrics = performance.metrics
-    stroke = metrics.expansion_stroke - targets.expansion_stroke
-    ratio = metrics.compression_ratio - targets.compression_ratio
+    phases = performance.analysis.require_solved().thermodynamics.phases
     band_stroke, band_ratio = (float(width) for width in _band_widths(band))
+    # One row per top dead centre, matching RELIABILITY_NAMES; §6.8 says why.
+    stroke = tuple(value - targets.expansion_stroke for value in phases.expansion_strokes)
+    ratio = tuple(
+        1.0
+        + performance.spec.piston_area * value / performance.spec.dead_volume
+        - targets.compression_ratio
+        for value in phases.compression_strokes
+    )
 
     diameters = np.array(
         [coupled.diameters[name] for name in coupled.diameters],
@@ -214,10 +226,14 @@ def constraint_vector(
             metrics.compatibility - targets.max_transmission,
             metrics.tdc_gap - targets.max_tdc_gap,
             metrics.side_load_ratio - targets.max_side_load,
-            stroke - band_stroke,
-            -stroke - band_stroke,
-            ratio - band_ratio,
-            -ratio - band_ratio,
+            stroke[0] - band_stroke,
+            stroke[1] - band_stroke,
+            -stroke[0] - band_stroke,
+            -stroke[1] - band_stroke,
+            ratio[0] - band_ratio,
+            ratio[1] - band_ratio,
+            -ratio[0] - band_ratio,
+            -ratio[1] - band_ratio,
             float(diameters.max()) - SATURATION_FRACTION * MAX_DIAMETER,
             slenderness - MAX_SLENDERNESS,
             peak_bearing / targets.max_bearing_load - 1.0,
@@ -243,7 +259,7 @@ def widened_moments(
     relative_step: float = 1.0e-3,
     **kwargs: Any,
 ) -> tuple[ConstraintMoments, VarianceShares] | None:
-    """First-order moments of all thirteen constraints, over all seventeen inputs.
+    """First-order moments of every constraint, over all seventeen inputs.
 
     Differences one full evaluation per uncertain entry, so it costs eighteen
     analyses -- seconds, not milliseconds.  See the module docstring for why
@@ -270,7 +286,7 @@ def widened_moments(
         **kwargs: Forwarded to :func:`exlink.performance.evaluate`.
 
     Returns:
-        The moments over thirteen constraints and the split of each one's
+        The moments over every constraint and the split of each one's
         variance by source, or ``None`` if the nominal design cannot be
         analysed or sized.
     """
@@ -407,7 +423,7 @@ def format_shares(shares: VarianceShares) -> str:
 
 
 def widened_reliability(design: Design, **kwargs: Any) -> Reliability | None:
-    """The system failure probability over all thirteen constraints.
+    """The system failure probability over every constraint.
 
     Args:
         design: The design to assess.

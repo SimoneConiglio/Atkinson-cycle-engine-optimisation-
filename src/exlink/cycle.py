@@ -69,6 +69,23 @@ class Phases:
     compression_stroke: float
     """``STC``, from top dead centre to the shallower bottom dead centre [mm]."""
 
+    expansion_strokes: tuple[float, float]
+    """``STE`` measured from *each* top dead centre separately [mm].
+
+    :attr:`expansion_stroke` is the larger of these two, and that maximum is the
+    only physically meaningful figure -- the clearance volume is set by
+    whichever top dead centre the piston reaches highest.  Both are kept because
+    a maximum of two smooth functions is not itself smooth, and at a design
+    whose two top dead centres nearly coincide the difference matters:
+    §6.8 shows the reliability estimate failing by a factor of seven at exactly
+    such a design, because it linearises one branch of a constraint the parts
+    straddle.  Having the branches separately is what lets that be diagnosed,
+    and what a smooth reformulation would bound.
+    """
+
+    compression_strokes: tuple[float, float]
+    """``STC`` measured from each top dead centre separately [mm]."""
+
     maxima_indices: tuple[int, int]
     minima_indices: tuple[int, int]
 
@@ -165,6 +182,14 @@ def find_phases(lam: FloatArray) -> Phases:
         tdc_gap=tdc_gap,
         expansion_stroke=expansion_stroke,
         compression_stroke=compression_stroke,
+        expansion_strokes=(
+            float(max_values[0] - min(min_values)),
+            float(max_values[1] - min(min_values)),
+        ),
+        compression_strokes=(
+            float(max_values[0] - max(min_values)),
+            float(max_values[1] - max(min_values)),
+        ),
         maxima_indices=(maxima[0], maxima[1]),
         minima_indices=(deep, shallow),
     )

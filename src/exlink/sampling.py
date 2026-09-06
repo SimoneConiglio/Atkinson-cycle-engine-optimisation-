@@ -146,24 +146,38 @@ def _exact_constraints(
     spec: EngineSpec,
     band: dict[str, float] | None,
 ) -> FloatArray | None:
-    """The eight constraints of :data:`RELIABILITY_NAMES`, not linearised."""
+    """The constraints of :data:`RELIABILITY_NAMES`, in that order, not linearised.
+
+    The two strokes appear once per top dead centre, because that is how
+    :mod:`exlink.robustness` now prices them and a check that scored a
+    different constraint set would be checking the wrong thing.
+    """
     analysis = analyse(design, samples=samples, spec=spec)
     if not analysis.valid:
         return None
     metrics = analysis.metrics
-    stroke = metrics.expansion_stroke - targets.expansion_stroke
-    ratio = metrics.compression_ratio - targets.compression_ratio
+    phases = analysis.require_solved().thermodynamics.phases
     band_stroke, band_ratio = (float(width) for width in _band_widths(band))
+
+    stroke = tuple(value - targets.expansion_stroke for value in phases.expansion_strokes)
+    ratio = tuple(
+        1.0 + spec.piston_area * value / spec.dead_volume - targets.compression_ratio
+        for value in phases.compression_strokes
+    )
     return np.array(
         [
             metrics.rod_angle - targets.max_rod_angle,
             metrics.compatibility - targets.max_transmission,
             metrics.tdc_gap - targets.max_tdc_gap,
             metrics.side_load_ratio - targets.max_side_load,
-            stroke - band_stroke,
-            -stroke - band_stroke,
-            ratio - band_ratio,
-            -ratio - band_ratio,
+            stroke[0] - band_stroke,
+            stroke[1] - band_stroke,
+            -stroke[0] - band_stroke,
+            -stroke[1] - band_stroke,
+            ratio[0] - band_ratio,
+            ratio[1] - band_ratio,
+            -ratio[0] - band_ratio,
+            -ratio[1] - band_ratio,
         ]
     )
 

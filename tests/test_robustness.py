@@ -195,9 +195,9 @@ def test_the_constraints_are_strongly_correlated() -> None:
     off_diagonal = moments.correlation[~np.eye(len(moments.names), dtype=bool)]
     assert np.max(np.abs(off_diagonal)) > 0.9
 
-    # The two sides of the stroke band are the same residual, negated.
-    upper = moments.names.index("stroke_upper")
-    lower = moments.names.index("stroke_lower")
+    # The two sides of one branch's stroke band are the same residual, negated.
+    upper = moments.names.index("stroke_upper_1")
+    lower = moments.names.index("stroke_lower_1")
     assert moments.correlation[upper, lower] == pytest.approx(-1.0, abs=1.0e-9)
 
 
@@ -308,7 +308,7 @@ def test_relaxing_the_gap_alone_is_not_enough() -> None:
     )
     reliability = failure_probability(COUPLED_DESIGN, samples=CRANK, targets=relaxed)
     assert reliability is not None
-    assert reliability.binding() == "stroke_lower"
+    assert reliability.binding().startswith("stroke_lower")
     assert reliability.system > 0.1
 
 
@@ -514,3 +514,72 @@ def test_the_system_index_saturates_where_the_per_constraint_one_does_not() -> N
     assert max(system) - min(system) < 1.0e-9
     # The per-constraint minimum keeps falling, so it still carries a gradient.
     assert all(b > a for a, b in zip(smallest[1:], smallest[:-1], strict=True))
+
+
+# -- the branch-aware stroke constraints of section 6.8 -------------------------
+
+
+def test_both_top_dead_centres_carry_their_own_constraints():
+    """Section 6.8: linearising the maximum used the wrong branch."""
+    from exlink.robustness import CONSTRAINT_ROWS_FOR_RELIABILITY, RELIABILITY_NAMES
+
+    assert "stroke_upper" not in RELIABILITY_NAMES
+    for side in ("upper", "lower"):
+        for branch in ("1", "2"):
+            assert f"stroke_{side}_{branch}" in RELIABILITY_NAMES
+            assert f"ratio_{side}_{branch}" in RELIABILITY_NAMES
+    # Each branch is built from its own Jacobian row, not from the maximum's.
+    assert CONSTRAINT_ROWS_FOR_RELIABILITY["stroke_upper_1"] == "expansion_stroke_1"
+    assert CONSTRAINT_ROWS_FOR_RELIABILITY["stroke_upper_2"] == "expansion_stroke_2"
+
+
+def test_the_branch_the_maximum_attains_is_not_the_one_that_binds():
+    """The whole of the factor of seven, in three numbers."""
+    import dataclasses
+
+    from exlink.constants import DEFAULT_TARGETS
+    from exlink.reference import RELIABLE_DESIGN
+    from exlink.robustness import constraint_moments
+
+    targets = dataclasses.replace(DEFAULT_TARGETS, max_tdc_gap=0.1)
+    band = {"expansion_stroke": 0.15, "compression_ratio": 0.15}
+    moments = constraint_moments(RELIABLE_DESIGN, targets=targets, band=band)
+    index = dict(zip(moments.names, range(len(moments.names)), strict=True))
+
+    attaining = moments.beta[index["stroke_upper_1"]]
+    other = moments.beta[index["stroke_upper_2"]]
+    # The branch that attains the maximum looks safe; the other one is what the
+    # parts breach, and it is the less stiff of the two.
+    assert attaining == pytest.approx(3.0, abs=0.05)
+    assert other == pytest.approx(2.36, abs=0.05)
+    assert moments.sigma[index["stroke_upper_2"]] > moments.sigma[index["stroke_upper_1"]]
+
+
+def test_the_two_top_dead_centres_of_the_study_result_are_numerically_coincident():
+    """Which is why the maximum is not differentiable there."""
+    from exlink.model import analyse
+    from exlink.reference import COUPLED_DESIGN, RELIABLE_DESIGN
+
+    tight = analyse(RELIABLE_DESIGN).require_solved().thermodynamics.phases
+    loose = analyse(COUPLED_DESIGN).require_solved().thermodynamics.phases
+    assert abs(tight.expansion_strokes[0] - tight.expansion_strokes[1]) < 1.0e-4
+    assert abs(loose.expansion_strokes[0] - loose.expansion_strokes[1]) > 1.0e-3
+    assert tight.expansion_stroke == max(tight.expansion_strokes)
+
+
+def test_the_corrected_estimate_matches_the_sampled_one():
+    """Section 6.8's payoff, at both designs, against 150 000 sampled builds."""
+    import dataclasses
+
+    from exlink.constants import DEFAULT_TARGETS
+    from exlink.reference import COUPLED_DESIGN, RELIABLE_DESIGN
+    from exlink.robustness import failure_probability
+
+    # Sampled: 0.6650 and 9.28e-3 respectively; see docs/results.md section 6.8.
+    loose = failure_probability(COUPLED_DESIGN)
+    assert loose.system == pytest.approx(0.665, rel=0.02)
+
+    targets = dataclasses.replace(DEFAULT_TARGETS, max_tdc_gap=0.1)
+    band = {"expansion_stroke": 0.15, "compression_ratio": 0.15}
+    tight = failure_probability(RELIABLE_DESIGN, targets=targets, band=band)
+    assert tight.system == pytest.approx(9.28e-3, rel=0.05)
