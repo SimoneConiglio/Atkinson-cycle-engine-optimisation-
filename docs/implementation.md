@@ -130,6 +130,7 @@ src/exlink/
 | the N2 chart and the XDSM of §4.2 | `exlink diagram -o docs/figures` |
 | the drive-cycle scores of §6.5 | `python examples/08_drive_cycle.py` |
 | what tubular sections are worth, §6.6 | `python examples/09_tubular_sections.py` |
+| the widened uncertainty model of §6.7 | `python examples/10_widened_uncertainty.py` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests

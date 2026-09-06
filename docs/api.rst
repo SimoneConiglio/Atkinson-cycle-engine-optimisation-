@@ -54,11 +54,13 @@ into kilograms, and the vehicle converts kilograms and efficiency into range.
 Study of the result
 -------------------
 
-Whether the optimum survives manufacturing tolerance, how strongly coupled the
-problem actually is, whether it survives being asked to run at more than one
-speed, and whether the finding generalises past one linkage.
+Whether the optimum survives manufacturing tolerance -- of the dimensions, and
+then of everything else -- how strongly coupled the problem actually is, whether
+it survives being asked to run at more than one speed, and whether the finding
+generalises past one linkage.
 
 .. automodule:: exlink.robustness
+.. automodule:: exlink.uncertainty
 .. automodule:: exlink.drivecycle
 .. automodule:: exlink.formulations
 .. automodule:: exlink.slidercrank

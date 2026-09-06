@@ -50,6 +50,14 @@ against 2733**. A wider speed range makes the flywheel a larger share of the mas
 linkage's and 96 % of the baseline's, and the flywheel is the item the flatter torque curve
 wins by a factor of 1.79.
 
+**A reliability model reports silence as safety.** The tolerance study above prices scatter on
+the eleven dimensions, which leaves five of the thirteen constraints with no probability at all.
+Widening the uncertain vector to seventeen — material strength, stiffness, density, friction,
+gas load — leaves every geometric constraint identical to the last figure, and finds that the
+binding constraint of the whole design was never in the model: the gear pair the mixed-integer
+master chose sits **exactly** on its face-width limit, so whether it fits is a coin flip. The
+pair the exhaustive search preferred is 0.4 km/L better and puts that constraint at β = 3.97.
+
 **A modelling conservatism is worth what the objective says, not what it looks like.** Solid
 round bars were the study's largest stated conservatism. The seven members turn out to be
 **1.3 %** of the engine, so boring them is worth 0.9 % of range — all of it *above* the design

@@ -675,7 +675,139 @@ joint or end-fitting mass where a tube must become solid to take a pin, and no
 account of what a bored trigonal link costs to make. All three of those work
 against the tube, so +0.9 % is an upper bound on a real one.
 
-## 6.7 Supporting measurements
+## 6.7 Reliability against more than the dimensions
+
+### Result
+
+§6.2 and §6.4 price manufacturing scatter on the eleven dimensions, and §3.10
+records the limitation that follows: five of the thirteen constraints get no
+probability at all, because they are not functions of those eleven. Widening
+the uncertain vector to seventeen — adding the material's yield strength,
+ultimate strength, stiffness and density, the friction coefficient, and the
+explosion ratio that sets the gas load — answers two questions, and the answers
+point in opposite directions.
+
+**Nothing that was already priced moves.** Every one of the eight geometric
+constraints turns out to be 100 % dimensional to the last figure reported:
+
+| constraint | $\sigma$, dimensions only | $\sigma$, widened |
+|---|---|---|
+| rod_angle | 0.00637 | 0.00637 |
+| compatibility | 0.00005 | 0.00005 |
+| tdc_gap | 0.01231 | 0.01231 |
+| side_load | 0.00012 | 0.00012 |
+| stroke_upper | 0.01814 | 0.01814 |
+| ratio_upper | 0.00463 | 0.00463 |
+
+That is exact and not approximate, and deliberately so: the widened model takes
+these rows from the same analytic Jacobian rather than differencing them, so a
+disagreement here would have been physics rather than a step size. §6.2's
+0.47 % and §6.4's $P_f = 1.3\times10^{-3}$ stand as reported.
+
+**What was not priced decides the design.** The system probability goes from
+$1.3\times10^{-3}$ to $5.0\times10^{-1}$, and all of it is one constraint:
+
+| constraint | $\beta$ | dominant source of its variance |
+|---|---|---|
+| saturation | 460 | explosion ratio, 87 % |
+| slenderness | 63 | ultimate strength, 94 % |
+| bearing | 36 | explosion ratio, 100 % |
+| runs | 26 | friction 51 %, explosion ratio 49 % |
+| **gear** | **0.00** | explosion ratio 71 %, yield strength 29 % |
+
+The gear pair the mixed-integer master picked — $m = 0.8$, $z = 48$ — sits
+*exactly* on its face-width limit, at 11.99997 against a bound of 12. Whether
+it fits is a coin flip.
+
+### Why the narrow model could not have found this
+
+Not because it was careless about the gears, but because the face width is not
+a function of any of the eleven dimensions. It is set by the torque the pair
+transmits and the strength of what it is cut from, and the pair itself is
+chosen by the master problem from a catalogue. A tolerance study on the
+linkage's lengths and angles has nothing to say about it, and would not have
+said anything however finely those lengths were held.
+
+The general shape is worth naming, because it is not specific to gears. **A
+reliability model prices what its uncertain vector contains, and reports
+silence as safety on everything else.** §3.10's honest statement that only
+seven constraints could carry a probability reads, in hindsight, as a warning
+that was not loud enough: the constraint that governs was in the other group.
+
+### What it costs to fix: nothing
+
+The mixed-integer master of §6.8 chose $m = 0.8$, $z = 48$; the exhaustive
+search over the same four candidates chose $m = 1.0$, $z = 39$, and was already
+known to be 0.6 % better at its own optimum. Re-scoring `RELIABLE_DESIGN`
+itself on the two:
+
+| gear pair | range | engine mass | $P_f$ | binding constraint |
+|---|---|---|---|---|
+| $m = 0.8$, $z = 48$ (pinned, the master's) | 3394.9 km/L | 12.94 kg | $5.0\times10^{-1}$ | gear, $\beta = 0.00$ |
+| $m = 1.0$, $z = 39$ (the exhaustive answer) | 3395.3 km/L | 12.91 kg | $1.4\times10^{-3}$ | stroke, $\beta = 3.00$ |
+| $m = 2.0$, $z = 19$ (chosen by the sizing rule) | 3396.0 km/L | 12.86 kg | $1.3\times10^{-3}$ | stroke, $\beta = 3.00$ |
+
+The ordering is the same on every column. The pinned pair is the shortest
+ranged, the heaviest, and the only one whose gear constraint binds; the pair
+the sizing rule picks unaided — face width 2.4 modules against a limit of 12 —
+recovers the dimensional-only probability exactly, because with the gear
+constraint at $\beta = 12$ the widened model has nothing left to add.
+
+There is no trade to negotiate here; the pinned choice was simply worse on all
+three counts, and the range gap of 0.03 % is far too small to have revealed it.
+Only the widened model could.
+
+The recommendation is one line: **the study's result should not be built with
+the pair the master returned.** Its range is 3395 km/L whichever pair is
+fitted, to four figures, and its reliability is either $1.3\times10^{-3}$ or a
+coin flip depending on which.
+
+### Where each uncertainty actually goes
+
+The variance split is exact rather than attributed — at first order and with
+the entries independent, the variance is a plain sum of $(\partial g/\partial
+u_j \, \sigma_j)^2$, with no interaction term to allocate:
+
+| constraint | dimensions | yield | ultimate | friction | explosion ratio |
+|---|---|---|---|---|---|
+| the eight geometric | 100 % | — | — | — | — |
+| saturation | 0 % | — | 13 % | — | 87 % |
+| slenderness | 0 % | — | 94 % | — | — |
+| bearing | 0 % | — | — | — | 100 % |
+| runs | 0 % | — | — | 51 % | 49 % |
+| gear | 0 % | 29 % | — | — | 71 % |
+
+Two entries are worth reading. `slenderness` rides almost entirely on the
+*ultimate* strength, not the yield, which says the members are sized by fatigue
+rather than by static yield — the endurance limit is $0.5 S_u$ before Marin
+corrections, so the scatter that matters is the one in $S_u$. And `runs`
+splits evenly between friction and the gas load, which is the mechanical
+efficiency of §6.3 restated as a variance: the margin between indicated and
+brake work is a difference of two uncertain quantities of comparable size.
+
+Stiffness and density earn their place by not mattering: 0 % and 6 % of one
+constraint between them, which is what a CoV of 0.03 and 0.01 buys. Carrying
+them costs two of the eighteen analyses and settles the question.
+
+### Discussion
+
+The finding here is not really about gears. It is that **a reliability model
+prices what its uncertain vector contains and reports silence as safety on
+everything outside it**, and that the constraint which governs a design has no
+obligation to be inside. §3.10 said plainly that only some constraints could
+carry a probability; that statement was true, correctly worded, and read as a
+limitation rather than as the warning it was.
+
+Two limits of what is done here. The uncertain parameters are taken
+independent, which is conservative for the two strengths — a low-yield heat
+usually has a low ultimate — and neutral for the rest. And the model remains
+first order: the widened constraints include ``saturation``, which is a
+threshold on a fixed-point iteration and is about as far from linear as a
+constraint gets, though at $\beta = 460$ its linearisation error is not what
+decides anything.
+
+
+## 6.8 Supporting measurements
 
 The results above rest on properties of the problem and of the implementation
 that are asserted where they are used and measured here: how strongly the
@@ -722,6 +854,12 @@ Half the sub-solves, 0.6 % short of the best lattice point. The convexification
 options of §2.7 were enabled and measured to change nothing here: the master
 terminates after two solves, which is less history than the adaptive correction
 needs.
+
+The 0.6 % is not the whole cost of stopping early. §6.7 shows the pair the
+master chose sits exactly on its face-width limit, so the design built with it
+has a 50 % chance of not fitting; the pair the exhaustive search chose is
+0.4 km/L better *and* has $\beta = 3.97$ on that constraint. The master's
+answer was worse on both counts, and the range gap alone did not say so.
 
 ### Local optima
 

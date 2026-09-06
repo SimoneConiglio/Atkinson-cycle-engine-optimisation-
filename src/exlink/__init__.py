@@ -96,6 +96,13 @@ from .slidercrank import (
     slidercrank_reliability,
 )
 from .synthesis import TargetMotion, fit_to_target, target_from_design, target_motion
+from .uncertainty import (
+    DEFAULT_SCATTER,
+    ParameterScatter,
+    VarianceShares,
+    widened_moments,
+    widened_reliability,
+)
 from .vehicle import RangeResult, Vehicle
 
 __all__ = [
@@ -103,6 +110,7 @@ __all__ = [
     "DEFAULT_MATERIAL",
     "DEFAULT_PENALTY",
     "DEFAULT_SAFETY",
+    "DEFAULT_SCATTER",
     "DEFAULT_SPEC",
     "DEFAULT_SPEED_RPM",
     "DEFAULT_TARGETS",
@@ -140,6 +148,7 @@ __all__ = [
     "Material",
     "MemberSizing",
     "Metrics",
+    "ParameterScatter",
     "PenaltyValues",
     "Performance",
     "Phase",
@@ -153,6 +162,7 @@ __all__ = [
     "TargetMotion",
     "Thermodynamics",
     "ToleranceReport",
+    "VarianceShares",
     "Vehicle",
     "analyse",
     "compare_formulations",
@@ -175,6 +185,8 @@ __all__ = [
     "target_from_design",
     "target_motion",
     "tolerance_report",
+    "widened_moments",
+    "widened_reliability",
 ]
 
 #: :mod:`exlink.minlp` is deliberately *not* re-exported here.  It needs the

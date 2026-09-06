@@ -576,13 +576,57 @@ def constraint_moments(
     Returns:
         The moments, or ``None`` if the design cannot be analysed.
     """
+    outcome = constraint_jacobian(design, samples, targets, spec, band)
+    if outcome is None:
+        return None
+    value, jacobian = outcome
+    sigma_matrix = covariance(design, grade, angular)
+
+    covariances = jacobian @ sigma_matrix @ jacobian.T
+    sigma = np.sqrt(np.clip(np.diag(covariances), 0.0, None))
+    outer = np.outer(sigma, sigma)
+    correlation = np.divide(covariances, outer, out=np.eye(sigma.size), where=outer > 0.0)
+    return ConstraintMoments(
+        names=RELIABILITY_NAMES,
+        value=value,
+        sigma=sigma,
+        correlation=np.clip(correlation, -1.0, 1.0),
+    )
+
+
+def constraint_jacobian(
+    design: Design,
+    samples: int = 360,
+    targets: DesignTargets = DEFAULT_TARGETS,
+    spec: EngineSpec = DEFAULT_SPEC,
+    band: dict[str, float] | None = None,
+) -> tuple[FloatArray, FloatArray] | None:
+    """The eight geometric constraints and their exact derivatives.
+
+    Split out of :func:`constraint_moments` so that
+    :mod:`exlink.uncertainty`, which reaches the other five constraints by
+    finite differences, can still take *these* columns analytically.  Where an
+    exact derivative exists there is no reason to difference it, and the two
+    models then agree on their overlap by construction rather than to within a
+    step size.
+
+    Args:
+        design: The design.
+        samples: Crank angles per revolution.
+        targets: Constraint right-hand sides.
+        spec: Fixed engine data.
+        band: Half-widths of the two relaxed equalities.
+
+    Returns:
+        ``(value, jacobian)`` of shapes ``(8,)`` and ``(8, 11)``, or ``None``
+        if the design cannot be analysed.
+    """
     analysis = analyse(design, samples=samples, spec=spec)
     if not analysis.valid:
         return None
 
     kinematic = kinematic_jacobian(design, analysis.require_solved().kinematics, spec)
     rows = metric_jacobian(design, analysis, kinematic, spec)
-    sigma_matrix = covariance(design, grade, angular)
 
     metrics = analysis.metrics
     stroke = metrics.expansion_stroke - targets.expansion_stroke
@@ -603,17 +647,9 @@ def constraint_moments(
     for name, source in CONSTRAINT_ROWS_FOR_RELIABILITY.items():
         gradient = np.asarray(rows[source], dtype=float)
         gradients.append(-gradient if name.endswith("_lower") else gradient)
-    jacobian = np.stack(gradients)
-
-    covariances = jacobian @ sigma_matrix @ jacobian.T
-    sigma = np.sqrt(np.clip(np.diag(covariances), 0.0, None))
-    outer = np.outer(sigma, sigma)
-    correlation = np.divide(covariances, outer, out=np.eye(sigma.size), where=outer > 0.0)
-    return ConstraintMoments(
-        names=RELIABILITY_NAMES,
-        value=np.array([values[name] for name in RELIABILITY_NAMES]),
-        sigma=sigma,
-        correlation=np.clip(correlation, -1.0, 1.0),
+    return (
+        np.array([values[name] for name in RELIABILITY_NAMES]),
+        np.stack(gradients),
     )
 
 
@@ -697,11 +733,27 @@ def failure_probability(
     Returns:
         The reliability, or ``None`` if the design cannot be analysed.
     """
-    from scipy.stats import multivariate_normal, norm
-
     moments = constraint_moments(design, grade, angular, samples, targets, spec, band)
     if moments is None:
         return None
+    return reliability_from_moments(moments)
+
+
+def reliability_from_moments(moments: ConstraintMoments) -> Reliability:
+    """The orthant integral itself, given the moments.
+
+    Split out from :func:`failure_probability` so that the widened uncertainty
+    model of :mod:`exlink.uncertainty` -- which reaches its moments a different
+    way, and prices five more constraints -- goes through exactly this integral
+    rather than a second implementation of it.
+
+    Args:
+        moments: Constraint values, standard deviations and correlations.
+
+    Returns:
+        The system and independent probabilities, and the per-constraint ones.
+    """
+    from scipy.stats import multivariate_normal, norm
 
     beta = moments.beta
     per_constraint = {

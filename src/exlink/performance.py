@@ -59,7 +59,7 @@ from .constants import DEFAULT_SPEC, EngineSpec
 from .coupled import CoupledResult, solve_coupled
 from .design import Design
 from .dynamics import DEFAULT_SPEED_RPM
-from .friction import FrictionLosses
+from .friction import JOURNAL_FRICTION, PISTON_FRICTION, FrictionLosses
 from .friction import losses as friction_losses
 from .manufacturing import round_up_to_stock
 from .mass_budget import SPEED_FLUCTUATION, MassBudget, assemble
@@ -231,6 +231,7 @@ def evaluate(
     spec: EngineSpec = DEFAULT_SPEC,
     material: Material = DEFAULT_MATERIAL,
     safety: SafetyFactors = DEFAULT_SAFETY,
+    friction_scale: float = 1.0,
     **kwargs: Any,
 ) -> Performance:
     """Run the full chain for one design.
@@ -246,6 +247,9 @@ def evaluate(
         spec: Fixed engine data.
         material: Structural material.
         safety: Design factors.
+        friction_scale: Multiplier on both Coulomb coefficients.  Exists so
+            that :mod:`exlink.uncertainty` can propagate friction scatter,
+            which is not a design variable and not a constant either.
         **kwargs: Forwarded to :func:`exlink.coupled.solve_coupled`.
 
     Returns:
@@ -269,7 +273,12 @@ def evaluate(
         spec=spec,
         **kwargs,
     )
-    friction = friction_losses(coupled.loads, coupled.diameters)
+    friction = friction_losses(
+        coupled.loads,
+        coupled.diameters,
+        journal_friction=friction_scale * JOURNAL_FRICTION,
+        piston_friction=friction_scale * PISTON_FRICTION,
+    )
 
     metrics = analysis.metrics
     thermo = solved.thermodynamics

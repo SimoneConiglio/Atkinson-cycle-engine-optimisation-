@@ -53,6 +53,15 @@ point is made of. Given to both engines the comparison of §6.3 moves from
 just as hard (§6.6). In a coupled problem the size of an effect is not the size
 of the thing it acts on.
 
+**A reliability model reports silence as safety.** Widening the uncertain
+vector from the eleven dimensions to seventeen — material strength, stiffness,
+density, friction, gas load — leaves every geometric constraint identical to
+the last figure and reveals that the binding constraint of the whole design was
+never in the model: the gear pair the mixed-integer master chose sits exactly
+on its face-width limit, at $\beta = 0.00$. The honest note in §3.10 that only
+some constraints could carry a probability was a warning about the answer, not
+a footnote to it, and the pair that fixes it costs nothing at all (§6.7).
+
 **A schedule of speeds rewards smoothness, and the advantage widens to 19.3 %.**
 Scored over four speeds as one engine rather than at one point, both designs
 lose range and the conventional engine loses more. The reason is structural: a
@@ -124,6 +133,12 @@ nonlinear constraint, 0.42 against 0.54 sampled. Its derivatives are finite
 differences because the exact route needs $\nabla^2 g$, which the package does
 not compute.
 
+**The uncertain vector was too narrow, and now is not.** §6.7 widens it from
+eleven dimensions to seventeen and prices every constraint. What is left is
+that the six added parameters are taken independent, and that the widened
+model costs eighteen analyses rather than one Jacobian, so it remains a
+reporting tool rather than something the optimizer can call.
+
 **The mixed-integer bound is not a bound.** Outer approximation's guarantee
 requires a convex sub-problem, which this problem violates comprehensively.
 
@@ -171,12 +186,18 @@ In rough order of value per unit of effort:
    tubes. What is still missing is a wall-buckling check, end-fitting mass, and
    a bore ratio treated as a design variable rather than scanned — all three of
    which work against the tube, so 0.9 % is an upper bound.
-3. **A widened uncertainty model**, carrying material, load and friction
-   scatter alongside the dimensional tolerances. This is the prerequisite for
-   everything else on the reliability side: $\Sigma$ currently holds only ISO 286
-   dimensional errors, which is why only seven of the twelve constraints can
-   honestly carry a probability (§3.10). Widening it is what would let the
-   bearing, saturation and vehicle constraints join.
+3. ~~**A widened uncertainty model**, carrying material, load and friction
+   scatter alongside the dimensional tolerances.~~ **Done** (§6.7), and it
+   found the design's binding constraint. Widening $\Sigma$ to seventeen
+   entries leaves all eight geometric constraints identical to the last figure
+   — §6.2 and §6.4 stand — and prices the five that had no probability at all.
+   One of them, the gear pair's face width, sits exactly on its limit at
+   $\beta = 0.00$, so the system probability is $5\times10^{-1}$ rather than
+   $1.3\times10^{-3}$. The fix costs nothing: the pair the exhaustive search
+   preferred is 0.4 km/L better and puts that constraint at $\beta = 3.97$.
+   What remains is a correlated model of the two strengths (independence is
+   conservative here) and second-order treatment of ``saturation``, which is a
+   threshold on a fixed point and the least linear constraint in the set.
 4. **A way to reach the reliable region**, which is now known to be worth
    reaching. The loop itself is closed --
    ``build_range_scenario(beta_target=...)`` constrains the reliability index
@@ -308,6 +329,8 @@ Full provenance for every design is in §6.0.
 | gap bound above which the gap stops binding | 0.054 mm; 0.1 mm adopted |
 | stroke band the *system* then needs | ±0.15 mm against ±0.05 |
 | range given up by widening both | −0.47 % |
+| the same design against all thirteen constraints | $5\times10^{-1}$, binding on the gear pair |
+| with the gear pair the exhaustive search preferred | $1.4\times10^{-3}$, at +0.4 km/L |
 | failure probability bought | 0.645 → $1.9\times10^{-5}$ |
 
 ---
