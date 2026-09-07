@@ -60,9 +60,9 @@ jobs:
       - run: touch docs/_build/html/.nojekyll
       - name: Check every page rendered
         run: |
-          for page in index introduction state_of_the_art methodology framework \
-                      use_case results conclusions references implementation \
-                      api theory; do
+          for page in index introduction state_of_the_art formulation method \
+                      results conclusions references theory implementation \
+                      supporting api; do
             test -f "docs/_build/html/$page.html" || {
               echo "::error::$page.html was not produced"; exit 1; }
           done
