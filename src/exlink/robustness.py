@@ -500,17 +500,17 @@ CONSTRAINT_ROWS_FOR_RELIABILITY: dict[str, str] = {
     "ratio_lower_1": "compression_ratio_1",
     "ratio_lower_2": "compression_ratio_2",
 }
-"""Which Jacobian row each reliability constraint is built from.
+r"""Which Jacobian row each reliability constraint is built from.
 
 The two strokes appear **once per top dead centre**, and that is not a
 refinement -- it is the difference between an estimate that agrees with
 sampling and one that is optimistic by a factor of seven.
 
 The expansion stroke is
-:math:`\\max(\\lambda_{tdc,1}, \\lambda_{tdc,2}) - \\min\\lambda`, a maximum of
+:math:`\max(\lambda_{tdc,1}, \lambda_{tdc,2}) - \min\lambda`, a maximum of
 two smooth functions, and a maximum is differentiable only away from the tie.
 Linearising it uses the branch that attains the maximum *at the nominal
-design*; the parts, whose dimensions scatter by some 8 um, straddle a tie of
+design*; the parts, whose dimensions scatter by some 7 um, straddle a tie of
 0.107 um and breach whichever branch is nearer.  At
 ``RELIABLE_DESIGN`` the attaining branch has :math:`\beta = 3.00` and the other
 :math:`\beta = 2.36`, and it is the second that decides: sampling 150 000 exact

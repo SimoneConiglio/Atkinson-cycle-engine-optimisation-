@@ -87,10 +87,15 @@ $$R_1 \to Q \to A \to E \to P \to H \to R_1 = 0.$$
 
 Projecting the first on the axes and isolating the terms in $a$ and $c$,
 
-$$\begin{aligned}
+```{math}
+:nowrap:
+\begin{equation}
+\begin{aligned}
 A &= q_1 \sin\theta_1 - q_2 \sin\theta_2 + I\cos\theta_r, \\
 B &= -q_1 \cos\theta_1 + q_2 \cos\theta_2 + I\sin\theta_r.
-\end{aligned} \tag{A.3}$$
+\end{aligned} \tag{A.3}
+\end{equation}
+```
 
 Squaring and adding eliminates $\theta_a$ and $\theta_T$ separately, leaving
 their difference $T = \theta_a - \theta_T$:
@@ -287,13 +292,18 @@ numerical value is not a detailed CAD clearance.
 
 **The conventional formulation.** Collecting these,
 
-$$\begin{aligned}
+```{math}
+:nowrap:
+\begin{equation}
+\begin{aligned}
 \min_{X} \quad & f(X) = (-\eta,\; H,\; B)^{\mathsf{T}} \\
 \text{s.t.}\quad & c(X) = (\mathrm{mra} - 10,\; W - 0.985,\; g - 0.01,\;
   10 - d,\; \gamma - 0.02)^{\mathsf{T}} \le 0, \\
 & c_{\mathrm{eq}}(X) = (\mathrm{STE} - 74,\; \varepsilon - 16)^{\mathsf{T}} = 0,\\
 & l_b \le X \le u_b,
-\end{aligned} \tag{A.13}$$
+\end{aligned} \tag{A.13}
+\end{equation}
+```
 
 with $W = \max(\delta_{c1}, \delta_{c2})$ and $\gamma = \max(D)/\max(P)$. §3
 replaces it.

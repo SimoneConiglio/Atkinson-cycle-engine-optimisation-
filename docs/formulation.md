@@ -105,10 +105,15 @@ $$\max_X \; R(X) \quad [\mathrm{km/L}], \tag{3.2}$$
 
 which requires the chain
 
-$$X \longrightarrow \lambda(\theta_1) \longrightarrow p(V) \longrightarrow
+```{math}
+:nowrap:
+\begin{equation}
+X \longrightarrow \lambda(\theta_1) \longrightarrow p(V) \longrightarrow
   \text{loads} \longleftrightarrow \text{sections} \longrightarrow
   \begin{cases} W_{\mathrm{brake}} \\ m_{\mathrm{engine}} \end{cases}
-  \longrightarrow R. \tag{3.3}$$
+  \longrightarrow R. \tag{3.3}
+\end{equation}
+```
 
 Range prices the competing quantities at rates the physics fixes rather than the
 designer: a point of brake efficiency is worth a fixed distance through the fuel

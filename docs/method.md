@@ -117,12 +117,17 @@ degenerate active set does not supply, whereas an outer-approximation cut needs
 only $\nabla f$ and $\nabla g$ at the visited point, which §4.2 already provides
 exactly. With $y$ a one-hot selection over the lattice the master is
 
-$$\min_{x,y,\eta}\ \eta \quad\text{s.t.}\quad
+```{math}
+:nowrap:
+\begin{equation}
+\min_{x,y,\eta}\ \eta \quad\text{s.t.}\quad
 \begin{cases}
 \eta \ge f_k + \nabla f_k^{\mathsf T}(x - x_k), \\
 0 \ge g_k + \nabla g_k^{\mathsf T}(x - x_k), \\
 I = \sum_j I_j y_j, \quad \sum_j y_j = 1.
-\end{cases} \tag{4.8}$$
+\end{cases} \tag{4.8}
+\end{equation}
+```
 
 Infeasible sub-problems need no special machinery: their constraint
 linearisations are added without an objective cut, which excludes that lattice
@@ -186,8 +191,13 @@ produce. Restarts are therefore constructed *on* the manifold: perturb the
 incumbent, project the perturbation back onto the two equalities by a
 minimum-norm Newton step from the analytic Jacobians,
 
-$$\Delta X = -J^{+} r, \qquad
-  J = \begin{bmatrix}\nabla\mathrm{STE}\\ \nabla\varepsilon\end{bmatrix}, \tag{4.11}$$
+```{math}
+:nowrap:
+\begin{equation}
+\Delta X = -J^{+} r, \qquad
+  J = \begin{bmatrix}\nabla\mathrm{STE}\\ \nabla\varepsilon\end{bmatrix}, \tag{4.11}
+\end{equation}
+```
 
 and let the optimizer restore the inequalities from there. This is a local-search
 diversification, not a global method; §5.5 reports what it settles and what it
@@ -195,7 +205,9 @@ does not.
 
 ## 4.7 The problem solved
 
-$$
+```{math}
+:nowrap:
+\begin{equation}
 \begin{aligned}
 \max_{X,\,y} \quad & R(X, y) && \text{range [km/L]} \\
 \text{s.t.}\quad
@@ -212,7 +224,8 @@ $$
   && \text{catalogue (4.7)} \\
 & X \in [X_{lb}, X_{ub}] \subset \mathbb R^{11}
 \end{aligned} \tag{4.12}
-$$
+\end{equation}
+```
 
 Twelve constraints, with $y$ the converged MDA state of §4.3. Two details the
 code makes visible and the notation does not: each two-sided band is attached as
