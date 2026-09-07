@@ -450,7 +450,7 @@ def test_the_shipped_result_is_what_the_documentation_claims() -> None:
     )
     assert reliability is not None
     # 2.35, not the 3.00 the solve that produced this design was holding: it
-    # held the index of the stroke branch that attains the maximum, and §6.8
+    # held the index of the stroke branch that attains the maximum, and §5.3
     # shows the other branch is what the parts breach.  Verified against
     # 150 000 sampled builds at P_f = 9.28e-3, which is beta = 2.35.
     assert reliability.system_beta == pytest.approx(2.35, abs=0.05)

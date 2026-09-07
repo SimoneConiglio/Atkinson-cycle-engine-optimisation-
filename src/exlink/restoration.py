@@ -2,13 +2,13 @@
 
 The measurement this answers
 ----------------------------
-§6.11 reports that manifold-projected restarts reached feasibility in **0 of 6
-attempts** on the range problem at an affordable budget, which is why §3.9's
+Appendix C reports that manifold-projected restarts reached feasibility in **0 of 6
+attempts** on the range problem at an affordable budget, which is why §4.6's
 multistart is inconclusive there: it is not that the restarts found worse
 optima, it is that they never found the feasible set at all, so there was
-nothing to compare.  §7.3 asks for a restoration phase before each restart.
+nothing to compare.  §6.3 asks for a restoration phase before each restart.
 
-The reason a restart lands outside is §3.4's: the relaxed equalities make the
+The reason a restart lands outside is §4.1's: the relaxed equalities make the
 feasible set a thin shell, and a design scattered from a good one by any
 useful amount is outside it.  A range-maximising solve started there spends its
 whole budget on the constraint violation and has none left for the objective --
@@ -65,7 +65,7 @@ DEFAULT_MARGIN = 1.0e-4
 """Smallest margin counted as being *inside* rather than merely on the boundary.
 
 Zero would accept a point sitting exactly on a constraint, which is the state
-§6.2 shows fails half the builds and §6.8 shows breaks the reliability
+§5.2 shows fails half the builds and §5.3 shows breaks the reliability
 estimate.  A restoration that stops at the boundary has not done its job.
 """
 

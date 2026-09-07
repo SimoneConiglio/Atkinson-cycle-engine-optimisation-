@@ -77,7 +77,7 @@ class Phases:
     whichever top dead centre the piston reaches highest.  Both are kept because
     a maximum of two smooth functions is not itself smooth, and at a design
     whose two top dead centres nearly coincide the difference matters:
-    §6.8 shows the reliability estimate failing by a factor of seven at exactly
+    §5.3 shows the reliability estimate failing by a factor of seven at exactly
     such a design, because it linearises one branch of a constraint the parts
     straddle.  Having the branches separately is what lets that be diagnosed,
     and what a smooth reformulation would bound.

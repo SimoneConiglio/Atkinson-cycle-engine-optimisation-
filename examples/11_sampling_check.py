@@ -42,7 +42,7 @@ def main() -> None:
     print("=" * 66)
     for label, design, targets, band in (
         ("COUPLED_DESIGN, spec as written", COUPLED_DESIGN, DEFAULT_TARGETS, None),
-        ("RELIABLE_DESIGN, §6.2's bounds", RELIABLE_DESIGN, TARGETS, BAND),
+        ("RELIABLE_DESIGN, §5.2's bounds", RELIABLE_DESIGN, TARGETS, BAND),
     ):
         form = failure_probability(design, targets=targets, band=band)
         sampled = sampled_reliability(

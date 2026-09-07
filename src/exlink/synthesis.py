@@ -413,7 +413,7 @@ def fit_within_constraints(
     ``hold_bands`` carries the same argument one step further.  Against a target
     the mechanism cannot reach, holding ``g <= 0`` and chasing the motion trade
     against each other, and the strokes drift out of the tolerance bands of
-    §3.4.  Those bands are constraints too, so they belong in the problem rather
+    §4.1.  Those bands are constraints too, so they belong in the problem rather
     than being checked afterwards: with them added the solve either returns a
     design that is feasible *and* in band, or reports that it found none, which
     is the useful answer in both cases.
@@ -549,7 +549,7 @@ def _range_constraints(
     """Every constraint of the full problem, as ``>= 0`` when satisfied.
 
     Geometric, tolerance bands, coupled and vehicle, in that order -- the same
-    twelve §3.10 states, minus nothing.
+    twelve §4.7 states, minus nothing.
     """
     from .disciplines import MEMBER_IS_SLENDER
     from .dynamics import MEMBER_NAMES
@@ -622,7 +622,7 @@ def maximise_range_from_target(
 
     The formulation
     ---------------
-    This is the whole problem of §3.10 with the prescribed motion carried
+    This is the whole problem of §4.7 with the prescribed motion carried
     along, rather than a synthesis problem that hands its answer to a separate
     optimization:
 
@@ -775,7 +775,7 @@ def maximise_range_from_target(
         # ``beta_i = -g_i / sigma_i`` has no such floor.  It is smooth through
         # the band and orders designs the same way on the safe side.
         #
-        # The cost is that this is the per-constraint statement §3.8 argues
+        # The cost is that this is the per-constraint statement §4.5 argues
         # against: the system is likelier to fail than any single constraint,
         # so ``min_i beta_i >= t`` is *weaker* than ``beta_sys >= t``.  It is
         # used to steer the search, and the system probability is reported at
@@ -787,7 +787,7 @@ def maximise_range_from_target(
     upper = np.array(bounds.upper, dtype=float)
     begin = np.clip(start.to_array(), lower, upper)
     if module is not None and teeth is not None:
-        # Pinning the gear pair pins the centre distance: §3.7's catalogue
+        # Pinning the gear pair pins the centre distance: §4.4's catalogue
         # relation makes ``I`` an *output* of the choice, not a free variable.
         # Leaving it in the search lets the linkage drift to a centre distance
         # the chosen pair cannot realise, and every downstream quantity is then
@@ -838,7 +838,7 @@ def feasible_starts(
 ) -> list[FitResult]:
     """Generate starting points by fitting random starts to the target.
 
-    This is the answer to §3.4's measurement that uniform sampling finds
+    This is the answer to §4.1's measurement that uniform sampling finds
     0 feasible designs in 12 000 draws.  Sampling *and then fitting* is a
     different operation: the random draw only has to be analysable, and the fit
     carries it towards a motion that already satisfies both equalities.

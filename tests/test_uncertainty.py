@@ -118,7 +118,7 @@ def test_the_widened_model_contains_the_narrow_one_exactly(widened):
     """Section 6.7's first finding, and the one that had to be checked first.
 
     The eight geometric constraints turn out to be untouched by the six new
-    parameters, so §6.2's and §6.4's reliability figures stand.  That is a
+    parameters, so §5.2's and §5.5's reliability figures stand.  That is a
     result only because it is *exact*: the widened model takes the same
     analytic gradients for these rows rather than differencing them, so any
     disagreement here would be physics rather than a step size.

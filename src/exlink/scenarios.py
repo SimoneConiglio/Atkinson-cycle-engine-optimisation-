@@ -1471,7 +1471,7 @@ def build_range_scenario(
         # Reliability enters as one more discipline, not as a post-processing
         # step: its output is a constraint the optimizer must hold at every
         # iteration.  It depends on the design variables only, so it does not
-        # join the MDA -- the coupling is unchanged and §3.6's count still
+        # join the MDA -- the coupling is unchanged and §4.3's count still
         # holds.
         disciplines.append(
             FailureProbabilityDiscipline(

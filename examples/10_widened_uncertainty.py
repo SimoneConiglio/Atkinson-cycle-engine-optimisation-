@@ -30,10 +30,10 @@ from exlink.uncertainty import (
 )
 
 BAND = {"expansion_stroke": 0.15, "compression_ratio": 0.15}
-"""The relaxed bounds §6.2 settles on."""
+"""The relaxed bounds §5.2 settles on."""
 
 TARGETS = dataclasses.replace(DEFAULT_TARGETS, max_tdc_gap=0.1)
-"""With the top-dead-centre gap widened, as §6.2 settles it."""
+"""With the top-dead-centre gap widened, as §5.2 settles it."""
 
 RUN = {"band": BAND, "targets": TARGETS, "speed_rpm": 1000.0}
 
@@ -94,7 +94,7 @@ def main() -> None:
             f"P_f = {reliability.system:9.3e}   binding: {worst[0]} at beta {worst[1]:.2f}"
         )
     narrow_reliability = failure_probability(RELIABLE_DESIGN, targets=TARGETS, band=BAND)
-    print(f"\n  the dimensional-only figure §6.4 reports: {narrow_reliability.system:9.3e}")
+    print(f"\n  the dimensional-only figure §5.5 reports: {narrow_reliability.system:9.3e}")
     print(
         "\n  The pinned pair sits on its face-width limit, so whether it fits"
         "\n  is a coin flip -- and no amount of dimensional tolerance would"

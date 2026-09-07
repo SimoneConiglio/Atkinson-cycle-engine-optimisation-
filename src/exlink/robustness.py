@@ -189,7 +189,7 @@ def _constraint_vector(
     """All seven constraints as one vector, negative meaning satisfied.
 
     ``band`` widens the two relaxed equalities.  It has to be a parameter
-    rather than a constant, because §6.2's question -- what bound would this
+    rather than a constant, because §5.2's question -- what bound would this
     design need in order to be reliable? -- cannot be asked of a formulation
     whose bounds are fixed.
     """
@@ -515,7 +515,7 @@ design*; the parts, whose dimensions scatter by some 8 um, straddle a tie of
 ``RELIABLE_DESIGN`` the attaining branch has :math:`\beta = 3.00` and the other
 :math:`\beta = 2.36`, and it is the second that decides: sampling 150 000 exact
 builds gives :math:`9.3\times10^{-3}`, against :math:`1.3\times10^{-3}` from the
-attaining branch alone and :math:`9.1\times10^{-3}` from the other (§6.8).
+attaining branch alone and :math:`9.1\times10^{-3}` from the other (§5.3).
 
 Carrying both is also the *right* probability statement for the upper bounds,
 not merely a safe one: the realised stroke exceeds its bound when **either**

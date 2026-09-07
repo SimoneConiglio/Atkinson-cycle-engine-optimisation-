@@ -2,11 +2,11 @@
 
 What this module was built for
 ------------------------------
-§7.3 asked for :math:`\\nabla^2 g`, for two reasons that look like one problem.
+§6.3 asked for :math:`\\nabla^2 g`, for two reasons that look like one problem.
 The reliability estimate is first order, and where a constraint surface curves
 towards the design that under-predicts; and the derivative of
 :math:`\\beta_i = -g_i/\\sigma_i` is a finite difference, because
-:math:`\\partial\\sigma_i/\\partial x` needs the Hessian.  §6.8 had just measured
+:math:`\\partial\\sigma_i/\\partial x` needs the Hessian.  §5.3 had just measured
 the first-order estimate as optimistic by a factor of seven at the study's
 result, so curvature was the obvious suspect.
 
@@ -20,7 +20,7 @@ gradient** rather than of a second derivative.  A finer crank-angle grid does
 not change it, so it is not discretisation.
 
 The jump is a branch switch.  The expansion stroke is a maximum over the two
-top dead centres, and the design §6.4 arrives at has them 0.107 um
+top dead centres, and the design §5.5 arrives at has them 0.107 um
 apart, so perturbing any dimension by a fraction of a micron swaps which one
 attains the maximum and moves :math:`\\partial STE/\\partial a` by a factor of 56.
 The surface is not curved, it is **kinked**, and no order of Taylor expansion
@@ -339,7 +339,7 @@ def beta_gradient(
 ) -> FloatArray | None:
     """Exact derivative of each reliability index, ``(8, 11)``.
 
-    The quantity §3.10's search is steered on is ``min_i beta_i``, and until
+    The quantity §4.7's search is steered on is ``min_i beta_i``, and until
     now its derivative was a finite difference of a difference.  With the
     Hessian in hand it is closed form:
 
@@ -405,7 +405,7 @@ def differencing_scaling(
 ) -> dict[str, list[tuple[float, float, float]]]:
     """Norm and asymmetry of the differenced Hessian, against step size.
 
-    The diagnostic of §6.8, and the reason it is worth having as a function
+    The diagnostic of §5.3, and the reason it is worth having as a function
     rather than as a one-off script: a genuine second derivative is insensitive
     to the step over a range of steps and its matrix is symmetric, while a
     discontinuous gradient gives a norm proportional to ``1/h`` and an

@@ -4,10 +4,10 @@ Why the check is needed
 -----------------------
 Every probability in this study comes from FORM: the constraint surfaces are
 linearised at the nominal design and the failure probability is read off a
-multivariate-normal orthant (§3.8).  That is what makes the estimate affordable
+multivariate-normal orthant (§4.5).  That is what makes the estimate affordable
 enough to sit inside an optimizer -- one exact Jacobian per design point -- and
 it is an approximation whose error is not bounded by anything the estimate
-itself reports.  §7.2 lists it as a limitation and §7.3 asks for a sampling
+itself reports.  §6.2 lists it as a limitation and §6.3 asks for a sampling
 check.
 
 This module is that check.  It evaluates the *exact* constraints on random
@@ -16,7 +16,7 @@ it produces makes no linearity assumption at all.
 
 Why crude Monte Carlo is not enough on its own
 ----------------------------------------------
-The study's headline is :math:`P_f = 1.3\\times10^{-3}` and §6.2 reaches
+The study's headline is :math:`P_f = 1.3\\times10^{-3}` and §5.2 reaches
 :math:`1.9\\times10^{-5}`.  Crude sampling resolves a probability :math:`p` to a
 relative standard error of :math:`\\sqrt{(1-p)/(np)}`, so ten per cent on
 :math:`10^{-5}` needs :math:`10^{7}` analyses -- six hours, to check a number

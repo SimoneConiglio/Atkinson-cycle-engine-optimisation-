@@ -352,7 +352,7 @@ def test_restoring_the_equalities_can_break_the_gap() -> None:
 
 
 def test_the_reliability_constraint_is_attached_when_asked() -> None:
-    """§3.10's correction, made structural.
+    """§4.7's correction, made structural.
 
     Reliability was reported after the fact for the whole study; the loop is
     closed by passing ``beta_target``, and this pins that it changes the
@@ -374,7 +374,7 @@ def test_the_reliability_constraint_is_attached_when_asked() -> None:
 
 
 def test_the_reliability_discipline_stays_out_of_the_mda() -> None:
-    """It depends on the design variables only, so §3.6's coupling is unchanged.
+    """It depends on the design variables only, so §4.3's coupling is unchanged.
 
     If it joined the MDA it would have to be converged at every iteration and
     the coupling count that decides MDF against IDF would change.  It does not.

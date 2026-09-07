@@ -4,7 +4,7 @@
 *geometric* constraints, exactly, using the analytic Jacobians.  That is the
 right thing to have inside an optimizer -- it costs one Jacobian and no extra
 analyses -- but it leaves five of the thirteen constraints without a
-probability, and §7.2 records why: they are not functions of the eleven
+probability, and §6.2 records why: they are not functions of the eleven
 dimensions alone.  ``saturation``, ``slenderness`` and ``bearing`` depend on the
 material the members are made of; ``runs`` depends on how much of the indicated
 work friction takes; and all of them depend on how hard the charge burns.
@@ -26,7 +26,7 @@ yield strength      0.07    JCSS steel; the dominant material scatter
 ultimate strength   0.05    correlated with yield in reality; see below
 Young's modulus     0.03    JCSS; tight, and it only enters buckling
 density             0.01    tighter still; a bar is a bar
-friction coeff.     0.20    §7.2 puts the FMEP uncertainty near 30 %; this is
+friction coeff.     0.20    §6.2 puts the FMEP uncertainty near 30 %; this is
                             the part of it attributable to ``mu`` alone
 explosion ratio     0.10    cycle-to-cycle variation of a single-cylinder
                             engine, plus calibration of an idealised burn
@@ -97,7 +97,7 @@ WIDENED_NAMES: tuple[str, ...] = (*RELIABILITY_NAMES, *COUPLED_NAMES)
 """Every constraint, in the order this module's vectors use.
 
 The geometric ones first, in :data:`~exlink.robustness.RELIABILITY_NAMES` order
--- which since §6.8 carries the two strokes once per top dead centre -- then the
+-- which since §5.3 carries the two strokes once per top dead centre -- then the
 five that only exist once the loads are dynamic and the car is in the problem.
 """
 
@@ -202,7 +202,7 @@ def constraint_vector(
     metrics = performance.metrics
     phases = performance.analysis.require_solved().thermodynamics.phases
     band_stroke, band_ratio = (float(width) for width in _band_widths(band))
-    # One row per top dead centre, matching RELIABILITY_NAMES; §6.8 says why.
+    # One row per top dead centre, matching RELIABILITY_NAMES; §5.3 says why.
     stroke = tuple(value - targets.expansion_stroke for value in phases.expansion_strokes)
     ratio = tuple(
         1.0

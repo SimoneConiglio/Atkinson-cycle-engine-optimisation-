@@ -120,7 +120,7 @@ def test_form_agrees_with_sampling_at_the_study_result():
     """Section 6.8's payoff, at a sample count that can see it.
 
     This test used to assert the opposite — that FORM was optimistic by more
-    than a factor of three — and it was right when it was written.  §6.8 traced
+    than a factor of three — and it was right when it was written.  §5.3 traced
     that to the expansion stroke being a *maximum* over two top dead centres
     linearised at the tie, and carrying both branches fixed it.  What is worth
     pinning now is the agreement, because it is what would break if the

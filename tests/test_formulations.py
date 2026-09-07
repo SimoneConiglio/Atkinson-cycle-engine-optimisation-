@@ -121,7 +121,7 @@ def test_idf_reports_its_own_refusal_rather_than_raising() -> None:
 
 
 def test_the_piston_motion_needs_only_tens_of_harmonics() -> None:
-    """The measurement behind §7.4's correction to §3.6.
+    """The measurement behind Appendix C.7's correction to §4.3.
 
     ``coupling_dimension`` counts the coupling pointwise and gets tens of
     thousands, which is what rules IDF out.  But the linkage reaches the rest

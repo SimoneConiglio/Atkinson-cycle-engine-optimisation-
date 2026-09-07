@@ -1,4 +1,4 @@
-# Running the code
+# Appendix B. Running the code
 
 Everything reported in this documentation is produced by the package described
 here and pinned by its test suite. {doc}`api` documents the modules
@@ -46,13 +46,13 @@ exlink animate --formulations \
 exlink refine --design published --save refined.json   # augmented Lagrangian
 exlink optimize --save best.json     # differential evolution over the full box
 exlink pareto --pop-size 200 --max-gen 60              # NSGA-II front
-exlink cycle --module 0.8 --teeth 48 --baseline        # over a schedule of speeds (§6.5)
-exlink size --rpm 1400 --bore 0.6                     # tubular members (§6.6)
+exlink cycle --module 0.8 --teeth 48 --baseline        # over a schedule of speeds (§5.4)
+exlink size --rpm 1400 --bore 0.6                     # tubular members (§5.1)
 ```
 
 `--design` takes `published`, `refined`, `coupled`, `range`, `reliable` or a path
 to a JSON design file. It defaults to `reliable` — `RELIABLE_DESIGN`, the design
-§6.4 arrives at — so every figure in this documentation is produced by the
+§5.5 arrives at — so every figure in this documentation is produced by the
 commands above with no arguments beyond an output path.
 
 The commands chain through JSON design files:
@@ -126,14 +126,14 @@ src/exlink/
 | the augmented-Lagrangian polish | `python examples/03_optimize.py` |
 | the efficiency/size trade-off | `python examples/04_pareto.py` |
 | sizing, dynamics and the singularity result | `python examples/05_sizing_and_dynamics.py` |
-| the mass budget, loss breakdown and both mechanism comparisons of §6.3 | `python examples/06_range.py` |
-| the N2 chart and the XDSM of §4.2 | `exlink diagram -o docs/figures` |
-| the drive-cycle scores of §6.5 | `python examples/08_drive_cycle.py` |
-| what tubular sections are worth, §6.6 | `python examples/09_tubular_sections.py` |
-| the widened uncertainty model of §6.7 | `python examples/10_widened_uncertainty.py` |
-| the sampling check of §6.8 | `python examples/11_sampling_check.py` |
-| the third point on the dimensionality axis, §6.9 | `exlink.slidercrank.SliderCrank(offset=...)` |
-| the restoration and continuation of §6.10 | `exlink.restoration.restore`, `exlink.continuation.reliability_continuation` |
+| the mass budget, loss breakdown and both mechanism comparisons of §5.4 | `python examples/06_range.py` |
+| the N2 chart and the XDSM of §4.8 | `exlink diagram -o docs/figures` |
+| the drive-cycle scores of §5.4 | `python examples/08_drive_cycle.py` |
+| what tubular sections are worth, §5.1 | `python examples/09_tubular_sections.py` |
+| the widened uncertainty model of §5.3 | `python examples/10_widened_uncertainty.py` |
+| the sampling check of §5.3 | `python examples/11_sampling_check.py` |
+| the third point on the dimensionality axis, §5.4 | `exlink.slidercrank.SliderCrank(offset=...)` |
+| the restoration and continuation of §5.5 | `exlink.restoration.restore`, `exlink.continuation.reliability_continuation` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests
@@ -157,7 +157,7 @@ The mechanism and the design brief come from an unpublished student study by the
 cycle, the quasi-static load chain and the efficiency measure, and solved the quasi-static
 problem in MATLAB. Everything needed to read, run and check this repository is
 restated here; the document itself is not a citable reference, and the only
-things taken from it directly are the two parametrisation figures of §5.2 and
+things taken from it directly are the two parametrisation figures of §3.1 and
 the two design vectors below.
 
 Two designs carry over from that study as **historical baselines**, and they are labelled as
@@ -180,4 +180,4 @@ Mechanism topology after Honda's
 
 ---
 
-Next: [API reference](api.rst)
+Next: {doc}`api`

@@ -69,7 +69,7 @@ def test_the_margin_is_the_worst_of_every_constraint():
 
 @pytest.mark.slow
 def test_restoration_reaches_the_interior_from_a_scattered_start():
-    """The measurement §7.3(6) asks for, at one start rather than six."""
+    """The measurement §6.3(6) asks for, at one start rather than six."""
     target = target_from_design(COUPLED_DESIGN)
     box = Bounds.around(COUPLED_DESIGN, relative=0.30)
     rng = np.random.default_rng(0)

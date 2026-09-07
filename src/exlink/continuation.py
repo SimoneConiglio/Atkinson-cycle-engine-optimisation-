@@ -40,7 +40,7 @@ the answer.
 
 What it did not do here
 -----------------------
-§6.10 measures this against a single solve at the same iteration budget and
+§5.5 measures this against a single solve at the same iteration budget and
 the ladder loses on both counts: 2060 evaluations against 1435, ending at
 ``min_i beta_i = 2.651`` where the single solve reaches 3.000 exactly.  The
 rungs behave as designed -- each moves, and the climb is monotone in
@@ -48,9 +48,9 @@ reliability while the range *rises* -- but thirty iterations is not enough for
 any rung to converge, so the budget goes on restarting rather than arriving.
 
 The instrument is not at fault; the obstruction is absent.  The non-movement
-this module was written for was measured under the first of §3.10's three
+this module was written for was measured under the first of §4.7's three
 forms, with the coupled and vehicle constraints bound only at the end.  Under
-the second form, with the branch-aware constraint set §6.8 introduced, the
+the second form, with the branch-aware constraint set §5.3 introduced, the
 search moves freely from the same start.  Given a search that can move,
 subdividing its target only fragments its budget.  The code is kept because
 the measurement is the finding, and because a problem whose feasible set is
@@ -97,7 +97,7 @@ class ContinuationStep:
     km_per_litre: float
 
     steered_beta: float
-    """``min_i beta_i``, the quantity the solve actually holds (§3.10)."""
+    """``min_i beta_i``, the quantity the solve actually holds (§4.7)."""
 
     system_beta: float
     """The system index, reported rather than steered."""
@@ -110,7 +110,7 @@ class ContinuationStep:
     """Whether every constraint holds *at the bands this solve is using*.
 
     Not the same as :attr:`strictly_feasible`, and the distinction matters:
-    §6.2 settles the study on a widened specification, and a rung solved
+    §5.2 settles the study on a widened specification, and a rung solved
     against a band of 0.15 must be judged against 0.15.  Scoring it against
     the specification as written would mark every rung a failure and say
     nothing about whether the continuation works.
@@ -179,7 +179,7 @@ def reliability_continuation(
     """Climb a ladder of reliability targets, warm-starting each rung.
 
     Args:
-        target: The fallback motion, as §3.10's ladder needs.
+        target: The fallback motion, as §4.7's ladder needs.
         start: Where to begin -- typically a deterministic optimum.
         schedule: Reliability targets, ascending.
         speed_rpm: Analysis speed [rev/min].

@@ -348,7 +348,7 @@ def test_an_unanalysable_design_is_certain_to_fail_not_an_error() -> None:
 
 
 def test_the_probability_covers_the_dimension_only_constraints() -> None:
-    """§3.10's seven-of-twelve split, pinned so the documentation cannot drift.
+    """§4.7's seven-of-twelve split, pinned so the documentation cannot drift.
 
     ``Sigma`` carries ISO 286 dimensional tolerances and nothing else, so a
     probability of failure is honest only for constraints that are functions of
@@ -382,7 +382,7 @@ def test_the_probability_covers_the_dimension_only_constraints() -> None:
     for name in deterministic:
         assert name.removesuffix("_margin") not in covered
 
-    # Seven covered plus five deterministic is the twelve of §3.10.
+    # Seven covered plus five deterministic is the twelve of §4.7.
     assert len(covered) + len(deterministic) == 12
 
     # The claim that makes the split necessary: Sigma is dimensional only.
@@ -393,7 +393,7 @@ def test_the_probability_covers_the_dimension_only_constraints() -> None:
 
 @pytest.mark.slow
 def test_the_deterministic_optimum_is_dominated_on_reliability() -> None:
-    """§6.2's finding: most of the 0.645 is self-inflicted, not required.
+    """§5.2's finding: most of the 0.664 is self-inflicted, not required.
 
     A deterministic optimizer converges *onto* its active constraints, because
     nothing in the formulation rewards standing off them -- and a design
@@ -401,7 +401,7 @@ def test_the_deterministic_optimum_is_dominated_on_reliability() -> None:
     of a millimetre away are both more reliable and no worse in range, so the
     converged design is dominated rather than merely unreliable.
 
-    Sampled rather than optimised, because the point of §3.10 is that a
+    Sampled rather than optimised, because the point of §4.7 is that a
     gradient method does not get there.
     """
     import numpy as np
@@ -438,7 +438,7 @@ def test_the_deterministic_optimum_is_dominated_on_reliability() -> None:
 
 
 def test_the_tolerance_band_can_be_relaxed() -> None:
-    """§6.2 asks what bound a design would need; that needs a bound it can vary.
+    """§5.2 asks what bound a design would need; that needs a bound it can vary.
 
     The band was a module constant, so the reliability of a design could only
     ever be scored against the *specified* tolerance -- which makes the

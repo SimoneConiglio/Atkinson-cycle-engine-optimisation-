@@ -327,7 +327,7 @@ theorem gives them exactly instead.
 The four numbered rows are the two strokes measured from *each* top dead centre
 rather than from the higher of the two. ``expansion_stroke`` and
 ``stroke_error`` are derivatives of a maximum, which exist only away from the
-tie -- and §6.8 shows a design of this study sitting 0.107 um from it,
+tie -- and §5.3 shows a design of this study sitting 0.107 um from it,
 where the reported derivative is that of a branch the parts do not stay on.
 
 ``efficiency``, ``height``, ``width`` and ``clearance`` are left to finite
@@ -464,7 +464,7 @@ def metric_jacobian(
     # from the higher one.  ``d_expansion`` above is the derivative of a
     # maximum, which is only the derivative of whichever branch attains it --
     # and at a design whose two top dead centres coincide, that is a
-    # derivative of something the parts do not have.  §6.8 measures what it
+    # derivative of something the parts do not have.  §5.3 measures what it
     # costs; these rows are what a smooth reformulation would use.
     d_expansion_branches = (
         d_lam_at[top_1] - d_lam_at[deep],

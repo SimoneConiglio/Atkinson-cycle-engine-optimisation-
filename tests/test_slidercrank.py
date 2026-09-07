@@ -228,7 +228,7 @@ def test_the_hand_set_baseline_is_not_the_best_conventional_engine() -> None:
     Comparing an optimised EX-link against a slider-crank whose obliquity was
     written down from a textbook measures the optimization, not the topology.
     If the hand-set proportions happened to be optimal there would be nothing
-    to fix; this asserts that they are not, so the comparison in §6.3 has to be
+    to fix; this asserts that they are not, so the comparison in §5.4 has to be
     made optimum against optimum.
     """
     hand_set = evaluate_slidercrank(SliderCrank.for_compression_ratio(16.0), 2000.0)
@@ -270,7 +270,7 @@ def test_the_linkage_leads_an_optimised_baseline_at_equal_output_speed() -> None
 
 
 def test_the_constrained_baseline_imposes_its_constraints() -> None:
-    """Both sides of §6.3 must be optimised the same way, method included.
+    """Both sides of §5.4 must be optimised the same way, method included.
 
     The EX-link's best design comes from an SQP holding every constraint at
     every step.  Scoring the baseline with a search that merely rejects
@@ -368,7 +368,7 @@ def test_the_specification_baseline_holds_both_caps_and_beats_a_pinned_design() 
 
 
 def test_the_baseline_has_a_reliability_of_its_own() -> None:
-    """§6.3 compared range with range and reliability with silence.
+    """§5.4 compared range with range and reliability with silence.
 
     The slider-crank carries ISO 286 tolerances on its two lengths exactly as
     the EX-link does on its eleven, so it has a probability of missing its
@@ -388,7 +388,7 @@ def test_the_baseline_has_a_reliability_of_its_own() -> None:
 def test_the_baseline_reliability_is_insensitive_to_the_difference_step() -> None:
     """The gradients are differences, so the step has to be shown to be safe.
 
-    §3.5 rejects differences for the EX-link because its constraints are
+    §4.2 rejects differences for the EX-link because its constraints are
     extrema whose maximiser moves.  The same risk applies here -- the
     side-load ratio is a quotient of two maxima -- so this checks the answer
     across two decades of step rather than trusting one.
@@ -405,7 +405,7 @@ def test_the_baseline_reliability_is_insensitive_to_the_difference_step() -> Non
 
 
 def test_the_optimised_baseline_misses_the_ex_links_limits() -> None:
-    """The asymmetry §6.3 was carrying, made explicit.
+    """The asymmetry §5.4 was carrying, made explicit.
 
     The EX-link is held to a 10 degree rod angle and a 0.02 side-load ratio.
     ``evaluate_slidercrank`` never applied either, so the baseline's optimum

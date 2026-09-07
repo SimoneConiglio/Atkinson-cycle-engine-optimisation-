@@ -110,8 +110,8 @@ class SliderCrank:
 
     Zero is the centred slider-crank the study compares against.  A non-zero
     offset -- *desaxe*, in the older literature -- is the cheapest extra degree
-    of freedom a conventional engine has, and §6.9 uses it as a third point on
-    the dimensionality axis §7.1's explanation rests on.  It does *not* make an
+    of freedom a conventional engine has, and §5.4 uses it as a third point on
+    the dimensionality axis §6.1's explanation rests on.  It does *not* make an
     Atkinson engine: the piston still makes two identical strokes per
     revolution, so the expansion and compression strokes stay equal and the
     offset buys only a rearranged side load and a slightly asymmetric velocity.
@@ -934,7 +934,7 @@ def optimise_slidercrank_constrained(
     ------------------------------------------------------
     A comparison is only worth making if both sides get the same treatment, and
     that has to include the *method*, not only the models.  The EX-link's best
-    design comes from an SQP that holds every constraint at every step (§3.10);
+    design comes from an SQP that holds every constraint at every step (§4.7);
     scoring the baseline with a derivative-free search that simply rejects
     infeasible points would leave the comparison measuring the optimizer again,
     which is the error :func:`optimise_slidercrank` was written to remove one
@@ -949,13 +949,13 @@ def optimise_slidercrank_constrained(
     What is *not* matched, and cannot be here
     ------------------------------------------
     The EX-link's final formulation also constrains a system reliability index
-    over its eleven dimensions (§3.10).  There is no equivalent for the
+    over its eleven dimensions (§4.7).  There is no equivalent for the
     slider-crank in this package: :mod:`exlink.robustness` builds its
     covariance and its constraint Jacobians for the EX-link's design vector
     specifically.  Constructing the analogue for a two-variable mechanism is
     tractable but is not the same model, and asserting a reliability comparison
     across two different uncertainty models would be worse than declining one.
-    The comparison in §6.3 is therefore between two *nominally* optimised
+    The comparison in §5.4 is therefore between two *nominally* optimised
     engines, and says so.
 
     Args:
@@ -1356,7 +1356,7 @@ def slidercrank_reliability(
     The same method as :func:`exlink.robustness.failure_probability` -- ISO 286
     tolerances on the machined lengths, first-order propagation to each
     constraint, and the correlated multivariate-normal orthant for the system
-    probability -- applied to the baseline so that §6.3 compares reliability
+    probability -- applied to the baseline so that §5.4 compares reliability
     with reliability rather than reliability with silence.
 
     What is the same, and what cannot be
@@ -1375,7 +1375,7 @@ def slidercrank_reliability(
     builder would ask.
 
     Gradients are central differences on two variables, not the analytic
-    Jacobians §3.5 needs for the EX-link.  The reason §3.5 rejects differences
+    Jacobians §4.2 needs for the EX-link.  The reason §4.2 rejects differences
     is extremum switching, and it applies here too -- ``gamma`` is a ratio of
     two maxima -- so the step is checked against a tenth and ten times its
     value in the tests rather than assumed safe.

@@ -379,7 +379,7 @@ def motion_harmonics(
     In a Fourier basis the count is what this returns: of order twenty
     coefficients to reproduce the motion more tightly than the part can be
     machined.  A decomposition on that basis would carry tens of consistency
-    variables where the pointwise one carries tens of thousands.  See §7.4 of
+    variables where the pointwise one carries tens of thousands.  See Appendix C.7 of
     the documentation.
 
     Args:

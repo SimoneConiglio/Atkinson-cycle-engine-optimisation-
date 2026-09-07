@@ -27,29 +27,33 @@ the manufacturing scatter of the components, so that reliability-based
 optimization arises as a consequence of the relaxation rather than as an
 addition to the problem.
 
-Four quantitative results follow. The quasi-statically optimal geometry
+Five quantitative results follow. The quasi-statically optimal geometry
 coincides with the transmission-angle singularity at which the inertia loads are
-largest, and admits no feasible structure above 2000 rev/min, whereas a geometry
+largest and admits no feasible structure above 2000 rev/min, whereas a geometry
 displaced from it attains lower mass and greater range simultaneously. A
 tolerance study conducted against the specification rather than against a design
-identifies which of the stated bounds govern reliability, and prices their
+identifies which of the stated bounds govern reliability and prices their
 relaxation at 0.47 % of the objective in exchange for a fall in the probability
-of violating a dimensional requirement from 0.645 to 1.9e-5. Power is taken
-from the shaft that turns twice per cycle, as on any four-stroke, so the
-mechanism's advantage
-over a conventional slider-crank -- sized by identical structural and
+of violating a dimensional requirement from 0.664 to 1.9e-5. Power is taken from
+the shaft that turns twice per cycle, as on any four-stroke, so the mechanism's
+advantage over a conventional slider-crank -- sized by identical structural and
 tribological models, and optimised over its own degrees of freedom rather than
 proportioned by hand -- is measured at equal speed and equal firing rate and
-amounts to 17.6 %. It decomposes into an indicated efficiency of 0.480 against
+amounts to 17.6 %; it decomposes into an indicated efficiency of 0.480 against
 0.457, a mechanical efficiency of 0.865 against 0.787 and an engine mass of
-12.9 kg against 16.9: extended expansion, the feature the topology exists for,
-is the smallest of the three. Finally, imposing the coupled and structural
-constraints throughout the search rather than verifying them on
-its result is worth 4.9 % of the objective under an identical algorithm, and
-constraining a system probability of failure returns 3 % of that in exchange for
-a design meeting its requirements with probability 0.999 -- the deterministic
+12.9 kg against 16.9, so that extended expansion, the feature the topology
+exists for, is the smallest of the three. Imposing the coupled and structural
+constraints throughout the search rather than verifying them on its result is
+worth 4.9 % of the objective under an identical algorithm, the deterministic
 optima of both mechanisms being shown to be dominated by designs standing
-slightly off their active constraints.
+slightly off their active constraints. Finally, the first-order reliability
+model is shown to fail in two independent ways that no output of it signals: it
+prices only what its uncertain vector contains, so that the constraint governing
+the design -- a gear face width at a reliability index of zero -- lies outside
+the model entirely; and it linearises the expansion stroke at a tie between the
+two top dead centres that the optimizer itself has closed to 0.107 um, giving a
+failure probability seven times too small against 150 000 sampled builds. Both
+corrections are free.
 
 The methodological contribution is a demonstration, on a problem small enough to
 be verified throughout, that the choice of objective and the geometry of the
@@ -70,20 +74,20 @@ sensitivities; extended-expansion engine.
 
    introduction
    state_of_the_art
-   methodology
-   framework
-   use_case
+   formulation
+   method
    results
    conclusions
    references
 
 .. toctree::
    :maxdepth: 2
-   :caption: Reference
+   :caption: Appendices
 
-   implementation
-   api
    theory
+   implementation
+   supporting
+   api
 
 .. rubric:: At a glance
 

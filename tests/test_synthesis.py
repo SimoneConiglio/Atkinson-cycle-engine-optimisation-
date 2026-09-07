@@ -130,7 +130,7 @@ def test_a_fit_from_an_unanalysable_start_returns_nothing() -> None:
 
 
 def test_the_report_counts_what_landed_in_band() -> None:
-    """The report is what §7.4 quotes, so its arithmetic is pinned."""
+    """The report is what Appendix C.7 quotes, so its arithmetic is pinned."""
     from exlink.synthesis import FitResult
 
     def row(stroke: float, ratio: float) -> FitResult:
@@ -252,7 +252,7 @@ def test_keeping_the_inequalities_in_the_fit_keeps_the_design_buildable() -> Non
 def test_the_fits_are_feasible_against_the_whole_constraint_set() -> None:
     """The generator returns usable starts, not merely points near the manifold.
 
-    Corrects an earlier claim in §7.4 that none of these designs was feasible;
+    Corrects an earlier claim in Appendix C.7 that none of these designs was feasible;
     measured, every in-band fit from a reachable target satisfies the coupled
     and vehicle constraints too.
     """
@@ -394,7 +394,7 @@ def test_holding_the_bands_as_constraints_keeps_the_fit_in_band() -> None:
 
 
 def test_the_constraint_vector_covers_the_whole_problem() -> None:
-    """All twelve constraints of §3.10, not the five that were cheap.
+    """All twelve constraints of §4.7, not the five that were cheap.
 
     Each earlier round of this exercise found that whatever was left out of the
     fit was what the solve then violated.  This pins that nothing is left out:
@@ -475,7 +475,7 @@ def test_the_target_takes_over_when_the_range_does_not_exist() -> None:
 
 
 def test_pinning_the_gear_pair_pins_the_centre_distance() -> None:
-    """§3.7's catalogue relation makes ``I`` an output, not a design variable.
+    """§4.4's catalogue relation makes ``I`` an output, not a design variable.
 
     A 200-iteration run that left ``I`` free while the gear pair was pinned
     returned a design with ``I = 85.08`` against the 57.6 the chosen pair
