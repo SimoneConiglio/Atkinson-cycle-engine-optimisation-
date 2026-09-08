@@ -579,3 +579,106 @@ second form with the branch-aware constraint set the search moves freely from th
 same start and reaches its target unaided. Given a search that can move,
 subdividing its target only fragments its budget. The fault was in the constraint
 set, and one extra Jacobian row did more for reachability than a homotopy does.
+
+## 5.6 Asking for the topology instead of supplying one
+
+§5.4 measures a topology that was given. This section removes that, and applies
+the second family of §2.2 — the spring-connected model — to the question the
+engine poses: turn the circular motion of one input shaft into the piston motion
+an extended-expansion cycle needs.
+
+The design domain holds eight nodes and twelve candidate members: the input
+shaft grounded at the origin with its pin, a second grounded shaft carrying a pin
+at twice the input speed and the opposite sense — the relation a 2:1 gear pair
+imposes, which the search may use or leave out — a spare grounded pivot, two free
+nodes, and the piston on the cylinder axis. Each candidate member is a spring
+whose presence is a design variable, penalised towards rigid or absent, giving 26
+variables in all. The target is $\lambda^\star(\theta_1)$ from §3.5's
+requirements: two equal maxima and two unequal minima, $\mathrm{STE} = 74$ mm and
+$\varepsilon = 16$ exactly. Six random starts were walked up a four-rung
+penalisation schedule and then rounded to a discrete linkage; five completed
+inside a 50-minute cap and one did not.
+
+| start | rms [mm] | strain | members | first harmonic | second | four phases | STE | STC |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 37.00 | $1.4\times10^{-6}$ | 2 | 29.32 | 7.43 | no | — | — |
+| **3** | **7.19** | $5.8\times10^{-7}$ | 3 | **0.0000** | 36.89 | **yes** | **73.775** | **73.775** |
+| 5 | 21.43 | $7.9\times10^{-6}$ | 2 | 19.79 | 21.04 | no | — | — |
+| 6 | 29.38 | $7.5\times10^{-5}$ | 1 | 27.12 | 33.85 | no | — | — |
+| 7 | 28.61 | $6.2\times10^{-7}$ | 4 | 36.77 | 3.42 | no | — | — |
+| 1 | *cap reached at rms 5.93, still undecided* | | | | | | | |
+
+The target's own harmonics are 9.02 mm at the first and 32.33 mm at the second,
+and its standard deviation — the score for producing no useful motion at all — is
+23.74 mm.
+
+**The method works and produces real linkages.** Every completed start returned a
+discrete mechanism running at a strain of $10^{-7}$ to $10^{-5}$, which is the
+stiffness floor: the springs are standing in for rigid links rather than
+deforming. Nothing about the topology was assumed, and the search chose its own
+member count, from one to four.
+
+**Not one of them is an extended-expansion mechanism.** One start reached a clean
+four-stroke motion, and it is an *Otto* engine: $\mathrm{STE}$ and
+$\mathrm{STC}$ equal to six figures, with an asymmetry of zero rather than the
+18 mm the specification needs. What it built is a slider-crank hung on the geared
+shaft — one rod from that shaft's pin to the piston — with the input shaft
+carrying a two-bar chain that reaches nothing.
+
+**The failure is an identity, not a numerical accident.** Reach the piston from
+the geared shaft alone and its height is a function of that shaft's angle,
+$-2\theta_1 + \varphi$; every term is then periodic in $\theta_1$ with period
+$\pi$, so *every odd harmonic vanishes exactly*. The two up-and-downs are there
+and the two halves of the revolution are identical, which is precisely a plain
+four-stroke Otto motion. Measured on that design the first harmonic is
+$1.5\times10^{-5}$ mm against a second of 36.89 — seven orders of magnitude down,
+and the residue is the equilibrium solver's precision rather than physics. The
+opposite degeneracy also appeared: start 7 reaches the piston from the *input*
+shaft alone, so its motion is periodic in $2\pi$, gives one up-and-down per
+revolution, and is not a four-stroke at all.
+
+**So the asymmetry lives entirely in the first harmonic, and the first harmonic
+requires both shafts.** This is what EXlink's trigonal link *is*: a single body
+whose three corners take the swing rod from the half-speed shaft, the crank from
+the fast shaft, and the piston rod. Read that way it is not a construction detail
+but the feature the topology exists for, and a synthesis that never joins the two
+chains cannot produce extended expansion however well it fits everything else.
+
+**Why the search stops where it does.** The second harmonic carries 32.33 mm of
+the target's 33.6 mm of harmonic amplitude, so a design that captures it alone
+has already taken most of the objective: 7.19 mm of error against the 23.74 mm of
+doing nothing. The missing first harmonic is worth only 6.38 mm of rms — and it
+is unreachable by descent, because the two-bar chain the search kept touches
+nothing that reaches the piston, so the objective is *flat* in its geometry.
+Differencing at the answer gives a gradient of at most $1.5\times10^{-4}$ over
+that chain's six geometry variables against 1.69 over the six that drive the
+piston: four orders of magnitude. It is the failure of {doc}`Appendix C
+<supporting>` §C.7 in a new place — a gradient method stalls where the quantity
+of interest does not vary — and here it is the *topology* that would have to
+change first, which no amount of geometry descent will do.
+
+**Two faults in the formulation were found by running it**, and both are worth
+recording because neither is visible in a statement of the method. The first: a
+member-count term of 1 mm made "build nothing" a strict local minimum, since a
+piston connected to nothing scores the target's standard deviation and pays no
+count, and one start duly converged to it — fully discrete, and a mechanism with
+no members. The repair is a floor on the delivered stroke, which charges a static
+piston twice the required travel. The second: a strain weight of 50 mm let a
+design fit the target to 2.0 mm while carrying 3 % strain, so the search was
+being *paid* to leave members half present — a half-stiff member lets an
+overconstrained network move by giving rather than by articulating. That answer
+fitted well and rounded to nothing. Raising the weight to 800 mm and ramping an
+explicit discreteness charge alongside the penalty exponent took the resolved
+designs from a discreteness of 0.43 to 0.02.
+
+**What this establishes and what it does not.** It establishes that the piston
+must be reached from both shafts, by an argument that is exact rather than
+empirical, and it demonstrates the method end to end on this problem — ground
+structure, continuation, rounding, and a mechanism at the end of it. It does not
+establish that no alternative topology exists. Twelve candidate members and six
+starts is a small search next to the published spring-connected studies, which
+use far larger domains and many more starts; a domain that offered a three-corner
+body directly, rather than requiring the search to assemble one from binary
+members, would be the obvious next step. And the objective here is kinematic, so
+even a success would have produced a *candidate* rather than a design: the range
+chain of §3.3 is what would decide whether it beat 3395 km/L.

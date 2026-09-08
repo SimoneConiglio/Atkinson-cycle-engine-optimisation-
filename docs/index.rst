@@ -55,6 +55,18 @@ two top dead centres that the optimizer itself has closed to 0.107 um, giving a
 failure probability seven times too small against 150 000 sampled builds. Both
 corrections are free.
 
+The topology is finally removed from the assumptions altogether: a
+spring-connected synthesis, in which every candidate member is a spring whose
+stiffness is a design variable and is penalised towards rigid or absent, is run
+on the same requirements with no mechanism given. It returns discrete linkages
+and no alternative. The one start reaching a four-stroke motion returns an Otto
+engine whose two strokes are equal to six figures, for a reason that is an
+identity rather than an accident -- a piston reached from one shaft alone is
+periodic in that shaft's angle, so the asymmetry, which lives entirely in the
+first harmonic, is exactly zero. Extended expansion therefore requires the piston
+train to be reached from both shafts, which is what the three-cornered link of
+the studied mechanism does.
+
 The methodological contribution is a demonstration, on a problem small enough to
 be verified throughout, that the choice of objective and the geometry of the
 feasible set determine both the design obtained and the class of algorithms that

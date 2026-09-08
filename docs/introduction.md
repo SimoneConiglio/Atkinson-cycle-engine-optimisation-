@@ -67,7 +67,10 @@ The study contributes, on a problem small enough to be verified throughout:
    (§5.1, §5.4);
 4. two failures of the reliability model, found by widening the uncertain vector
    and by sampling against the first-order estimate, together with the
-   corrections they imply (§5.3).
+   corrections they imply (§5.3);
+5. a topology synthesis run on the same requirements with no mechanism assumed,
+   which establishes what extended expansion needs of *any* linkage that
+   realises it (§5.6).
 
 ## 1.4 Structure
 

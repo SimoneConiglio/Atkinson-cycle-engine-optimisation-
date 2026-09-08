@@ -128,7 +128,8 @@ than an oversight, and it has a cost the results make explicit — §5.4 measure
 what the topology is worth against a slider-crank and finds it cannot say
 whether a *better* topology exists, because two topologies establish a contrast
 and not a trend. The second family is the natural instrument for that question,
-and §6.3 records it as the route to the third topology this study lacks.
+and §5.6 applies it: a spring-connected synthesis run on this engine's own
+requirements, with no mechanism assumed.
 
 ## 2.3 Architectures, derivatives, and thin feasible sets
 

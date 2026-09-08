@@ -67,6 +67,17 @@ turn out to be 1.3 % of the engine, yet boring them buys 31 % of range at
 3200 rev/min, because what a bore removes is inertia in the load path rather than
 weight. Given to both engines the comparison moves from +17.6 % to +17.0 %.
 
+**The trigonal link is the feature, not a detail.** Handed the design domain and
+no topology, a spring-connected synthesis returns real linkages — discrete,
+running at the stiffness floor — and none of them is an extended-expansion
+mechanism. The one that reaches a clean four-stroke motion is an Otto engine,
+with the two strokes equal to six figures, because it reaches the piston from the
+geared shaft alone. That is an identity rather than an accident: a piston driven
+from one shaft is periodic in that shaft's angle, so the asymmetry, which lives
+entirely in the first harmonic, is *exactly* zero. Extended expansion requires
+the piston train to be reached from both shafts, which is what EXlink's
+three-cornered link does (§5.6).
+
 **Decomposition buys structure, not speed.** Bi-level outer approximation halves
 the sub-solves against enumeration and lands 0.6 % short, on a bound that is not
 valid because the sub-problem is nonconvex. What it buys is a mixed-integer
@@ -107,6 +118,11 @@ is inapplicable and restoration makes six restarts feasible without answering
 whether their solutions agree. The schedule's distance weights are stated rather
 than derived, no survey of the track existing.
 
+The topology synthesis of §5.6 searched a domain of twelve candidate members
+from six random starts, which is small next to the published spring-connected
+studies; it establishes what extended expansion requires, not that no alternative
+topology exists.
+
 **Scope.** The results at $\beta \ge 3$ are stated at a widened specification: the
 top-dead-centre gap at 0.1 mm and both equality bands at $\pm 0.15$. §5.2 prices
 that widening at 0.47 % of range and shows what it buys, but whether those bounds
@@ -143,21 +159,19 @@ is a correlated model of the two strengths, second-order treatment of
 the set — and an implementation cheap enough for the optimizer to call rather than
 for a report to quote.
 
-*Add a third topology, and generate it rather than choose it.* A genuine third
-extended-expansion mechanism needs its own internal 2:1 ratio, which is what
-unequal strokes require. The dimensionality axis has been settled (§5.4); the
-topological question has not, and picking a third linkage by hand would only move
-the arbitrariness rather than remove it. The instrument for generating one is the
-second family of §2.2 — a spring-connected rigid block model, in which the joints
-are relaxed to springs of variable stiffness and penalised back to rigid or free,
-so that the topology comes out of the solve. Its gear-linkage form is the one to
-use, since the 2:1 relation this cycle depends on is carried by a gear pair. Two
-things would have to be added to it, and both are this study's own subject rather
-than that method's: its objective is kinematic, so it prices no part and would
-have to be composed with the range chain of §3.3; and the top-dead-centre gap that
-§5.2 shows governs this mechanism is a functional of the synthesised motion, so it
-belongs in the synthesis rather than in a check afterwards. A functional IDF over
-the piston motion, sketched in {doc}`Appendix C <supporting>`, is a larger
+*Finish the topology synthesis.* §5.6 runs it and does not find an alternative:
+six starts return mechanisms, one of them a clean four-stroke, and that one is an
+Otto engine. Three things would give the question a fair hearing. The domain
+should offer a **three-cornered body** as a candidate rather than requiring the
+search to assemble one from binary members, since §5.6 shows that joining the two
+shafts at one body is the whole of what extended expansion needs. The search
+should be much wider — twelve candidate members and six starts is small next to
+the published spring-connected studies. And the objective should reach past the
+motion: a kinematic target produces a candidate, and only the range chain of §3.3
+decides whether a candidate beats 3395 km/L. The top-dead-centre gap that §5.2
+shows governs this mechanism is a functional of the synthesised motion, so it
+belongs inside the synthesis rather than in a check afterwards. A functional IDF
+over the piston motion, sketched in {doc}`Appendix C <supporting>`, is a larger
 question again and would need its own study.
 
 ## 6.4 Headline numbers

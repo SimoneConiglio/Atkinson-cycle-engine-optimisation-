@@ -1,0 +1,257 @@
+"""The spring-connected synthesis, checked against results computed without it.
+
+The load-bearing test is :func:`test_a_single_member_reproduces_a_slider_crank`:
+the whole model is an energy minimisation, and if a network whose only member is
+a connecting rod does not reproduce the connecting rod's own closed form, nothing
+built on it means anything.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from exlink.synthesis import target_motion
+from exlink.topology import (
+    COUNT_WEIGHT,
+    DISCRETENESS_SCHEDULE,
+    PENALTY_SCHEDULE,
+    STIFFNESS_FLOOR,
+    STRAIN_WEIGHT,
+    TRAVEL_WEIGHT,
+    _energy_terms,
+    assess,
+    default_bounds,
+    engine_ground_structure,
+    initial_configuration,
+    member_lengths,
+    motion_error,
+    objective,
+    random_start,
+    stiffnesses,
+    sweep,
+    travel_shortfall,
+)
+
+
+def _slider_crank_design(radius: float = 30.0, rod: float = 120.0, axis: float = 0.0):
+    """A design vector whose only present member is a connecting rod."""
+    structure, layout = engine_ground_structure()
+    x = np.zeros(layout.size)
+    x[0:2] = [200.0, 200.0]  # the second shaft, parked out of the way
+    x[2:4] = [-200.0, 200.0]  # the spare ground pivot, likewise
+    x[4:6] = [radius, 0.0]  # input crank: radius, phase
+    x[6:8] = [10.0, 0.0]
+    x[8:10] = [-150.0, -150.0]  # free nodes, parked
+    x[10:12] = [150.0, -150.0]
+    x[12] = axis
+    x[13] = np.sqrt(rod**2 - (radius - axis) ** 2)
+    names = [(structure.names[i], structure.names[j]) for i, j in structure.members]
+    rho = np.zeros(structure.n_members)
+    rho[names.index(("P1", "S"))] = 1.0
+    x[layout.presence_offset :] = rho
+    return layout, x
+
+
+def test_a_single_member_reproduces_a_slider_crank() -> None:
+    """The energy minimisation must agree with the linkage's own closed form.
+
+    With one rod from the crank pin to a piston on the cylinder axis, the piston
+    height is ``y_pin + sqrt(L^2 - (x_pin - axis)^2)`` and nothing about springs
+    enters it.  Agreement to well under a micron is the evidence that a stiff
+    spring is standing in for a rigid link rather than approximating one.
+    """
+    radius, rod, axis = 30.0, 120.0, 0.0
+    layout, x = _slider_crank_design(radius, rod, axis)
+    motion = sweep(layout, x, samples=360, penalty=1.0)
+
+    theta = np.linspace(0.0, 2.0 * np.pi, 360, endpoint=False)
+    pin_x, pin_y = radius * np.cos(theta), radius * np.sin(theta)
+    exact = pin_y + np.sqrt(rod**2 - (pin_x - axis) ** 2)
+
+    assert motion.converged
+    assert np.max(np.abs(motion.lam - exact)) < 1.0e-3
+    assert motion.strain < 1.0e-5
+    assert np.ptp(motion.lam) == pytest.approx(2.0 * radius, abs=1.0e-3)
+
+
+def test_the_energy_derivatives_agree_with_differences() -> None:
+    """Gradient and Hessian of the spring energy, against central differences."""
+    pos = np.array([[0.0, 0.0], [3.0, 4.0], [10.0, 0.0]])
+    ends = (np.array([0, 1]), np.array([1, 2]))
+    k, rest = np.array([2.0, 3.0]), np.array([4.0, 6.0])
+
+    def energy(v: np.ndarray) -> float:
+        return _energy_terms(v.reshape(3, 2), ends, k, rest)[0]
+
+    def gradient(v: np.ndarray) -> np.ndarray:
+        return _energy_terms(v.reshape(3, 2), ends, k, rest)[1]
+
+    _, grad, hess = _energy_terms(pos, ends, k, rest)
+    flat, step, basis = pos.reshape(-1), 1.0e-6, np.eye(6)
+    fd_grad = np.array(
+        [(energy(flat + step * e) - energy(flat - step * e)) / (2.0 * step) for e in basis]
+    )
+    fd_hess = np.array(
+        [(gradient(flat + step * e) - gradient(flat - step * e)) / (2.0 * step) for e in basis]
+    )
+    assert np.max(np.abs(grad - fd_grad)) < 1.0e-6
+    assert np.max(np.abs(hess - fd_hess)) < 1.0e-6
+    assert np.max(np.abs(hess - hess.T)) == 0.0
+
+
+def test_the_objective_is_assembled_from_its_four_terms() -> None:
+    """Motion error, travel shortfall, strain and member count, in that order.
+
+    Worth pinning because the travel term exists to repair a real failure.  With
+    ``COUNT_WEIGHT`` at its original 1.0 mm and no travel term, the cheapest
+    design was very nearly no design: a start converged to a fully discrete
+    answer whose motion tracked nothing, scoring the target's own standard
+    deviation and paying nothing for the members it had dropped.
+    """
+    _structure, layout = engine_ground_structure()
+    x = random_start(layout, np.random.default_rng(0))
+    x[layout.presence_offset :] = 0.0
+    target = 150.0 + 32.0 * np.cos(2.0 * np.linspace(0.0, 2.0 * np.pi, 48, endpoint=False))
+
+    motion = sweep(layout, x, samples=48, penalty=1.0)
+    expected = (
+        motion_error(target, motion.lam)
+        + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
+        + STRAIN_WEIGHT * motion.strain
+    )
+    assert objective(layout, x, target, samples=48, penalty=1.0) == pytest.approx(expected)
+
+
+def test_dropping_every_member_is_not_worth_a_millimetre() -> None:
+    """The member count is a tie-break and must never be a reason to build nothing."""
+    assert COUNT_WEIGHT * 1.0 < 0.1
+
+
+def test_absent_members_still_drag_the_piston() -> None:
+    """The stiffness floor is not zero, so "no members" is not "no motion".
+
+    A detail with a consequence: an emptied structure does not sit still, it
+    follows the floor springs, so a test that asserted a motionless piston would
+    be asserting something false.  What makes emptiness unattractive is the
+    travel shortfall of the motion it does produce, not the absence of one.
+    """
+    _structure, layout = engine_ground_structure()
+    x = random_start(layout, np.random.default_rng(0))
+    x[layout.presence_offset :] = 0.0
+    motion = sweep(layout, x, samples=48, penalty=1.0)
+    assert motion.converged
+    assert motion.strain == pytest.approx(0.0), "an absent member is not charged strain"
+    assert np.ptp(motion.lam) > 0.0
+
+
+def test_travel_shortfall_charges_only_the_shortfall() -> None:
+    """Under-travel is charged, exact travel and over-travel are not."""
+    target = np.array([0.0, 74.0, 10.0, 60.0])
+    assert travel_shortfall(target, np.full(4, 5.0)) == pytest.approx(74.0)
+    assert travel_shortfall(target, target) == pytest.approx(0.0)
+    assert travel_shortfall(target, 2.0 * target) == pytest.approx(0.0)
+
+
+def test_motion_error_ignores_an_offset() -> None:
+    """Where the cylinder is bolted is not the mechanism's business."""
+    lam = np.sin(np.linspace(0.0, 2.0 * np.pi, 60, endpoint=False))
+    assert motion_error(lam, lam + 1000.0) == pytest.approx(0.0, abs=1.0e-12)
+    assert motion_error(lam, -lam) > 1.0
+
+
+def test_stiffness_runs_from_the_floor_to_one() -> None:
+    """SIMP, with the floor that keeps an abandoned node's Hessian invertible."""
+    rho = np.array([0.0, 0.5, 1.0])
+    for penalty in PENALTY_SCHEDULE:
+        k = stiffnesses(rho, penalty)
+        assert k[0] == pytest.approx(STIFFNESS_FLOOR)
+        assert k[2] == pytest.approx(1.0)
+        assert k[0] < k[1] < k[2]
+    assert stiffnesses(rho, 4.0)[1] < stiffnesses(rho, 1.0)[1]
+
+
+def test_the_ground_structure_excludes_fully_prescribed_members() -> None:
+    """A member between two prescribed nodes constrains the design, not the motion."""
+    structure, layout = engine_ground_structure()
+    movable = {"F1", "F2", "S"}
+    for i, j in structure.members:
+        pair = {structure.names[i], structure.names[j]}
+        assert pair & movable, f"{pair} joins two prescribed nodes"
+    assert structure.free_mask().sum() == 5
+    assert layout.size == 14 + structure.n_members
+
+
+def test_member_lengths_come_from_the_initial_pose() -> None:
+    """No design is prestressed, because every rest length is measured on it."""
+    structure, layout = engine_ground_structure()
+    x = random_start(layout, np.random.default_rng(3))
+    pos = initial_configuration(layout, x)
+    rest = member_lengths(layout, x)
+    for m, (i, j) in enumerate(structure.members):
+        assert rest[m] == pytest.approx(float(np.hypot(*(pos[i] - pos[j]))))
+
+
+def test_a_random_start_lies_in_the_box_with_every_member_half_present() -> None:
+    """The start is admissible and takes no decision the search should take."""
+    _structure, layout = engine_ground_structure()
+    lower, upper = default_bounds(layout)
+    x = random_start(layout, np.random.default_rng(7))
+    assert np.all(x >= lower) and np.all(x <= upper)
+    assert np.all(layout.presences(x) == 0.5)
+
+
+def test_the_schedules_are_paired_and_ramp() -> None:
+    """The continuation raises both pressures together, and starts with neither."""
+    assert len(DISCRETENESS_SCHEDULE) == len(PENALTY_SCHEDULE)
+    assert DISCRETENESS_SCHEDULE[0] == 0.0
+    assert list(PENALTY_SCHEDULE) == sorted(PENALTY_SCHEDULE)
+    assert list(DISCRETENESS_SCHEDULE) == sorted(DISCRETENESS_SCHEDULE)
+    assert STRAIN_WEIGHT > TRAVEL_WEIGHT > COUNT_WEIGHT
+
+
+def test_a_piston_driven_from_one_shaft_alone_has_no_odd_harmonic() -> None:
+    """The structural reason a synthesis can produce a four-stroke Otto engine.
+
+    This is not an observation, it is an identity.  Reach the piston from the
+    geared shaft alone and its height is a function of that shaft's angle, which
+    is :math:`-2\\theta_1 + \\varphi`; every term is therefore periodic in
+    :math:`\\theta_1` with period :math:`\\pi`, so *every odd harmonic vanishes*.
+    The two up-and-downs are there and the two halves of the revolution are
+    identical, which is exactly a plain Otto motion: four monotone phases, and
+    ``STE`` equal to ``STC``.
+
+    It is what the synthesis of §5.6 converged to, and it says where extended
+    expansion has to come from -- the piston must be reached from *both* shafts,
+    which is what EXlink's trigonal link does.
+
+    The identity is exact; what is measured here is the equilibrium solver's
+    precision, so the first harmonic is compared against the second rather than
+    against an absolute figure.  It comes out seven orders of magnitude down.
+    """
+    structure, layout = engine_ground_structure()
+    x = np.zeros(layout.size)
+    x[0:2] = [-140.0, -215.0]  # the geared shaft's centre
+    x[2:4] = [150.0, 40.0]
+    x[4:6] = [15.0, 2.1]
+    x[6:8] = [36.0, 1.45]  # its crank: radius, phase
+    x[8:10] = [-150.0, -150.0]
+    x[10:12] = [150.0, -150.0]
+    x[12] = -107.0
+    names = [(structure.names[i], structure.names[j]) for i, j in structure.members]
+    rho = np.zeros(structure.n_members)
+    rho[names.index(("P2", "S"))] = 1.0
+    x[layout.presence_offset :] = rho
+    pos = initial_configuration(layout, x)
+    x[13] = pos[structure.index("P2")][1] + 300.0
+
+    target = target_motion(samples=720)
+    verdict = assess(layout, x, target.lam, samples=720)
+
+    assert verdict.four_phases, "it is a perfectly good four-stroke motion"
+    assert verdict.second_harmonic > 20.0, "the two up-and-downs are there"
+    assert verdict.first_harmonic / verdict.second_harmonic < 1.0e-5, (
+        "and the asymmetry is absent to the solver's precision"
+    )
+    assert verdict.asymmetry == pytest.approx(0.0, abs=1.0e-3)
+    assert not verdict.is_extended_expansion
