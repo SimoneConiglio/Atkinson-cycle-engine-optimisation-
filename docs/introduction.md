@@ -40,10 +40,12 @@ methods are admissible at all.
 
 Two of the seven requirements are **equalities**, which makes the feasible set a
 measure-zero manifold in the design space: no method that proceeds by sampling
-can find a feasible point in it. The equalities must therefore be relaxed into
-**tolerance bands** — and those bands turn out to be comparable in width with
-the manufacturing scatter of the parts, so a deterministic answer inside the
-band is not the same thing as an engine that meets the requirement.
+can find a feasible point in it. This is a property of the specification rather
+than of the mechanism, and the repair belongs with the specification, so §3.5
+relaxes the equalities into **tolerance bands** as part of stating the problem
+rather than as a numerical expedient later. Those bands turn out to be comparable
+in width with the manufacturing scatter of the parts, so a deterministic answer
+inside the band is not the same thing as an engine that meets the requirement.
 
 Neither property is a numerical inconvenience to be worked around. The first
 dictates the class of optimizer; the second changes what "feasible" means and
@@ -57,10 +59,10 @@ The study contributes, on a problem small enough to be verified throughout:
 1. a formulation in which the objective is the application-level figure of merit
    and the competing geometric quantities are priced by the physical chain
    connecting them to it (§3);
-2. a demonstration that each structural property of the resulting problem —
-   measure-zero feasible set, field-valued coupling, discrete gear choice,
-   tolerance comparable with the bands — determines an element of the admissible
-   method rather than merely complicating it (§4);
+2. a demonstration that each structural property of the resulting problem — a
+   feasible set thin enough to exclude sampling, a field-valued coupling, a
+   discrete gear choice, a tolerance comparable with the bands — determines an
+   element of the admissible method rather than merely complicating it (§4);
 3. quantitative results on what the formulation and the topology are each worth
    (§5.1, §5.4);
 4. two failures of the reliability model, found by widening the uncertain vector
@@ -70,8 +72,8 @@ The study contributes, on a problem small enough to be verified throughout:
 ## 1.4 Structure
 
 §2 reviews the methods available for each feature of the problem and identifies
-which are admissible. §3 states the mechanism, the specification and the
-formulation. §4 derives each element of the method from a property of that
+which are admissible. §3 states the mechanism, the specification, the
+formulation, and the relaxation the specification turns out to require. §4 derives each element of the method from a property of that
 formulation, and describes the implementation and its verification. §5 presents
 the results, §6 the conclusions, limitations and further work. Derivations are
 collected in {doc}`Appendix A <theory>`, the software in {doc}`Appendix B

@@ -39,8 +39,14 @@ through.
 
 ## 2.2 Formulating a mechanism-synthesis problem
 
-The dominant formulation in mechanism synthesis is *dimensional synthesis to a
-kinematic criterion*: choose link lengths to minimise a path or motion error, or
+Mechanism synthesis divides into two families by what the optimizer is allowed
+to change. In the first the topology is given and only its **dimensions** are
+chosen; in the second the **topology itself** is an outcome of the optimization.
+The distinction matters here because the two families answer different questions
+about this engine, and because only one of them can be applied to it.
+
+The first family — *dimensional synthesis to a kinematic criterion* — is the
+dominant formulation: choose link lengths to minimise a path or motion error, or
 to maximise a transmission quality index, subject to bounds on the envelope.
 {cite:t}`balli2002` review the transmission angle as such an index and its use as
 both objective and constraint; {cite:t}`gosselin1990` give the Jacobian-based
@@ -84,6 +90,45 @@ show that achievable consumption is set jointly by the powertrain map and the
 driving strategy, so neither can be scored without the other. That literature
 optimises the *strategy* at fixed hardware; what is optimised here is the
 *hardware*, with the strategy solved to optimality inside each evaluation.
+
+### Synthesising the topology, not only its dimensions
+
+The second family generates the linkage itself. The line of work begun at Seoul
+National University by {cite:t}`kim2007spring` is the one relevant here: the
+design domain is filled with rigid blocks joined by **zero-length springs of
+variable stiffness**, and the stiffnesses are the design variables. A spring
+driven stiff welds two blocks into one rigid member; a spring driven soft becomes
+a revolute joint; so a single continuous parameterisation covers every linkage the
+domain can hold, and the topology, the joint positions and the link lengths are
+determined in one solve rather than assumed. The relaxation is the same device
+§2.4 describes for catalogue choices — a discrete present-or-absent decision made
+continuous and then penalised back to its extremes — applied to joints instead of
+to stock. The family has since been extended, in a form directly
+relevant to a mechanism whose 2:1 relation is carried by a gear pair, to planar
+**gear-linkage** mechanisms {cite:p}`yim2019gearlinkage`; and a recent
+spring-connected *link* model {cite:p}`tran2024slm` reaches the same answers with
+far fewer design variables.
+
+Two things about it are worth stating precisely, because the springs invite a
+misreading. **The result is a rigid-body linkage, not a compliant mechanism.**
+The springs are a modelling device that the penalisation drives out; what is
+delivered is a set of rigid members and revolute joints. That is the reason the
+method belongs in this review at all. Compliant and soft mechanisms, which
+deliver their motion by elastic deformation, are *not* adapted to this
+application and are not considered anywhere in this study: the linkage carries
+kilonewton gas loads and joint reactions of 6 to 12 kN (§5.1), it must survive
+fatigue at a thousand cycles a minute, and an extended-expansion cycle depends on
+a kinematically exact 2:1 relation between the shafts — a relation that a
+deforming member does not hold, and whose error goes straight into the
+top-dead-centre gap that §5.2 shows this mechanism can least afford.
+
+This study belongs to the first family: the EXlink topology is given, and eleven
+dimensions and a gear pair are chosen. That is a deliberate restriction rather
+than an oversight, and it has a cost the results make explicit — §5.4 measures
+what the topology is worth against a slider-crank and finds it cannot say
+whether a *better* topology exists, because two topologies establish a contrast
+and not a trend. The second family is the natural instrument for that question,
+and §6.3 records it as the route to the third topology this study lacks.
 
 ## 2.3 Architectures, derivatives, and thin feasible sets
 
@@ -181,14 +226,18 @@ machinery is applied to. The architecture comparison follows
 reliability treatment FORM {cite:p}`hasofer1974,rackwitz1978` with a system
 probability {cite:p}`ditlevsen1979,genz1992`. Nothing in §4 is a new algorithm.
 
-What the literature leaves open is fourfold. The extended-expansion literature
+What the literature leaves open is fivefold. The extended-expansion literature
 sizes no parts and so cannot price the mechanism against the cycle it enables.
-The mechanism-synthesis literature optimises a transmission quality that the
+The dimensional-synthesis literature optimises a transmission quality that the
 virtual-work identity shows to be a proxy with no loss in it, and does so on a box
-where sampling methods are admissible. The Eco-marathon literature optimises the
-strategy at fixed hardware. The RBDO literature treats the bounds as given data
-rather than asking which of them the mechanism is able to hold, and at what price
-in the objective. The contributions listed in §1.3 follow from joining these
+where sampling methods are admissible. The topology-synthesis literature
+generates linkages against a *kinematic* target — a path, a motion, a
+timing — and stops there, so it too determines no cross-section and prices no
+part; a spring-connected block model asked for this engine would return a
+mechanism, not a range. The Eco-marathon literature optimises the strategy at
+fixed hardware. The RBDO literature treats the bounds as given data rather than
+asking which of them the mechanism is able to hold, and at what price in the
+objective. The contributions listed in §1.3 follow from joining these
 strands rather than from extending any one of them, and the problem is
 deliberately small enough that every claim is checked against a closed-form or
 sampled reference (§4.9).

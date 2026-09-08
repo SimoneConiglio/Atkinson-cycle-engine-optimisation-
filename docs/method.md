@@ -4,12 +4,14 @@ Every element of the method below is forced by a property of the formulation of
 §3 rather than chosen for convenience. Each subsection states the property,
 what it excludes, and what it leaves.
 
-## 4.1 The feasible set has measure zero
+## 4.1 The feasible set is thin, and that selects the optimizer
 
-Two of the seven requirements are equalities, so the feasible set is a
-nine-dimensional manifold in $\mathbb R^{11}$ and has Lebesgue measure zero.
-Nothing that proceeds by sampling can enter it, which is measurable rather than
-asserted:
+§3.5 relaxed the two equality requirements into bands (3.11), and the feasible
+set is full-dimensional as a result. It is not, however, *wide*: the bands are
+0.05 mm and 0.05 on quantities the design variables move by millimetres, so what
+was a measure-zero manifold is now a sliver around one. That is enough to change
+which optimizers can be used and not enough to let a sampling method work, and
+both halves are measurable rather than asserted.
 
 | method | outcome |
 |---|---|
@@ -18,26 +20,19 @@ asserted:
 | 4000 uniform samples within 50 % of a feasible design | 0 feasible |
 | 4000 uniform samples within 10 % of a feasible design | 0 feasible |
 
-Two things follow. First, only a method that *moves along* the manifold is
-admissible, which selects sequential quadratic programming with exact
-gradients — and makes §4.2 necessary rather than merely desirable. Second, the
-specification itself is at fault: a requirement stated as an equality cannot be
-met by a manufactured part, since no dimension is produced exactly and the
-stroke of a built engine is therefore a random variable. Restoring what the
-equality means gives
-
-$$|\mathrm{STE} - 74| \le \delta_{\mathrm{STE}} = 0.05\ \mathrm{mm}, \qquad
-  |\varepsilon - 16| \le \delta_\varepsilon = 0.05, \tag{4.1}$$
-
-and the feasible set becomes full-dimensional. The relaxation is a promise about
-tolerance, and §4.5 shows it cannot be left unexamined.
+Only a method that *moves along* the manifold is admissible, which selects
+sequential quadratic programming with exact gradients — and makes §4.2 necessary
+rather than merely desirable. The same thinness returns twice more: it is why the
+restarts of §4.6 have to be constructed on the manifold rather than drawn, and it
+is what defeats the line search when a reliability constraint is attached to a
+search whose other constraints are not imposed (§4.7).
 
 ## 4.2 Finite differences are wrong, not merely inaccurate
 
 Several constraints are extrema over the crank revolution,
 
 $$\gamma(X) = \max_{\theta_1}
-  \frac{|D(X,\theta_1)|}{\max_{\theta_1}|P(\theta_1)|}, \tag{4.2}$$
+  \frac{|D(X,\theta_1)|}{\max_{\theta_1}|P(\theta_1)|}, \tag{4.1}$$
 
 and the sample attaining the maximum changes as $X$ moves. A difference quotient
 taken across that switch does not approximate a derivative: it is measured at
@@ -49,7 +44,7 @@ alongside each intermediate, and for an extremum attained at $\theta^\ast$ the
 envelope theorem gives
 
 $$\frac{\mathrm{d}}{\mathrm{d}X}\Bigl[\max_\theta f(X,\theta)\Bigr]
-  = \frac{\partial f}{\partial X}\Bigr|_{\theta^\ast}, \tag{4.3}$$
+  = \frac{\partial f}{\partial X}\Bigr|_{\theta^\ast}, \tag{4.2}$$
 
 the term through $\mathrm{d}\theta^\ast/\mathrm{d}X$ vanishing because
 $\partial f/\partial\theta = 0$ at the maximiser. The switching problem
@@ -60,14 +55,14 @@ equilibrium solve differentiates as
 
 $$\frac{\partial x}{\partial p}
   = A^{-1}\Bigl(\frac{\partial b}{\partial p}
-  - \frac{\partial A}{\partial p}\,x\Bigr), \tag{4.4}$$
+  - \frac{\partial A}{\partial p}\,x\Bigr), \tag{4.3}$$
 
 reusing the factorisation already computed; and the sizing bisection is never
 differentiated at all, because the diameter is defined implicitly by
 $U(d, N, M) = 1$, so
 
 $$\frac{\partial d}{\partial q}
-  = -\frac{\partial U/\partial q}{\partial U/\partial d}. \tag{4.5}$$
+  = -\frac{\partial U/\partial q}{\partial U/\partial d}. \tag{4.4}$$
 
 SLSQP thus becomes applicable to a problem on which derivative-free search
 returns its input. Derivations are in {doc}`Appendix A <theory>` §A.10.
@@ -81,7 +76,7 @@ $$\dim(\text{coupling})
  = \underbrace{2 \times 7 \times 360 \times 9}_{\text{load histories}}
  + \underbrace{7}_{\text{diameters}}
  + \underbrace{1}_{\text{piston mass}}
- = 45\,368 \tag{4.6}$$
+ = 45\,368 \tag{4.5}$$
 
 against eleven design variables. The couplings are not scalars but the internal
 load history of every member at every crank angle at every station. IDF would
@@ -102,7 +97,7 @@ A gear has an integer tooth count cut with a standard-module hob. For the 2:1
 pair, $r = mz/2$ and $z_1 = 2z_2$, so
 
 $$I = \tfrac32 m z_2, \qquad m \in \text{ISO 54}, \quad
-  z_2 \in \mathbb Z,\ z_2 \ge 17. \tag{4.7}$$
+  z_2 \in \mathbb Z,\ z_2 \ge 17. \tag{4.6}$$
 
 $I$ lives on a lattice rather than an interval, and $I$ is one of the variables
 the equalities are satisfied *with*, so choosing the gears throws the design off
@@ -125,7 +120,7 @@ exactly. With $y$ a one-hot selection over the lattice the master is
 \eta \ge f_k + \nabla f_k^{\mathsf T}(x - x_k), \\
 0 \ge g_k + \nabla g_k^{\mathsf T}(x - x_k), \\
 I = \sum_j I_j y_j, \quad \sum_j y_j = 1.
-\end{cases} \tag{4.8}
+\end{cases} \tag{4.7}
 \end{equation}
 ```
 
@@ -135,10 +130,10 @@ point on evidence.
 
 ## 4.5 The relaxed bands are comparable with the scatter
 
-The bands (4.1) are a promise about tolerance, and the promise can be checked.
+The bands (3.11) are a promise about tolerance, and the promise can be checked.
 With $\Sigma$ the covariance of the dimensional errors and $\nabla g$ from §4.2,
 
-$$\sigma_g = \sqrt{\nabla g^{\mathsf T}\,\Sigma\,\nabla g}. \tag{4.9}$$
+$$\sigma_g = \sqrt{\nabla g^{\mathsf T}\,\Sigma\,\nabla g}. \tag{4.8}$$
 
 At IT8 machining tolerances the band half-width is $\delta_{\mathrm{STE}} =
 0.050$ mm against a scatter $\sigma_{\mathrm{STE}} = 0.029$ mm, giving a best
@@ -157,7 +152,7 @@ constrained instead is a probability of failure that keeps the correlation,
 $$P_f = 1 - \Phi_n(\beta;\rho) \le p_{\text{target}}, \qquad
   \beta_i = -\frac{g_i}{\sigma_i}, \qquad
   \rho_{ij} = \frac{\nabla g_i^{\mathsf T}\Sigma\nabla g_j}
-                   {\sigma_i \sigma_j}, \tag{4.10}$$
+                   {\sigma_i \sigma_j}, \tag{4.9}$$
 
 a first-order (FORM) index per constraint combined through the multivariate
 normal orthant. It costs one Jacobian evaluation, so it can sit inside the
@@ -180,7 +175,7 @@ Bearing, "engine runs" and "gears fit" are load-dependent, and the missing
 ingredient is the uncertainty model rather than the derivative. A probability of
 failure computed from a model that omits the dominant source is *worse* than a
 deterministic margin, because it launders a partial variance into something that
-reads as a reliability statement and then enters the system union of (4.10).
+reads as a reliability statement and then enters the system union of (4.9).
 §5.3 widens $\Sigma$ and reports what the wider model changes.
 
 ## 4.6 The problem is nonconvex
@@ -195,7 +190,7 @@ minimum-norm Newton step from the analytic Jacobians,
 :nowrap:
 \begin{equation}
 \Delta X = -J^{+} r, \qquad
-  J = \begin{bmatrix}\nabla\mathrm{STE}\\ \nabla\varepsilon\end{bmatrix}, \tag{4.11}
+  J = \begin{bmatrix}\nabla\mathrm{STE}\\ \nabla\varepsilon\end{bmatrix}, \tag{4.10}
 \end{equation}
 ```
 
@@ -215,15 +210,15 @@ does not.
   && \text{geometric} \\
 & |\mathrm{STE}(X) - 74| \le \delta_{\mathrm{STE}}, \quad
   |\varepsilon(X) - 16| \le \delta_\varepsilon
-  && \text{relaxed equalities (4.1)} \\
+  && \text{relaxed equalities (3.11)} \\
 & s(X, y) \le 0,\; \ell(X, y) \le 0,\; b(X, y) \le 0
   && \text{saturation, slenderness, bearing} \\
 & r(X, y) \ge 0, \quad h(X, y) \ge 0
   && \text{engine runs, gears fit} \\
 & I = \tfrac32 m z, \quad m \in \text{ISO 54},\ z \in \mathbb Z,\ z \ge 17
-  && \text{catalogue (4.7)} \\
+  && \text{catalogue (4.6)} \\
 & X \in [X_{lb}, X_{ub}] \subset \mathbb R^{11}
-\end{aligned} \tag{4.12}
+\end{aligned} \tag{4.11}
 \end{equation}
 ```
 
@@ -235,7 +230,7 @@ relation rather than a free variable, leaving ten in the search. The envelope
 bounds $H$ and $B$ of §2.2 are not among the constraints at all — once the
 objective prices size through mass, a separate limit on it is redundant.
 
-**Imposed, or merely checked.** Whether an optimizer is made to *hold* (4.12) is
+**Imposed, or merely checked.** Whether an optimizer is made to *hold* (4.11) is
 a separate question from stating it, and the study answers it both ways.
 
 | | coupled and vehicle rows | reliability | results |
@@ -265,7 +260,7 @@ constraint: it satisfies both equality requirements exactly, being a functional
 of $\lambda$ alone, and it is abandoned the moment the range becomes computable.
 
 **Reliability, imposed.** Under either of the first two forms the problem is
-deterministic and (4.10) is applied to the solution. The third form closes the
+deterministic and (4.9) is applied to the solution. The third form closes the
 loop by attaching
 {py:class}`~exlink.robustness.FailureProbabilityDiscipline` and a thirteenth
 constraint. Three things had to be true before that constrained problem could be

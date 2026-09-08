@@ -243,3 +243,33 @@ explanation is conditioning — the vector sits at $W = 0.982$, where the piston
 motion is violently sensitive to the link lengths, so the design is not
 reproducible to four digits across two independent implementations. It is the
 first appearance of the theme §5.1 develops.
+
+## 3.5 The specification cannot be met as written
+
+Two of the seven requirements in §3.1 are **equalities**, and that is a property
+of this specification rather than of mechanism synthesis in general. Most
+dimensional-synthesis problems bound their requirements; this one fixes the
+expansion stroke at 74 mm and the compression ratio at 16 exactly, because both
+were written as targets before any part existed. The consequence is geometric:
+the two equalities cut the eleven-dimensional design box down to a
+nine-dimensional manifold, so the feasible set has Lebesgue measure zero and a
+point drawn at random lies off it with probability one.
+
+The defect is in the statement rather than in the mechanism. A requirement given
+as an equality cannot be met by a manufactured part: no dimension is produced
+exactly, so the stroke of a built engine is a random variable and
+$\mathrm{STE} = 74$ is a requirement no engine has ever satisfied. Restoring what
+the equality was shorthand for gives
+
+$$|\mathrm{STE} - 74| \le \delta_{\mathrm{STE}} = 0.05\ \mathrm{mm}, \qquad
+  |\varepsilon - 16| \le \delta_\varepsilon = 0.05, \tag{3.11}$$
+
+with the half-widths taken from what a machined linkage member holds. The
+feasible set becomes full-dimensional and the problem well posed, and it is
+(3.11) rather than the equalities that the rest of this document solves.
+
+Two things follow, and the study returns to each. The relaxation is a *promise
+about tolerance*, and a promise that can be checked: §4.5 compares the bands with
+the scatter of the parts they are supposed to cover, and §5.2 prices what
+widening them costs and buys. And a feasible set of measure zero excludes an
+entire class of optimizer before any is tried, which §4.1 measures.

@@ -143,9 +143,20 @@ is a correlated model of the two strengths, second-order treatment of
 the set — and an implementation cheap enough for the optimizer to call rather than
 for a report to quote.
 
-*Add a third topology.* A genuine third extended-expansion mechanism needs its own
-internal 2:1 ratio, which is what unequal strokes require. The dimensionality axis
-has been settled (§5.4); the topological question has not. A functional IDF over
+*Add a third topology, and generate it rather than choose it.* A genuine third
+extended-expansion mechanism needs its own internal 2:1 ratio, which is what
+unequal strokes require. The dimensionality axis has been settled (§5.4); the
+topological question has not, and picking a third linkage by hand would only move
+the arbitrariness rather than remove it. The instrument for generating one is the
+second family of §2.2 — a spring-connected rigid block model, in which the joints
+are relaxed to springs of variable stiffness and penalised back to rigid or free,
+so that the topology comes out of the solve. Its gear-linkage form is the one to
+use, since the 2:1 relation this cycle depends on is carried by a gear pair. Two
+things would have to be added to it, and both are this study's own subject rather
+than that method's: its objective is kinematic, so it prices no part and would
+have to be composed with the range chain of §3.3; and the top-dead-centre gap that
+§5.2 shows governs this mechanism is a functional of the synthesised motion, so it
+belongs in the synthesis rather than in a check afterwards. A functional IDF over
 the piston motion, sketched in {doc}`Appendix C <supporting>`, is a larger
 question again and would need its own study.
 

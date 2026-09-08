@@ -16,8 +16,8 @@ Nine designs are referred to below and are collected here once.
 | `GRADIENT_DESIGN` | — | geometric objective, SLSQP | yes |
 | `COUPLED_DESIGN` | 3338 km/L | minimum coupled mass; the strictly feasible reference | **yes** |
 | `RANGE_DESIGN` | 3388 km/L | range, constraints bound at the end | no, by $1.5\times10^{-4}$ |
-| range, constraints imposed | 3501 km/L | (4.12) second form, nominal only | no, by $2\times10^{-4}$ |
-| **`RELIABLE_DESIGN`** | **3395 km/L** | **(4.12) third form; the study's result** | no — relaxed spec |
+| range, constraints imposed | 3501 km/L | (4.11) second form, nominal only | no, by $2\times10^{-4}$ |
+| **`RELIABLE_DESIGN`** | **3395 km/L** | **(4.11) third form; the study's result** | no — relaxed spec |
 | slider-crank, optimised | 2888 km/L | the baseline of §5.4, over its own two freedoms | its own limits |
 | slider-crank, capped | 2467 km/L | the same, held to the linkage's limits; §5.2 only | yes, on the cap |
 
@@ -121,7 +121,7 @@ against the tube, so +0.9 % is an upper bound.
 The requirements of §3.1 are a mathematical specification: eight numbers written
 down before any part existed. A tolerance study at IT8 says which of them this
 mechanism can hold. Only two are in question — the top-dead-centre gap $g$ and
-the band each equality is relaxed into (4.1) — and the remaining five run from
+the band each equality is relaxed into (3.11) — and the remaining five run from
 $C_{pk} = 3.2$ to 493 and do not enter the discussion again.
 
 | constraint | nominal | $\sigma$, first order | $\sigma$, Monte Carlo | $C_{pk}$ | violated |
@@ -159,7 +159,7 @@ computed rather than argued. The bands are the same statement in other units:
 $\varepsilon = 16 \pm 0.15$ is $\pm 0.035$ mm of piston height, a shim under the
 head, and $\mathrm{STE} = 74 \pm 0.15$ mm is $\pm 0.2$ % of the stroke.
 
-**What widening buys.** Evaluating (4.10) on `COUPLED_DESIGN`:
+**What widening buys.** Evaluating (4.9) on `COUPLED_DESIGN`:
 
 | gap bound | band | system $P_f$ | $\beta$ | binding |
 |---|---|---|---|---|
@@ -478,7 +478,7 @@ members being a larger share of a smaller mechanism.
 
 ## 5.5 The announced problem, solved, and where the search must be helped
 
-Problem (4.12) is: maximise range, hold every constraint, constrain a system
+Problem (4.11) is: maximise range, hold every constraint, constrain a system
 probability of failure. Solving *that* needs the bounds §5.2 identifies, because
 at the bounds as written no design reaches the target. The run used the gap at
 0.054 mm and both bands at $\pm 0.15$:
@@ -573,7 +573,7 @@ the climb is monotone in reliability from $\beta = 0.001$ to 2.651 while the ran
 *rises* from 3388 to 3402 km/L — but thirty iterations is not enough for any rung
 to converge, so the budget is spent restarting rather than arriving. The reason is
 not that continuation is a bad instrument but that **the obstruction it was built
-for is absent**: the non-movement was measured under the first form of (4.12),
+for is absent**: the non-movement was measured under the first form of (4.11),
 with the coupled and vehicle constraints bound only at the end, and under the
 second form with the branch-aware constraint set the search moves freely from the
 same start and reaches its target unaided. Given a search that can move,
