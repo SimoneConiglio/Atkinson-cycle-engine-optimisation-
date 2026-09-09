@@ -15,6 +15,8 @@ from exlink.synthesis import target_motion
 from exlink.topology import (
     COUNT_WEIGHT,
     DISCRETENESS_SCHEDULE,
+    GEAR_CATALOGUE,
+    HARMONIC_WEIGHT,
     PENALTY_SCHEDULE,
     STIFFNESS_FLOOR,
     STRAIN_WEIGHT,
@@ -23,6 +25,10 @@ from exlink.topology import (
     assess,
     default_bounds,
     engine_ground_structure,
+    gear_radii,
+    geared_ground_structure,
+    harmonic,
+    harmonic_error,
     initial_configuration,
     member_lengths,
     motion_error,
@@ -51,6 +57,26 @@ def _slider_crank_design(radius: float = 30.0, rod: float = 120.0, axis: float =
     rho[names.index(("P1", "S"))] = 1.0
     x[layout.presence_offset :] = rho
     return layout, x
+
+
+def _geared_slider_crank(structure, layout, ratio: float):
+    """A design on the geared domain: one rod from the fast shaft to the piston."""
+    x = np.zeros(layout.size)
+    x[0:2] = [180.0, 0.0]  # the geared shaft's centre, 180 mm from the input
+    x[2:4] = [-150.0, 120.0]
+    x[4:6] = [20.0, 0.0]
+    x[6:8] = [35.0, 0.0]
+    x[8:10] = [-120.0, -120.0]
+    x[10:12] = [120.0, -120.0]
+    x[12], x[13] = 180.0, 300.0
+    x[14] = 0.0
+    names = [tuple(structure.names[n] for n in e.nodes) for e in structure.elements]
+    rho = np.zeros(structure.n_presences)
+    rho[names.index(("P2", "S"))] = 1.0
+    pair = next(g for g, gear in enumerate(structure.gears) if gear.ratio == ratio)
+    rho[structure.n_members + pair] = 1.0
+    x[layout.presence_offset :] = rho
+    return x
 
 
 def test_a_single_member_reproduces_a_slider_crank() -> None:
@@ -100,8 +126,8 @@ def test_the_energy_derivatives_agree_with_differences() -> None:
     assert np.max(np.abs(hess - hess.T)) == 0.0
 
 
-def test_the_objective_is_assembled_from_its_four_terms() -> None:
-    """Motion error, travel shortfall, strain and member count, in that order.
+def test_the_objective_is_assembled_from_its_terms() -> None:
+    """Motion error, harmonic error, travel shortfall, strain and count.
 
     Worth pinning because the travel term exists to repair a real failure.  With
     ``COUNT_WEIGHT`` at its original 1.0 mm and no travel term, the cheapest
@@ -117,6 +143,7 @@ def test_the_objective_is_assembled_from_its_four_terms() -> None:
     motion = sweep(layout, x, samples=48, penalty=1.0)
     expected = (
         motion_error(target, motion.lam)
+        + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
     )
@@ -255,3 +282,111 @@ def test_a_piston_driven_from_one_shaft_alone_has_no_odd_harmonic() -> None:
     )
     assert verdict.asymmetry == pytest.approx(0.0, abs=1.0e-3)
     assert not verdict.is_extended_expansion
+
+
+def test_a_harmonic_the_target_does_not_have_is_not_charged() -> None:
+    """A relative error needs something to be relative to.
+
+    A target with no content at an order still carries a coefficient of order
+    1e-15 there rather than exactly zero.  Dividing by that turned a bounded
+    objective into 7.8e16 the first time this ran, against a pure
+    second-harmonic target; the floor is why it no longer does.
+    """
+    theta = np.linspace(0.0, 2.0 * np.pi, 96, endpoint=False)
+    target = 150.0 + 32.0 * np.cos(2.0 * theta)
+    assert abs(harmonic(target, 1)[0]) < 1.0e-12, "the target has no first harmonic"
+
+    assert harmonic_error(target, target) == pytest.approx(0.0, abs=1.0e-9)
+    charge = harmonic_error(target, 150.0 + 24.0 * np.cos(2.0 * theta))
+    assert 0.0 < charge < float(np.std(target)), "and the second is charged in proportion"
+
+
+def test_a_fitted_gear_imposes_its_ratio() -> None:
+    """The geared shaft must turn at the catalogue ratio, and the other way.
+
+    A pair is carried as slip at the pitch point rather than as an angular
+    error, so this also checks the radii: they have to sum to the centre
+    distance and stand in the ratio, or the mesh the search chose is not one a
+    pair could be cut for.
+    """
+    structure, layout = geared_ground_structure()
+    for ratio in GEAR_CATALOGUE:
+        x = _geared_slider_crank(structure, layout, ratio)
+        radii = gear_radii(layout, x)
+        pair = next(g for g, gear in enumerate(structure.gears) if gear.ratio == ratio)
+        assert radii[pair].sum() == pytest.approx(180.0), "the pair fits its centres"
+        assert radii[pair][0] / radii[pair][1] == pytest.approx(ratio)
+
+        motion = sweep(layout, x, samples=720, penalty=PENALTY_SCHEDULE[-1])
+        assert motion.converged
+        assert motion.strain < 1.0e-4, "a fitted pair rolls without slipping"
+        assert motion.gear_ratios == (ratio,)
+        slope = np.sign(np.diff(np.concatenate([motion.lam, motion.lam[:1]])))
+        reversals = int((slope[:-1] != slope[1:]).sum() + (slope[-1] != slope[0]))
+        assert reversals // 2 == int(ratio), "one up-and-down per turn of the shaft"
+
+
+def test_only_a_whole_ratio_closes_the_cycle() -> None:
+    """The catalogue is integers, and that is physics rather than convenience.
+
+    A geared shaft turning ``r`` times per input revolution is back where it
+    started only when ``r`` is whole.  At three-to-two the mechanism's period is
+    *two* input revolutions, so successive cycles of the engine differ and there
+    is no four-stroke to speak of.
+    """
+    assert all(float(r).is_integer() for r in GEAR_CATALOGUE)
+
+
+def test_a_body_is_one_presence_driving_three_rigid_sides() -> None:
+    """The change §5.6's stall asked for: a triangle switched on by one variable.
+
+    Assembled from three separate bars a triangle is unreachable by descent --
+    each bar alone does nothing, so the objective is flat in its geometry until
+    all three happen to switch on together.  One presence removes that barrier,
+    and the three sides have to stay rigid for it to be a body at all.
+    """
+    structure, _layout = geared_ground_structure()
+    bodies = [e for e in structure.elements if e.kind == "body"]
+    assert bodies, "the geared domain offers three-cornered links"
+    assert all(len(e.springs) == 3 for e in bodies)
+    assert all(len(e.springs) == 1 for e in structure.elements if e.kind == "bar")
+
+    owner = structure.spring_owner()
+    assert owner.size == len(structure.springs())
+    for m, element in enumerate(structure.elements):
+        assert int((owner == m).sum()) == len(element.springs)
+
+
+def test_a_body_stays_rigid_through_the_revolution() -> None:
+    """A switched-on triangle holds all three of its sides, not just two."""
+    structure, layout = geared_ground_structure()
+    x = _geared_slider_crank(structure, layout, 2.0)
+    names = [tuple(structure.names[n] for n in e.nodes) for e in structure.elements]
+    rho = layout.presences(x).copy()
+    rho[names.index(("P2", "F1", "S"))] = 1.0
+    x[layout.presence_offset :] = rho
+
+    rest = member_lengths(layout, x)
+    body = next(
+        m
+        for m, e in enumerate(structure.elements)
+        if e.nodes == tuple(structure.index(n) for n in ("P2", "F1", "S"))
+    )
+    sides = np.flatnonzero(structure.spring_owner() == body)
+    assert sides.size == 3
+    assert np.all(rest[sides] > 0.0)
+
+    motion = sweep(layout, x, samples=360, penalty=PENALTY_SCHEDULE[-1])
+    assert motion.converged
+    assert motion.strain < 1.0e-4, "every side of the body holds its length"
+
+
+def test_the_geared_domain_contains_the_older_one() -> None:
+    """§5.7 adds freedom; it does not take any away."""
+    old, old_layout = engine_ground_structure()
+    new, new_layout = geared_ground_structure()
+    assert set(old.members) <= set(new.members)
+    assert new.n_members > old.n_members
+    assert new.gears and not old.gears
+    assert old.free_shafts == () and new.free_shafts == (1,)
+    assert new_layout.size > old_layout.size

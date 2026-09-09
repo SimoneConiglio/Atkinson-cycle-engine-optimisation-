@@ -105,7 +105,7 @@ Written as a paper, hosted on GitHub Pages, built from `docs/` by
 | [2. Related work](docs/state_of_the_art.md) | the methods available for each feature, and which apply |
 | [3. Problem formulation](docs/formulation.md) | the mechanism, the specification, the objective |
 | [4. Method](docs/method.md) | each element as a consequence of a property of the problem, and the implementation |
-| [5. Results](docs/results.md) | the six principal findings |
+| [5. Results](docs/results.md) | the seven principal findings |
 | [6. Conclusions](docs/conclusions.md) | what is established, the limitations, further work |
 | [Appendix A. Theory](docs/theory.md) | the derivations |
 | [Appendix B. Running the code](docs/implementation.md) | install, CLI, module map, reproducing each result |

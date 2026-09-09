@@ -76,7 +76,22 @@ geared shaft alone. That is an identity rather than an accident: a piston driven
 from one shaft is periodic in that shaft's angle, so the asymmetry, which lives
 entirely in the first harmonic, is *exactly* zero. Extended expansion requires
 the piston train to be reached from both shafts, which is what EXlink's
-three-cornered link does (§5.6).
+three-cornered link does (§5.6). Handing the search a three-cornered body does
+not by itself change the answer: §5.7 offers them, and the start that used two
+of them built both on the geared shaft and returned an Otto engine again. The
+body has to *bridge* the two shafts, not merely exist.
+
+**An under-constrained answer can report anything, and nothing standard catches
+it.** Enriching the synthesis domain — three-cornered bodies as single
+candidates, shaft angles as coordinates, gear pairs chosen from a catalogue —
+produced a start that reported extended expansion with an asymmetry of 70.9 mm
+and was not a mechanism at all: it kept no gear, so the geared shaft's angle was
+a coordinate nothing resisted, and its motion was chosen by the solver rather
+than by the linkage. Strain does not see this, because a loose mechanism strains
+nothing. The reading that does is the piston's component in the null space of
+the reduced Hessian: 0.71 there, against exactly zero at every genuine answer in
+this study. Every enrichment of such a domain has the same exposure, so a
+mobility test belongs beside the strain test in any run of this kind (§5.7).
 
 **Decomposition buys structure, not speed.** Bi-level outer approximation halves
 the sub-solves against enumeration and lands 0.6 % short, on a bound that is not
@@ -119,9 +134,10 @@ whether their solutions agree. The schedule's distance weights are stated rather
 than derived, no survey of the track existing.
 
 The topology synthesis of §5.6 searched a domain of twelve candidate members
-from six random starts, which is small next to the published spring-connected
-studies; it establishes what extended expansion requires, not that no alternative
-topology exists.
+from six random starts, and §5.7's enriched domain three of six inside a 90-minute cap;
+both are small next to the published spring-connected studies. They
+establish what extended expansion requires, not that no alternative topology
+exists.
 
 **Scope.** The results at $\beta \ge 3$ are stated at a widened specification: the
 top-dead-centre gap at 0.1 mm and both equality bands at $\pm 0.15$. §5.2 prices
@@ -159,20 +175,26 @@ is a correlated model of the two strengths, second-order treatment of
 the set — and an implementation cheap enough for the optimizer to call rather than
 for a report to quote.
 
-*Finish the topology synthesis.* §5.6 runs it and does not find an alternative:
-six starts return mechanisms, one of them a clean four-stroke, and that one is an
-Otto engine. Three things would give the question a fair hearing. The domain
-should offer a **three-cornered body** as a candidate rather than requiring the
-search to assemble one from binary members, since §5.6 shows that joining the two
-shafts at one body is the whole of what extended expansion needs. The search
-should be much wider — twelve candidate members and six starts is small next to
-the published spring-connected studies. And the objective should reach past the
-motion: a kinematic target produces a candidate, and only the range chain of §3.3
-decides whether a candidate beats 3395 km/L. The top-dead-centre gap that §5.2
-shows governs this mechanism is a functional of the synthesised motion, so it
-belongs inside the synthesis rather than in a check afterwards. A functional IDF
-over the piston motion, sketched in {doc}`Appendix C <supporting>`, is a larger
-question again and would need its own study.
+*Constrain the synthesis domain before widening it further.* §5.7 gives the
+search three-cornered bodies, free shaft angles and a catalogue of gear ratios,
+and the extra freedom brings two failures rather than an alternative mechanism: a
+design detached from the input shaft, which the void's flat gradient will not let
+the search leave, and an under-constrained one whose reported extended expansion
+was a solver artefact. What is needed next is not more freedom but two conditions
+on it — a **connectivity** requirement, that some path of present elements joins
+the input to the piston, and a **mobility** requirement, that the equilibrium
+determine the piston's coordinate. Neither is a volume fraction, which is what
+SIMP normally constrains, and both are conditions on the graph the presences
+describe. With them in place, the search should also be much wider: twelve bars,
+ten bodies and six starts is small next to the published spring-connected
+studies.
+
+*Then reach past the motion.* A kinematic target produces a candidate, and only
+the range chain of §3.3 decides whether a candidate beats 3395 km/L. The
+top-dead-centre gap that §5.2 shows governs this mechanism is a functional of the
+synthesised motion, so it belongs inside the synthesis rather than in a check
+afterwards. A functional IDF over the piston motion, sketched in {doc}`Appendix C
+<supporting>`, is a larger question again and would need its own study.
 
 ## 6.4 Headline numbers
 

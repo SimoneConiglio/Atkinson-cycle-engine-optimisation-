@@ -3,19 +3,20 @@
 What this is for
 ----------------
 §5.4 measures the EXlink topology against a slider-crank and finds it worth
-17.6 %.  Two topologies establish a contrast and not a trend, and §6.3 records
+17.6 %.  Two topologies establish a contrast and not a trend, and §6.3 recorded
 the missing third -- with the warning that choosing one by hand moves the
 arbitrariness rather than removing it.  This module removes it instead, by
 asking the optimizer for the topology.
 
 The method is the second family of §2.2: the spring-connected model of
-:cite:t:`kim2007spring`, in the reduced *link* form of
-:cite:t:`tran2024slm`.  A design domain is populated with candidate members,
-every candidate is a spring whose stiffness is a design variable, and the
-stiffnesses are penalised towards their extremes.  A spring driven stiff is a
-rigid binary link; a spring driven soft is no link at all.  One continuous
-parameterisation therefore covers every linkage the domain can hold, and the
-topology falls out of a gradient solve rather than being assumed.
+:cite:t:`kim2007spring`, in the reduced *link* form of :cite:t:`tran2024slm`,
+with the gear-linkage extension of :cite:t:`yim2019gearlinkage`.  A design
+domain is populated with candidate elements, every candidate is a spring whose
+stiffness is a design variable, and the stiffnesses are penalised towards their
+extremes.  A spring driven stiff is a rigid connection; a spring driven soft is
+no connection at all.  One continuous parameterisation therefore covers every
+mechanism the domain can hold, and the topology falls out of a gradient solve
+rather than being assumed.
 
 The synthesis problem
 ---------------------
@@ -23,41 +24,73 @@ The input is the **half-speed shaft**, turning once per cycle, and the output is
 the piston height.  Over one input revolution the target motion has two equal
 maxima and two unequal minima -- :func:`exlink.synthesis.target_motion` builds
 the one that realises ``STE = 74`` mm and ``epsilon = 16`` exactly -- so the
-synthesis is asked for a linkage that turns one circular input into two
+synthesis is asked for a mechanism that turns one circular input into two
 unequal up-and-downs of a point on the cylinder axis.
 
-That period is the whole difficulty, and it is worth being explicit about why.
-A linkage driven by a shaft is periodic in that shaft's angle, so a mechanism
-driven from the *crankshaft* alone cannot produce a motion that differs between
-its two revolutions: extended expansion needs something in the mechanism that
-turns once per cycle.  Every four-stroke already has one, and the candidate set
-below offers the search both ways of using it -- a second grounded shaft geared
-to the input, which is what EXlink does, or a longer chain of bars off the input
-shaft alone, which is what a six-bar function generator would do.  Which it
-takes is an outcome rather than an assumption.
+That period is the whole difficulty.  A mechanism driven by a shaft is periodic
+in that shaft's angle, so one driven from the *crankshaft* alone cannot produce
+a motion that differs between its two revolutions: extended expansion needs
+something that turns once per cycle.  §5.6 sharpens this into an identity --
+reach the piston from one shaft only and every odd harmonic vanishes exactly,
+so the asymmetry, which lives entirely in the first harmonic, is *zero* rather
+than small.  The piston must be reached from both shafts.
+
+What the domain can hold
+------------------------
+Three kinds of candidate, each with one presence variable :math:`\\rho`:
+
+**Bars.**  A spring between two nodes.
+
+**Bodies.**  A rigid triangle on three nodes, carried as three springs sharing a
+single presence.  §5.6 measured why this matters: assembled from three separate
+bars a triangle is unreachable by descent, because each bar alone does nothing
+and the objective is flat in its geometry until all three switch on together.
+One variable turns the whole three-cornered link on, which is the shape the
+identity above says extended expansion needs.
+
+**Gears.**  A pair between two shafts, at a ratio from a small catalogue.  Every
+shaft carries its own angle; the input's is prescribed and the rest are *free
+coordinates of the equilibrium*, so a shaft with no gear on it is simply loose
+and one with two is over-constrained -- both visible in the strain the answer
+runs at.  A pair between shafts at centres :math:`c_i, c_j` meshes externally,
+so its pitch radii are fixed by the centre distance and the ratio,
+
+.. math:: r_i = \\frac{d\\,r}{1 + r}, \\qquad r_j = \\frac{d}{1 + r},
+          \\qquad d = \\lVert c_i - c_j \\rVert,
+
+and rolling without slip at the pitch point costs
+
+.. math:: E = \\tfrac12 k(\\rho)\\,
+          \\bigl(r_i \\vartheta_i + r_j \\vartheta_j - \\varphi\\bigr)^2 .
+
+Writing it as slip rather than as an angular error is what keeps the mesh
+geometrically consistent for free -- no separate centre-distance constraint is
+needed, because the radii are read off the centres the search chose -- and keeps
+the term in the same units as every other spring.  Choosing the ratio from a
+catalogue of one presence per (pair, ratio) needs no new machinery either: two
+ratios switched on at once is over-constraint, which the strain already detects.
 
 The model
 ---------
-Nodes carry planar coordinates.  Some are grounded, two are *driven* -- pins on
-cranks whose angles are prescribed multiples of the input angle -- one is the
-piston, whose abscissa is the cylinder axis and whose ordinate is the output,
-and the rest are free.  Every candidate member :math:`m` joining nodes
-:math:`i` and :math:`j` contributes
+Nodes carry planar coordinates.  Some are grounded, some are *pins* on shafts,
+one is the piston -- abscissa on the cylinder axis, ordinate the output -- and
+the rest are free.  Every spring :math:`m` joining nodes :math:`i` and :math:`j`
+contributes
 
 .. math:: E_m = \\tfrac12 k_m \\bigl(\\lVert x_i - x_j \\rVert - L_m\\bigr)^2,
           \\qquad k_m = k_{\\min} + (1 - k_{\\min})\\,\\rho_m^{\\,p}
 
-with :math:`\\rho_m \\in [0, 1]` its presence and :math:`L_m` its length.  The
-configuration at an input angle is the minimiser of :math:`\\sum_m E_m` over the
-free coordinates, found by a damped Newton iteration warm-started from the
-previous angle -- the incremental analysis the published method uses, and the
-reason the branch a mechanism runs on is followed rather than re-chosen at every
-angle.
+with :math:`L_m` measured on the initial pose, so no design is prestressed.  The
+configuration at an input angle minimises the total over the free coordinates --
+free node positions *and* free shaft angles -- by a ridged Newton with a
+backtracking line search, warm-started from the previous angle.  That is the
+incremental analysis the published method uses, and the reason the branch a
+mechanism runs on is followed rather than re-chosen at every angle.
 
-The penalty exponent :math:`p` is raised on a schedule (:data:`PENALTY_SCHEDULE`).
-At :math:`p = 1` the problem is nearly convex in the stiffnesses and the search
-moves freely; raising it makes intermediate stiffnesses uneconomic, so the
-members separate into present and absent.
+The penalty exponent :math:`p` is raised on a schedule
+(:data:`PENALTY_SCHEDULE`).  At :math:`p = 1` the problem is nearly convex in the
+stiffnesses and the search moves freely; raising it makes intermediate
+stiffnesses uneconomic, so the candidates separate into present and absent.
 
 Why the objective can afford to be only the motion
 --------------------------------------------------
@@ -81,10 +114,10 @@ FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 
 STIFFNESS_FLOOR = 1.0e-6
-"""Stiffness of a fully absent member, relative to a fully present one.
+"""Stiffness of a fully absent candidate, relative to a fully present one.
 
 Not zero, for the reason SIMP keeps a floor: a node reachable only through
-absent members would otherwise leave the Hessian singular, and the damped
+absent springs would otherwise leave the Hessian singular, and the damped
 Newton would have nothing to say about where it goes.
 """
 
@@ -93,39 +126,100 @@ PENALTY_SCHEDULE: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0)
 
 GROUND = -1
 """Node kind: coordinates fixed by the design vector."""
-DRIVEN = -2
-"""Node kind: coordinates prescribed by the input angle."""
+PIN = -2
+"""Node kind: a point on a shaft's crank, carried round by the shaft's angle."""
 SLIDER = -3
 """Node kind: abscissa fixed, ordinate free.  The piston."""
 FREE = -4
 """Node kind: both coordinates free."""
 
+DRIVEN = PIN
+"""Old name for :data:`PIN`, kept so §5.6's vocabulary still reads."""
+
+PRESENCE_THRESHOLD = 0.5
+"""Presence above which a candidate is kept when the answer is made discrete."""
+
+
+@dataclass(frozen=True)
+class Shaft:
+    """A grounded axis with an angle, which may be prescribed or solved for."""
+
+    name: str
+    centre_slot: int | None
+    """Design-vector offset of its centre, or ``None`` when pinned at the origin."""
+    ratio: float | None
+    """Its speed as a multiple of the input's, or ``None`` when the angle is free.
+
+    ``1`` is the input shaft itself.  ``-2`` is a shaft geared to it two to one
+    and turning the other way, which is the relation :mod:`exlink.kinematics`
+    gives the EXlink -- prescribed here rather than discovered, which is what
+    §5.6's domain does and §5.7's does not.
+    """
+    angle_slot: int | None = None
+    """Design-vector offset of its starting angle, for a free shaft."""
+
+    @property
+    def is_free(self) -> bool:
+        """Whether the equilibrium solves for this shaft's angle."""
+        return self.ratio is None
+
+
+@dataclass(frozen=True)
+class Pin:
+    """A node carried round by a shaft at a radius and a phase."""
+
+    node: int
+    shaft: int
+    slot: int
+    """Design-vector offset of the radius, with the phase next to it."""
+
+
+@dataclass(frozen=True)
+class Element:
+    """A candidate the search may switch on: one presence variable, one shape."""
+
+    kind: str
+    """``"bar"`` for two nodes, ``"body"`` for a rigid triangle on three."""
+    nodes: tuple[int, ...]
+
+    @property
+    def springs(self) -> tuple[tuple[int, int], ...]:
+        """The springs it is carried as: one for a bar, three for a body."""
+        if self.kind == "bar":
+            return ((self.nodes[0], self.nodes[1]),)
+        i, j, k = self.nodes
+        return ((i, j), (j, k), (k, i))
+
+
+@dataclass(frozen=True)
+class Gear:
+    """A candidate gear pair between two shafts, at one catalogue ratio."""
+
+    first: int
+    second: int
+    ratio: float
+    """How many times faster the second shaft turns, and in the other sense."""
+    phase_slot: int
+    """Design-vector offset of its assembly phase."""
+
 
 @dataclass(frozen=True)
 class GroundStructure:
-    """The candidate nodes and members a linkage may be assembled from.
+    """The candidate nodes, shafts and elements a mechanism may be built from.
 
-    Instances are pure topology -- which nodes exist, what kind each is, and
-    which pairs a member may join.  Everything dimensional lives in the design
-    vector, so one ground structure serves every design drawn on it.
+    Instances are pure topology -- what exists and what may connect to what.
+    Everything dimensional lives in the design vector, so one ground structure
+    serves every design drawn on it.
     """
 
     names: tuple[str, ...]
     """Node names, in coordinate order."""
-
     kinds: tuple[int, ...]
-    """One of :data:`GROUND`, :data:`DRIVEN`, :data:`SLIDER`, :data:`FREE`."""
-
-    members: tuple[tuple[int, int], ...]
-    """Candidate members, as pairs of node indices."""
-
-    speed_ratios: dict[int, float] = field(default_factory=dict)
-    """For each driven node, its crank speed as a multiple of the input's.
-
-    ``1`` is a pin on the input shaft itself.  ``-2`` is a pin on a shaft geared
-    to it two to one and turning the other way, which is the relation
-    :mod:`exlink.kinematics` gives the EXlink.
-    """
+    """One of :data:`GROUND`, :data:`PIN`, :data:`SLIDER`, :data:`FREE`."""
+    shafts: tuple[Shaft, ...]
+    pins: tuple[Pin, ...]
+    elements: tuple[Element, ...]
+    gears: tuple[Gear, ...] = ()
 
     @property
     def n_nodes(self) -> int:
@@ -134,8 +228,32 @@ class GroundStructure:
 
     @property
     def n_members(self) -> int:
-        """Candidate members."""
-        return len(self.members)
+        """Candidate elements -- bars and bodies, not gears."""
+        return len(self.elements)
+
+    @property
+    def n_presences(self) -> int:
+        """Presence variables in all: one per element and one per gear."""
+        return len(self.elements) + len(self.gears)
+
+    @property
+    def members(self) -> tuple[tuple[int, int], ...]:
+        """The bar elements, as node pairs.  §5.6's vocabulary."""
+        return tuple(e.nodes[:2] for e in self.elements if e.kind == "bar")  # type: ignore[misc]
+
+    @property
+    def free_shafts(self) -> tuple[int, ...]:
+        """Indices of the shafts whose angle the equilibrium solves for."""
+        return tuple(i for i, s in enumerate(self.shafts) if s.is_free)
+
+    def springs(self) -> tuple[tuple[int, int], ...]:
+        """Every spring in the domain, expanded from the elements."""
+        return tuple(s for element in self.elements for s in element.springs)
+
+    def spring_owner(self) -> IntArray:
+        """Which presence variable each spring takes its stiffness from."""
+        owner = [m for m, element in enumerate(self.elements) for _ in element.springs]
+        return np.asarray(owner, dtype=np.int64)
 
     def free_mask(self) -> NDArray[np.bool_]:
         """Which of the ``2 n_nodes`` coordinates the equilibrium solves for."""
@@ -147,9 +265,14 @@ class GroundStructure:
                 mask[2 * i + 1] = True
         return mask
 
+    @property
+    def n_reduced(self) -> int:
+        """Unknowns per equilibrium: free coordinates, then free shaft angles."""
+        return int(self.free_mask().sum()) + len(self.free_shafts)
+
     def ends(self) -> tuple[IntArray, IntArray]:
-        """The members' first and second node indices, as arrays."""
-        pairs = np.asarray(self.members, dtype=np.int64).reshape(-1, 2)
+        """The springs' first and second node indices, as arrays."""
+        pairs = np.asarray(self.springs(), dtype=np.int64).reshape(-1, 2)
         return pairs[:, 0], pairs[:, 1]
 
     def index(self, name: str) -> int:
@@ -161,9 +284,9 @@ class GroundStructure:
 class Layout:
     """Where each quantity sits in the design vector.
 
-    The vector holds the *initial* configuration and the member presences, and
-    nothing else.  Member lengths are deliberately absent: each is taken as the
-    distance between its endpoints in the initial pose, so every design is
+    The vector holds the *initial* configuration, the gear phases and the
+    presences, and nothing else.  Element lengths are deliberately absent: each
+    is the distance between its endpoints in the initial pose, so every design is
     assembled without prestress and an entire class of structures that could
     never be built is never visited.
     """
@@ -171,65 +294,143 @@ class Layout:
     structure: GroundStructure
     ground_slots: tuple[tuple[int, int], ...]
     """``(node, offset)`` for every grounded node whose position is free."""
-    driven_slots: tuple[tuple[int, int], ...]
-    """``(node, offset)`` for every driven pin: radius then phase."""
     free_slots: tuple[tuple[int, int], ...]
     """``(node, offset)`` for every node whose initial position is chosen."""
     slider_slot: tuple[int, int]
     """``(node, offset)`` of the piston: cylinder abscissa then initial height."""
     presence_offset: int
-    """First index of the member presences."""
-    centre_of: dict[int, int]
-    """Grounded centre each driven pin turns about."""
+    """First index of the presences."""
+    driven_slots: tuple[tuple[int, int], ...] = ()
+    """``(node, offset)`` of each pin's radius, with its phase next to it."""
+    centre_of: dict[int, int] = field(default_factory=dict)
+    """Grounded node each pin turns about.  §5.6's vocabulary."""
 
     @property
     def size(self) -> int:
         """Length of the design vector."""
-        return self.presence_offset + self.structure.n_members
+        return self.presence_offset + self.structure.n_presences
 
     def presences(self, x: FloatArray) -> FloatArray:
         """The presence variables of a design vector."""
         return np.asarray(x[self.presence_offset :], dtype=float)
 
+    def element_presences(self, x: FloatArray) -> FloatArray:
+        """The presences of the bars and bodies alone."""
+        return self.presences(x)[: self.structure.n_members]
 
-def _fixed_positions(layout: Layout, x: FloatArray) -> FloatArray:
-    """Node coordinates that do not depend on the input angle."""
+    def gear_presences(self, x: FloatArray) -> FloatArray:
+        """The presences of the candidate gear pairs."""
+        return self.presences(x)[self.structure.n_members :]
+
+
+def shaft_centres(layout: Layout, x: FloatArray) -> FloatArray:
+    """Where each shaft's axis sits."""
+    centres = np.zeros((len(layout.structure.shafts), 2), dtype=float)
+    for s, shaft in enumerate(layout.structure.shafts):
+        if shaft.centre_slot is not None:
+            centres[s] = x[shaft.centre_slot : shaft.centre_slot + 2]
+    return centres
+
+
+def _shaft_angles(layout: Layout, x: FloatArray, theta: float, free: FloatArray) -> FloatArray:
+    """Every shaft's angle: prescribed from the input, or taken from the state."""
+    angles = np.zeros(len(layout.structure.shafts), dtype=float)
+    k = 0
+    for s, shaft in enumerate(layout.structure.shafts):
+        if shaft.ratio is None:
+            angles[s] = free[k]
+            k += 1
+        else:
+            angles[s] = shaft.ratio * theta
+    return angles
+
+
+def _base_positions(layout: Layout, x: FloatArray) -> FloatArray:
+    """Grounded coordinates, and the piston's abscissa."""
     pos = np.zeros((layout.structure.n_nodes, 2), dtype=float)
     for node, offset in layout.ground_slots:
         pos[node] = x[offset : offset + 2]
+    node, offset = layout.slider_slot
+    pos[node, 0] = float(x[offset])
     return pos
+
+
+def _place(
+    layout: Layout, x: FloatArray, theta: float, reduced: FloatArray
+) -> tuple[FloatArray, FloatArray]:
+    """Node coordinates at one input angle, and each pin's tangent.
+
+    The tangent is how the pin moves when its shaft turns, and it is what makes a
+    free shaft angle a coordinate the equilibrium can solve for rather than a
+    parameter it is handed.
+    """
+    structure = layout.structure
+    mask = structure.free_mask()
+    n_coords = int(mask.sum())
+    centres = shaft_centres(layout, x)
+    angles = _shaft_angles(layout, x, theta, reduced[n_coords:])
+
+    pos = _base_positions(layout, x)
+    tangents = np.zeros((structure.n_nodes, 2), dtype=float)
+    for pin in structure.pins:
+        radius, phase = float(x[pin.slot]), float(x[pin.slot + 1])
+        carried = angles[pin.shaft] + phase
+        direction = np.array([np.cos(carried), np.sin(carried)])
+        pos[pin.node] = centres[pin.shaft] + radius * direction
+        tangents[pin.node] = radius * np.array([-np.sin(carried), np.cos(carried)])
+    pos.reshape(-1)[mask] = reduced[:n_coords]
+    return pos, tangents
 
 
 def initial_configuration(layout: Layout, x: FloatArray) -> FloatArray:
     """The full node layout at zero input angle, free nodes included."""
-    pos = _fixed_positions(layout, x)
-    for node, offset in layout.driven_slots:
-        radius, phase = float(x[offset]), float(x[offset + 1])
-        ratio = layout.structure.speed_ratios[node]
-        angle = ratio * 0.0 + phase
-        pos[node] = pos[layout.centre_of[node]] + radius * np.array(
-            [np.cos(angle), np.sin(angle)]
-        )
+    structure = layout.structure
+    mask = structure.free_mask()
+    reduced = np.zeros(structure.n_reduced, dtype=float)
+    seed = np.zeros(2 * structure.n_nodes, dtype=float)
     for node, offset in layout.free_slots:
-        pos[node] = x[offset : offset + 2]
+        seed[2 * node : 2 * node + 2] = x[offset : offset + 2]
     node, offset = layout.slider_slot
-    pos[node] = np.array([x[offset], x[offset + 1]])
-    return pos
+    seed[2 * node + 1] = float(x[offset + 1])
+    reduced[: int(mask.sum())] = seed[mask]
+    for k, s in enumerate(structure.free_shafts):
+        slot = structure.shafts[s].angle_slot
+        if slot is not None:
+            reduced[int(mask.sum()) + k] = float(x[slot])
+    return _place(layout, x, 0.0, reduced)[0]
 
 
 def member_lengths(layout: Layout, x: FloatArray) -> FloatArray:
-    """Rest length of every candidate member, from the initial pose."""
+    """Rest length of every spring in the domain, from the initial pose."""
     pos = initial_configuration(layout, x)
-    out = np.empty(layout.structure.n_members, dtype=float)
-    for m, (i, j) in enumerate(layout.structure.members):
+    springs = layout.structure.springs()
+    out = np.empty(len(springs), dtype=float)
+    for m, (i, j) in enumerate(springs):
         out[m] = float(np.hypot(*(pos[i] - pos[j])))
     return out
 
 
 def stiffnesses(presence: FloatArray, penalty: float) -> FloatArray:
-    """SIMP stiffness of each member: a floor plus its penalised presence."""
+    """SIMP stiffness of each candidate: a floor plus its penalised presence."""
     rho = np.clip(np.asarray(presence, dtype=float), 0.0, 1.0)
     return STIFFNESS_FLOOR + (1.0 - STIFFNESS_FLOOR) * rho**penalty
+
+
+def gear_radii(layout: Layout, x: FloatArray) -> FloatArray:
+    """Pitch radii of every candidate pair, from its centres and its ratio.
+
+    An external mesh puts the pitch point between the two axes, so the radii sum
+    to the centre distance and their ratio is the speed ratio.  Reading them off
+    the centres the search chose is what makes the mesh consistent for free: no
+    separate centre-distance constraint is needed, because a pair drawn this way
+    always fits the shafts it is drawn between.
+    """
+    centres = shaft_centres(layout, x)
+    out = np.zeros((len(layout.structure.gears), 2), dtype=float)
+    for g, gear in enumerate(layout.structure.gears):
+        distance = float(np.hypot(*(centres[gear.first] - centres[gear.second])))
+        out[g] = (distance * gear.ratio / (1.0 + gear.ratio), distance / (1.0 + gear.ratio))
+    return out
 
 
 def _energy_terms(
@@ -242,15 +443,15 @@ def _energy_terms(
 
     The blocks are the textbook ones for an axial spring, assembled over the
     full coordinate set with the caller restricting to the free ones.  It is
-    written over all members at once because it is the innermost thing in the
+    written over all springs at once because it is the innermost thing in the
     method -- every Newton step of every angle of every finite difference -- and
-    a Python loop over members costs more than the arithmetic does.
+    a Python loop over springs costs more than the arithmetic does.
 
     Args:
         pos: ``(n_nodes, 2)`` coordinates.
-        ends: The members' first and second node indices.
-        k: Member stiffnesses.
-        rest: Member rest lengths.
+        ends: The springs' first and second node indices.
+        k: Spring stiffnesses.
+        rest: Spring rest lengths.
 
     Returns:
         Energy, a ``2 n_nodes`` gradient, and the ``2n x 2n`` Hessian.
@@ -285,23 +486,70 @@ def _energy_terms(
     return total, grad.reshape(-1), hess
 
 
-def driven_positions(layout: Layout, x: FloatArray, theta: float) -> FloatArray:
-    """Where each driven pin sits at an input angle."""
-    pos = _fixed_positions(layout, x)
-    out = np.zeros((layout.structure.n_nodes, 2), dtype=float)
-    for node, offset in layout.driven_slots:
-        radius, phase = float(x[offset]), float(x[offset + 1])
-        angle = layout.structure.speed_ratios[node] * theta + phase
-        out[node] = pos[layout.centre_of[node]] + radius * np.array(
-            [np.cos(angle), np.sin(angle)]
+def _jacobian(layout: Layout, tangents: FloatArray) -> FloatArray:
+    """How the node coordinates move with each reduced unknown."""
+    structure = layout.structure
+    mask = structure.free_mask()
+    n_coords = int(mask.sum())
+    jac = np.zeros((2 * structure.n_nodes, structure.n_reduced), dtype=float)
+    jac[np.flatnonzero(mask), np.arange(n_coords)] = 1.0
+    for k, s in enumerate(structure.free_shafts):
+        for pin in structure.pins:
+            if pin.shaft == s:
+                jac[2 * pin.node : 2 * pin.node + 2, n_coords + k] = tangents[pin.node]
+    return jac
+
+
+def _gear_terms(
+    layout: Layout,
+    x: FloatArray,
+    theta: float,
+    reduced: FloatArray,
+    stiffness: FloatArray,
+    radii: FloatArray,
+) -> tuple[float, FloatArray, FloatArray, FloatArray]:
+    """Slip energy of every candidate pair, in the reduced coordinates.
+
+    Returns the energy, its reduced gradient and Hessian, and the slip of each
+    pair as a fraction of its centre distance -- the gear's own strain, and the
+    reading that says whether a shaft has ended up with two pairs on it.
+    """
+    structure = layout.structure
+    n = structure.n_reduced
+    n_coords = n - len(structure.free_shafts)
+    angles = _shaft_angles(layout, x, theta, reduced[n_coords:])
+    column = {s: n_coords + k for k, s in enumerate(structure.free_shafts)}
+
+    total = 0.0
+    grad = np.zeros(n, dtype=float)
+    hess = np.zeros((n, n), dtype=float)
+    slip = np.zeros(len(structure.gears), dtype=float)
+    for g, gear in enumerate(structure.gears):
+        first, second = radii[g]
+        residual = (
+            first * angles[gear.first]
+            + second * angles[gear.second]
+            - float(x[gear.phase_slot])
         )
-    return out
+        total += 0.5 * stiffness[g] * residual**2
+        span = first + second
+        slip[g] = abs(residual) / span if span > 0.0 else 0.0
+        coefficients = {}
+        if gear.first in column:
+            coefficients[column[gear.first]] = first
+        if gear.second in column:
+            coefficients[column[gear.second]] = second
+        for a, ca in coefficients.items():
+            grad[a] += stiffness[g] * residual * ca
+            for b, cb in coefficients.items():
+                hess[a, b] += stiffness[g] * ca * cb
+    return total, grad, hess, slip
 
 
 NEWTON_STEPS = 30
 """Newton iterations allowed per input angle."""
 NEWTON_TOLERANCE = 1.0e-9
-"""Convergence test on the free-coordinate gradient, relative to its scale.
+"""Convergence test on the reduced gradient, relative to its scale.
 
 The gradient of a spring energy carries the stiffness and a length, and both
 vary by orders of magnitude across a penalisation schedule, so an absolute
@@ -310,14 +558,85 @@ threshold would be met instantly at one end of it and never at the other.
 RIDGE = 1.0e-9
 """Fraction of the mean diagonal added to the Hessian before solving.
 
-The Hessian of a spring network is singular exactly when some node is held only
-by members the search has switched off -- which, in a topology optimization, is
-most of the time.  The ridge leaves such a node where the warm start put it
-instead of sending it to infinity, and is small enough not to disturb a node
+The Hessian is singular exactly when some node or shaft is held only by
+candidates the search has switched off -- which, in a topology optimization, is
+most of the time.  The ridge leaves such a coordinate where the warm start put
+it instead of sending it to infinity, and is small enough not to disturb one
 that is properly held.
 """
 BACKTRACK_STEPS = 20
 """Halvings allowed before a Newton step is abandoned."""
+
+SLACK_TOLERANCE = 1.0e-3
+"""Component in a null direction above which the piston counts as undetermined."""
+
+SINGULAR_TOLERANCE = 1.0e-8
+"""Singular values below this fraction of the largest count as a null direction."""
+
+
+def _output_slack(hess: FloatArray, slider_row: int) -> float:
+    """How much of the Hessian's null space the piston's coordinate lives in.
+
+    A spring network holds a coordinate only through the candidates the search
+    switched on.  Where it holds none, the reduced Hessian is singular in that
+    direction and the equilibrium is not unique -- so the motion reported is the
+    one the ridge and the warm start happened to pick.  Projecting the slider's
+    coordinate onto those directions says whether the *output* is among them,
+    which is the only part that matters: an unused node floating off on its own
+    is harmless, and a piston floating off on its own is the whole answer.
+    """
+    if hess.size == 0:
+        return 1.0
+    _u, singular, right = np.linalg.svd(hess)
+    largest = float(singular[0]) if singular.size else 0.0
+    if largest <= 0.0:
+        return 1.0
+    null = right[singular <= SINGULAR_TOLERANCE * largest]
+    if null.size == 0:
+        return 0.0
+    return float(np.max(np.abs(null[:, slider_row])))
+
+
+def _assemble(
+    layout: Layout,
+    x: FloatArray,
+    theta: float,
+    reduced: FloatArray,
+    k: FloatArray,
+    rest: FloatArray,
+    gear_stiffness: FloatArray,
+    radii: FloatArray,
+) -> tuple[float, FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Total energy and its reduced derivatives, springs and gears together.
+
+    The reduction is a change of variables rather than a restriction: a free
+    shaft angle moves several pins at once, so its column of the Jacobian
+    carries a tangent at each of them, and its diagonal picks up the curvature
+    of the circle each pin runs on.
+    """
+    structure = layout.structure
+    pos, tangents = _place(layout, x, theta, reduced)
+    energy, grad_pos, hess_pos = _energy_terms(pos, structure.ends(), k, rest)
+
+    jac = _jacobian(layout, tangents)
+    grad = jac.T @ grad_pos
+    hess = jac.T @ hess_pos @ jac
+
+    n_coords = structure.n_reduced - len(structure.free_shafts)
+    centres = shaft_centres(layout, x)
+    for column, s in enumerate(structure.free_shafts):
+        curvature = 0.0
+        for pin in structure.pins:
+            if pin.shaft != s:
+                continue
+            radial = pos[pin.node] - centres[pin.shaft]
+            curvature -= float(np.dot(grad_pos[2 * pin.node : 2 * pin.node + 2], radial))
+        hess[n_coords + column, n_coords + column] += curvature
+
+    gear_energy, gear_grad, gear_hess, slip = _gear_terms(
+        layout, x, theta, reduced, gear_stiffness, radii
+    )
+    return energy + gear_energy, grad + gear_grad, hess + gear_hess, pos, slip
 
 
 def _equilibrate(
@@ -327,81 +646,91 @@ def _equilibrate(
     guess: FloatArray,
     k: FloatArray,
     rest: FloatArray,
+    gear_stiffness: FloatArray,
+    radii: FloatArray,
 ) -> tuple[FloatArray, bool]:
-    """Minimise the spring energy over the free coordinates at one angle.
+    """Minimise the energy over the free coordinates and shaft angles.
 
     Newton with a ridge and a backtracking line search.  The ridge handles the
-    singular Hessian of a partly switched-off network; the line search handles
-    the fact that a spring energy is not convex in the coordinates once a member
-    is in compression, which is where a bare Newton step overshoots.
+    singular Hessian of a partly switched-off mechanism; the line search handles
+    the fact that the energy is not convex in the coordinates once a spring is in
+    compression or a shaft has turned past its pin's tangent, which is where a
+    bare Newton step overshoots.
 
     Args:
         layout: The design vector's layout.
         x: Design vector.
         theta: Input angle [rad].
-        guess: Free coordinates to start from, normally the previous angle's.
-        k: Member stiffnesses.
-        rest: Member rest lengths.
+        guess: Reduced coordinates to start from, normally the previous angle's.
+        k: Spring stiffnesses.
+        rest: Spring rest lengths.
+        gear_stiffness: Stiffness of each candidate pair.
+        radii: Pitch radii of each candidate pair.
 
     Returns:
-        The free coordinates and whether the gradient test was met.
+        The reduced coordinates and whether the gradient test was met.
     """
-    structure = layout.structure
-    mask = structure.free_mask()
-    ends = structure.ends()
-    base = _fixed_positions(layout, x) + driven_positions(layout, x, theta)
-    slider_node, slider_offset = layout.slider_slot
-    base[slider_node, 0] = float(x[slider_offset])
-
-    scale = max(1.0, float(np.max(k)) * float(np.max(rest, initial=1.0)))
+    scale = max(1.0, float(np.max(k, initial=0.0)) * float(np.max(rest, initial=1.0)))
     tol = NEWTON_TOLERANCE * scale
-    n_free = int(mask.sum())
-    eye = np.eye(n_free)
-
-    def energy_at(free: FloatArray) -> tuple[float, FloatArray, FloatArray]:
-        pos = base.copy()
-        pos.reshape(-1)[mask] = free
-        return _energy_terms(pos, ends, k, rest)
+    eye = np.eye(layout.structure.n_reduced)
 
     u = np.array(guess, dtype=float)
     for _ in range(NEWTON_STEPS):
-        energy, grad, hess = energy_at(u)
-        g = grad[mask]
-        if float(np.max(np.abs(g))) < tol:
+        energy, grad, hess, _pos, _slip = _assemble(
+            layout, x, theta, u, k, rest, gear_stiffness, radii
+        )
+        if float(np.max(np.abs(grad))) < tol:
             return u, True
-        h = hess[np.ix_(mask, mask)]
-        ridge = RIDGE * max(float(np.mean(np.abs(np.diag(h)))), 1.0e-30)
+        ridge = RIDGE * max(float(np.mean(np.abs(np.diag(hess)))), 1.0e-30)
         try:
-            step = np.linalg.solve(h + ridge * eye, -g)
+            step = np.linalg.solve(hess + ridge * eye, -grad)
         except np.linalg.LinAlgError:
             return u, False
         alpha = 1.0
         for _back in range(BACKTRACK_STEPS):
             trial = u + alpha * step
-            if energy_at(trial)[0] <= energy:
+            if _assemble(layout, x, theta, trial, k, rest, gear_stiffness, radii)[0] <= energy:
                 u = trial
                 break
             alpha *= 0.5
         else:
             return u, False
-    return u, float(np.max(np.abs(energy_at(u)[1][mask]))) < tol
+    final = _assemble(layout, x, theta, u, k, rest, gear_stiffness, radii)[1]
+    return u, float(np.max(np.abs(final))) < tol
 
 
 @dataclass(frozen=True)
 class Motion:
-    """What a candidate structure does over one input revolution."""
+    """What a candidate mechanism does over one input revolution."""
 
     lam: FloatArray
     """Piston height at each input angle [mm]."""
     converged: bool
     """Whether every angle reached equilibrium."""
     strain: float
-    """Largest member strain over the revolution, as a fraction of rest length.
+    """Largest strain over the revolution, as a fraction of a rest length.
 
-    The honest measure of whether the springs are behaving as rigid links.  A
-    linkage the penalisation has resolved runs at a strain of order the
-    stiffness floor; anything larger means the answer is a deforming structure
-    rather than a mechanism, and is not a linkage at all.
+    The honest measure of whether the springs are behaving as rigid links, and
+    it covers the gears too: a pair's strain is its slip at the pitch point as a
+    fraction of the centre distance.  A mechanism the penalisation has resolved
+    runs at a strain of order the stiffness floor; anything larger means the
+    answer is a deforming structure rather than a mechanism.
+    """
+    gear_ratios: tuple[float, ...] = ()
+    """Ratio of every pair the design kept, in catalogue order."""
+    output_slack: float = 0.0
+    """How undetermined the piston is, from 0 (fixed by the input) to 1 (free).
+
+    Strain catches an *over*-constrained answer.  This catches the opposite, and
+    the opposite is the one that lies.  If the equilibrium leaves a direction the
+    energy does not resist -- a shaft with no gear on it, a chain with a link
+    missing -- then where the mechanism goes is chosen by the ridge and the warm
+    start rather than by the mechanism, and the motion that comes back is an
+    artefact that can look like anything, including extended expansion.  The
+    reading is the largest component the slider's coordinate has in the null
+    space of the reduced Hessian, over the revolution.  A mechanism whose motion
+    the input actually determines runs at zero; anything above
+    :data:`SLACK_TOLERANCE` is not a mechanism.
     """
 
 
@@ -425,64 +754,79 @@ def sweep(
         penalty: SIMP exponent applied to the presences.
 
     Returns:
-        The piston motion and two diagnostics.
+        The piston motion and its diagnostics.
     """
     structure = layout.structure
-    mask = structure.free_mask()
-    first, second = structure.ends()
-    presence = layout.presences(x)
-    k = stiffnesses(presence, penalty)
+    element_rho = layout.element_presences(x)
+    gear_rho = layout.gear_presences(x)
+    k = stiffnesses(element_rho, penalty)[structure.spring_owner()]
+    spring_rho = element_rho[structure.spring_owner()]
+    gear_stiffness = stiffnesses(gear_rho, penalty)
+    radii = gear_radii(layout, x)
     rest = member_lengths(layout, x)
     safe_rest = np.where(rest > 0.0, rest, 1.0)
+    first, second = structure.ends()
 
     start = initial_configuration(layout, x)
-    u = start.reshape(-1)[mask].copy()
+    mask = structure.free_mask()
+    u = np.zeros(structure.n_reduced, dtype=float)
+    u[: int(mask.sum())] = start.reshape(-1)[mask]
+    for column, s in enumerate(structure.free_shafts):
+        slot = structure.shafts[s].angle_slot
+        if slot is not None:
+            u[int(mask.sum()) + column] = float(x[slot])
 
     angles = np.linspace(0.0, 2.0 * np.pi, int(samples), endpoint=False)
     lam = np.empty(angles.size, dtype=float)
-    slider_node, slider_offset = layout.slider_slot
+    slider_node, _slider_offset = layout.slider_slot
+    slider_row = int(np.flatnonzero(mask).tolist().index(2 * slider_node + 1))
     ok = True
     worst = 0.0
+    slack = 0.0
     for step, theta in enumerate(angles):
-        u, converged = _equilibrate(layout, x, float(theta), u, k, rest)
+        u, converged = _equilibrate(layout, x, float(theta), u, k, rest, gear_stiffness, radii)
         ok = ok and converged
-        pos = _fixed_positions(layout, x) + driven_positions(layout, x, float(theta))
-        pos[slider_node, 0] = float(x[slider_offset])
-        pos.reshape(-1)[mask] = u
+        hess = _assemble(layout, x, float(theta), u, k, rest, gear_stiffness, radii)[2]
+        slack = max(slack, _output_slack(hess, slider_row))
+        pos, _tangents = _place(layout, x, float(theta), u)
         lam[step] = pos[slider_node, 1]
         gap = pos[first] - pos[second]
         length = np.sqrt(np.einsum("mi,mi->m", gap, gap))
         strain = np.abs(length - rest) / safe_rest
-        worst = max(worst, float(np.max(strain * presence, initial=0.0)))
-    return Motion(lam=lam, converged=ok, strain=worst)
+        worst = max(worst, float(np.max(strain * spring_rho, initial=0.0)))
+        slip = _gear_terms(layout, x, float(theta), u, gear_stiffness, radii)[3]
+        worst = max(worst, float(np.max(slip * gear_rho, initial=0.0)))
+    kept = tuple(
+        gear.ratio for g, gear in enumerate(structure.gears) if gear_rho[g] > PRESENCE_THRESHOLD
+    )
+    return Motion(lam=lam, converged=ok, strain=worst, gear_ratios=kept, output_slack=slack)
 
 
 def engine_ground_structure() -> tuple[GroundStructure, Layout]:
-    """The candidate set this study searches.
+    """§5.6's candidate set: bars only, and the gear ratio given.
 
-    Eight nodes and twelve candidate members.  The input shaft is grounded at
-    the origin -- a gauge choice, since translating the whole mechanism changes
-    nothing -- and carries the pin ``P1``.  A second grounded shaft ``B`` carries
+    Eight nodes and twelve candidate bars.  The input shaft is grounded at the
+    origin -- a gauge choice, since translating the whole mechanism changes
+    nothing -- and carries the pin ``P1``.  A second grounded shaft carries
     ``P2`` at twice the input speed and the opposite sense, which is the relation
     a 2:1 gear pair imposes and the one EXlink uses; the search is free to leave
-    it out by switching off every member that touches it, in which case the
-    answer is a linkage driven from the input shaft alone.  ``C`` is a plain
-    grounded pivot, ``F1`` and ``F2`` are free nodes, and ``S`` is the piston,
-    held on the cylinder axis.
+    it out by switching off every bar that touches it, but not to choose it.
+    ``C`` is a plain grounded pivot, ``F1`` and ``F2`` are free nodes, and ``S``
+    is the piston, held on the cylinder axis.
 
-    Members between two prescribed nodes are excluded: their length is a
-    function of the input angle alone, so such a member is a constraint on the
-    design rather than a degree of freedom for the mechanism.
+    Bars between two prescribed nodes are excluded: their length is a function
+    of the input angle alone, so such a bar is a constraint on the design rather
+    than a degree of freedom for the mechanism.
 
     Returns:
         The structure and the layout of the design vector drawn on it.
     """
     names = ("A", "P1", "B", "P2", "C", "F1", "F2", "S")
-    kinds = (GROUND, DRIVEN, GROUND, DRIVEN, GROUND, FREE, FREE, SLIDER)
+    kinds = (GROUND, PIN, GROUND, PIN, GROUND, FREE, FREE, SLIDER)
     idx = {name: i for i, name in enumerate(names)}
     movable = ("P1", "P2", "C", "F1", "F2", "S")
-    members = tuple(
-        (idx[a], idx[b])
+    elements = tuple(
+        Element("bar", (idx[a], idx[b]))
         for i, a in enumerate(movable)
         for b in movable[i + 1 :]
         if kinds[idx[a]] in (FREE, SLIDER) or kinds[idx[b]] in (FREE, SLIDER)
@@ -490,16 +834,104 @@ def engine_ground_structure() -> tuple[GroundStructure, Layout]:
     structure = GroundStructure(
         names=names,
         kinds=kinds,
-        members=members,
-        speed_ratios={idx["P1"]: 1.0, idx["P2"]: -2.0},
+        shafts=(
+            Shaft("input", centre_slot=None, ratio=1.0),
+            Shaft("geared", centre_slot=0, ratio=-2.0),
+        ),
+        pins=(Pin(idx["P1"], 0, 4), Pin(idx["P2"], 1, 6)),
+        elements=elements,
     )
     layout = Layout(
         structure=structure,
         ground_slots=((idx["B"], 0), (idx["C"], 2)),
-        driven_slots=((idx["P1"], 4), (idx["P2"], 6)),
         free_slots=((idx["F1"], 8), (idx["F2"], 10)),
         slider_slot=(idx["S"], 12),
         presence_offset=14,
+        driven_slots=((idx["P1"], 4), (idx["P2"], 6)),
+        centre_of={idx["P1"]: idx["A"], idx["P2"]: idx["B"]},
+    )
+    return structure, layout
+
+
+GEAR_CATALOGUE: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0)
+"""Speed ratios a candidate pair may be cut for.
+
+Whole numbers, and that is a requirement rather than a convenience.  The cycle
+has to *close*: after one revolution of the input shaft the mechanism must be
+back where it started, or the engine's motion differs between successive cycles
+and there is no four-stroke to speak of.  A geared shaft turning :math:`r` times
+per input revolution returns to its start only when :math:`r` is an integer, so
+a three-to-two pair would give a mechanism whose period is two input
+revolutions.  That is a real machine and not this one.
+
+Small on purpose otherwise.  A ratio is one integer tooth pair and one module
+away from being buildable, and §4.4 already owns that step; what this catalogue
+has to settle is only whether the *synthesis* wants a two-to-one relation, which
+is the question §5.6 could not ask because it was handed one.
+"""
+
+
+def geared_ground_structure() -> tuple[GroundStructure, Layout]:
+    """§5.7's candidate set: bodies as well as bars, and the gear chosen.
+
+    Three changes from :func:`engine_ground_structure`, each aimed at something
+    §5.6 measured.
+
+    The second shaft's angle is **free**, and four candidate pairs -- one per
+    catalogue ratio -- may drive it from the input.  So the ratio is an outcome:
+    a design that keeps the two-to-one pair has rediscovered EXlink's gearing,
+    one that keeps another has found something else, and one that keeps none has
+    a loose shaft its linkage must hold.
+
+    Ten candidate **bodies** join the twelve bars: rigid triangles carried as
+    three springs sharing a single presence.  §5.6's stall was a triangle that
+    could only be assembled from three separately-switched bars, each useless
+    alone; one variable now turns a whole three-cornered link on.
+
+    Returns:
+        The structure and the layout of the design vector drawn on it.
+    """
+    names = ("A", "P1", "B", "P2", "C", "F1", "F2", "S")
+    kinds = (GROUND, PIN, GROUND, PIN, GROUND, FREE, FREE, SLIDER)
+    idx = {name: i for i, name in enumerate(names)}
+    movable = ("P1", "P2", "C", "F1", "F2", "S")
+    loose = {idx["F1"], idx["F2"], idx["S"]}
+
+    bars = tuple(
+        Element("bar", (idx[a], idx[b]))
+        for i, a in enumerate(movable)
+        for b in movable[i + 1 :]
+        if kinds[idx[a]] in (FREE, SLIDER) or kinds[idx[b]] in (FREE, SLIDER)
+    )
+    triples = tuple(
+        Element("body", (idx[a], idx[b], idx[c]))
+        for i, a in enumerate(movable)
+        for j, b in enumerate(movable[i + 1 :], start=i + 1)
+        for c in movable[j + 1 :]
+        if len(loose & {idx[a], idx[b], idx[c]}) >= 2
+    )
+    gears = tuple(
+        Gear(first=0, second=1, ratio=ratio, phase_slot=15 + g)
+        for g, ratio in enumerate(GEAR_CATALOGUE)
+    )
+    structure = GroundStructure(
+        names=names,
+        kinds=kinds,
+        shafts=(
+            Shaft("input", centre_slot=None, ratio=1.0),
+            Shaft("geared", centre_slot=0, ratio=None, angle_slot=14),
+        ),
+        pins=(Pin(idx["P1"], 0, 4), Pin(idx["P2"], 1, 6)),
+        elements=bars + triples,
+        gears=gears,
+    )
+    layout = Layout(
+        structure=structure,
+        ground_slots=((idx["B"], 0), (idx["C"], 2)),
+        free_slots=((idx["F1"], 8), (idx["F2"], 10)),
+        slider_slot=(idx["S"], 12),
+        presence_offset=15 + len(GEAR_CATALOGUE),
+        driven_slots=((idx["P1"], 4), (idx["P2"], 6)),
         centre_of={idx["P1"]: idx["A"], idx["P2"]: idx["B"]},
     )
     return structure, layout
@@ -519,25 +951,30 @@ def default_bounds(layout: Layout) -> tuple[FloatArray, FloatArray]:
     for _node, offset in layout.ground_slots:
         lower[offset : offset + 2] = -span
         upper[offset : offset + 2] = span
-    for _node, offset in layout.driven_slots:
-        lower[offset], upper[offset] = 5.0, 120.0
-        lower[offset + 1], upper[offset + 1] = -np.pi, np.pi
+    for pin in layout.structure.pins:
+        lower[pin.slot], upper[pin.slot] = 5.0, 120.0
+        lower[pin.slot + 1], upper[pin.slot + 1] = -np.pi, np.pi
     for _node, offset in layout.free_slots:
         lower[offset : offset + 2] = -span
         upper[offset : offset + 2] = span
     _node, offset = layout.slider_slot
-    lower[offset], upper[offset] = -span, span
-    lower[offset + 1], upper[offset + 1] = -span, span
+    lower[offset : offset + 2] = -span
+    upper[offset : offset + 2] = span
+    for shaft in layout.structure.shafts:
+        if shaft.angle_slot is not None:
+            lower[shaft.angle_slot], upper[shaft.angle_slot] = -np.pi, np.pi
+    for gear in layout.structure.gears:
+        lower[gear.phase_slot], upper[gear.phase_slot] = -span * np.pi, span * np.pi
     lower[layout.presence_offset :] = 0.0
     upper[layout.presence_offset :] = 1.0
     return lower, upper
 
 
 COUNT_WEIGHT = 0.05
-"""Millimetres of motion error a whole extra member is worth.
+"""Millimetres of motion error a whole extra candidate is worth.
 
 A tie-break and nothing more.  It began at 1.0 mm, which was a mistake worth
-recording: a design with no members at all leaves the piston free, the piston
+recording: a design with no elements at all leaves the piston free, the piston
 then stays where the warm start put it, and a *constant* motion scores the
 target's own standard deviation -- 23.7 mm here.  At 1.0 mm the empty structure
 was therefore cheaper than any partly-connected one, and one start duly
@@ -555,21 +992,46 @@ connect the piston to something before it can start improving the shape.
 """
 
 STRAIN_WEIGHT = 800.0
-"""Millimetres of motion error a unit of member strain is worth.
+"""Millimetres of motion error a unit of strain is worth.
 
 This is the term that decides whether the answer is a mechanism, and it began
 an order of magnitude too small.  At 50 a start reached a motion error of
 2.0 mm while carrying 3 % strain, and paid 1.5 mm for it -- so the search was
-being *paid* to leave members half present, because a half-stiff member lets an
-overconstrained network move by giving rather than by articulating.  The gray
+being *paid* to leave candidates half present, because a half-stiff member lets
+an overconstrained network move by giving rather than by articulating.  The gray
 design fitted the target well and rounded to nothing.  At 800 the same 3 % costs
 25 mm and softness stops being a way to buy motion.
 """
 
-DISCRETENESS_SCHEDULE: tuple[float, ...] = (0.0, 2.0, 6.0, 18.0)
-r"""Millimetres charged for a fully undecided member, one per penalty rung.
+HARMONIC_WEIGHT = 1.0
+"""Weight on the *relative* error of each harmonic, against the plain distance.
 
-The SIMP exponent alone did not separate the members here.  Ramping an explicit
+The repair for the stall §5.6 measured.  The target carries 32.33 mm at its
+second harmonic and 9.02 mm at its first, and the whole Atkinson asymmetry is
+the first; but a plain root-mean-square is dominated by the second, so a
+mechanism that reproduces the second and none of the first already scores
+7.19 mm against the 23.74 mm of doing nothing.  That is a deep local minimum
+holding an Otto engine.  Charging each harmonic by its error *relative to the
+target's own amplitude there* makes missing the small one cost as much,
+proportionally, as missing the large one.
+"""
+
+HARMONIC_ORDERS: tuple[int, ...] = (1, 2)
+"""Harmonics the relative term is taken over: the asymmetry, and the strokes."""
+
+HARMONIC_FLOOR = 1.0e-6
+"""Amplitude, relative to the target's own scale, below which an order is skipped.
+
+A relative error needs something to be relative *to*.  A target with no content
+at an order still has a coefficient of order 1e-15 there rather than exactly
+zero, and dividing by that turns a bounded objective into 1e16 -- which is what
+happened the first time this was run against a pure second-harmonic target.
+"""
+
+DISCRETENESS_SCHEDULE: tuple[float, ...] = (0.0, 2.0, 6.0, 18.0)
+r"""Millimetres charged for a fully undecided candidate, one per penalty rung.
+
+The SIMP exponent alone did not separate them here.  Ramping an explicit
 :math:`4\rho(1-\rho)` charge alongside it is the standard repair, and the ramp
 matters: charged from the start it decides the topology before the geometry is
 any good, and never charged at all it leaves an answer that cannot be rounded.
@@ -578,18 +1040,20 @@ any good, and never charged at all it leaves an answer that cannot be rounded.
 
 @dataclass(frozen=True)
 class Candidate:
-    """A linkage the synthesis produced, and how well it does."""
+    """A mechanism the synthesis produced, and how well it does."""
 
     x: FloatArray
     """Design vector."""
     rms: float
     """Motion error against the target, mean removed [mm]."""
     strain: float
-    """Largest strain in a present member (:attr:`Motion.strain`)."""
+    """Largest strain in a present candidate (:attr:`Motion.strain`)."""
     discreteness: float
-    """Mean of :math:`4\\rho(1-\\rho)`: zero when every member has resolved."""
-    present: tuple[tuple[str, str], ...]
-    """Members that survived, by node name."""
+    """Mean of :math:`4\\rho(1-\\rho)`: zero when every candidate has resolved."""
+    present: tuple[tuple[str, ...], ...]
+    """Elements that survived, by node name."""
+    gear_ratios: tuple[float, ...]
+    """Ratios of the gear pairs that survived."""
     motion: FloatArray
     """The piston motion it realises [mm]."""
     converged: bool
@@ -597,14 +1061,23 @@ class Candidate:
 
     @property
     def uses_second_shaft(self) -> bool:
-        """Whether any surviving member touches the geared shaft's pin."""
-        return any("P2" in pair for pair in self.present)
+        """Whether any surviving element touches the geared shaft's pin."""
+        return any("P2" in nodes for nodes in self.present)
 
 
 def _centred(values: FloatArray) -> FloatArray:
     """Values with their mean removed, so an offset is not an error."""
     arr = np.asarray(values, dtype=float)
     return arr - float(arr.mean())
+
+
+def _resample(values: FloatArray, size: int) -> FloatArray:
+    """Put a motion on a given number of uniformly spaced angles."""
+    arr = np.asarray(values, dtype=float)
+    if arr.size == size:
+        return arr
+    grid = np.linspace(0.0, 1.0, size, endpoint=False)
+    return np.interp(grid, np.linspace(0.0, 1.0, arr.size, endpoint=False), arr, period=1.0)
 
 
 def motion_error(target: FloatArray, lam: FloatArray) -> float:
@@ -614,11 +1087,48 @@ def motion_error(target: FloatArray, lam: FloatArray) -> float:
     bolted, not by the mechanism -- so comparing raw heights would charge a
     design for a quantity the objective does not care about.
     """
-    a, b = _centred(target), _centred(lam)
-    if a.size != b.size:
-        grid = np.linspace(0.0, 1.0, a.size, endpoint=False)
-        b = np.interp(grid, np.linspace(0.0, 1.0, b.size, endpoint=False), b, period=1.0)
-    return float(np.sqrt(np.mean((a - b) ** 2)))
+    a = _centred(target)
+    return float(np.sqrt(np.mean((a - _resample(_centred(lam), a.size)) ** 2)))
+
+
+def harmonic(lam: FloatArray, order: int) -> tuple[float, float]:
+    """The cosine and sine coefficients of one harmonic of a motion.
+
+    The diagnostic that matters for extended expansion.  A motion's *even*
+    harmonics give the two up-and-downs per input revolution; its *odd* ones are
+    what make the two halves differ, so the whole Atkinson asymmetry lives in
+    the first harmonic and nowhere else.  A synthesised mechanism can therefore
+    be read off directly: a first harmonic of zero is an Otto engine whatever
+    else it does.
+    """
+    arr = _centred(lam)
+    theta = np.linspace(0.0, 2.0 * np.pi, arr.size, endpoint=False)
+    return (
+        float(2.0 * np.mean(arr * np.cos(order * theta))),
+        float(2.0 * np.mean(arr * np.sin(order * theta))),
+    )
+
+
+def harmonic_error(target: FloatArray, lam: FloatArray) -> float:
+    """Millimetres charged for missing each harmonic, in proportion to its size.
+
+    Each order's coefficient error is divided by the target's own amplitude
+    there and the mean is scaled back into millimetres by the target's standard
+    deviation, so a design that misses the first harmonic entirely is charged
+    the same as one that misses the second entirely -- which a plain distance
+    does not do, and which is why §5.6 stalled on an Otto engine.
+    """
+    reference = float(np.std(_centred(target)))
+    resampled = _resample(_centred(lam), np.asarray(target).size)
+    errors = []
+    for order in HARMONIC_ORDERS:
+        wanted = np.array(harmonic(target, order))
+        got = np.array(harmonic(resampled, order))
+        amplitude = float(np.hypot(*wanted))
+        if amplitude <= HARMONIC_FLOOR * reference:
+            continue
+        errors.append(float(np.hypot(*(got - wanted))) / amplitude)
+    return reference * float(np.mean(errors)) if errors else 0.0
 
 
 def travel_shortfall(target: FloatArray, lam: FloatArray) -> float:
@@ -640,7 +1150,7 @@ def objective(
     penalty: float,
     discreteness: float = 0.0,
 ) -> float:
-    """What the search minimises: the motion error, and four deterrents.
+    """What the search minimises: the motion, and four deterrents.
 
     Args:
         layout: The design vector's layout.
@@ -648,7 +1158,7 @@ def objective(
         target: Target piston motion.
         samples: Input angles per sweep.
         penalty: SIMP exponent on the presences.
-        discreteness: Millimetres charged for a fully undecided member.
+        discreteness: Millimetres charged for a fully undecided candidate.
 
     Returns:
         The objective, in millimetres of equivalent motion error.
@@ -659,6 +1169,7 @@ def objective(
     rho = layout.presences(x)
     return (
         motion_error(target, motion.lam)
+        + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
         + discreteness * float(np.mean(4.0 * rho * (1.0 - rho)))
@@ -667,12 +1178,12 @@ def objective(
 
 
 def random_start(layout: Layout, rng: np.random.Generator) -> FloatArray:
-    """A design drawn from the box, with every member half present.
+    """A design drawn from the box, with every candidate half present.
 
     Starting the presences at one half rather than at random is deliberate: at
     :math:`p = 1` the stiffnesses enter almost linearly, so a symmetric start
-    lets the first rung of the continuation decide which members matter instead
-    of inheriting a decision from the draw.
+    lets the first rung of the continuation decide which candidates matter
+    instead of inheriting a decision from the draw.
     """
     lower, upper = default_bounds(layout)
     x = lower + rng.random(layout.size) * (upper - lower)
@@ -714,18 +1225,14 @@ def _minimise(
     return np.asarray(result.x, dtype=float)
 
 
-PRESENCE_THRESHOLD = 0.5
-"""Presence above which a member is kept when the answer is made discrete."""
-
-
 def _describe(layout: Layout, x: FloatArray, target: FloatArray, samples: int) -> Candidate:
-    """Score a design at full penalty and name the members it kept."""
+    """Score a design at full penalty and name the candidates it kept."""
     motion = sweep(layout, x, samples=samples, penalty=PENALTY_SCHEDULE[-1])
     rho = layout.presences(x)
     names = layout.structure.names
     present = tuple(
-        (names[i], names[j])
-        for m, (i, j) in enumerate(layout.structure.members)
+        tuple(names[n] for n in element.nodes)
+        for m, element in enumerate(layout.structure.elements)
         if rho[m] > PRESENCE_THRESHOLD
     )
     return Candidate(
@@ -734,6 +1241,7 @@ def _describe(layout: Layout, x: FloatArray, target: FloatArray, samples: int) -
         strain=motion.strain,
         discreteness=float(np.mean(4.0 * rho * (1.0 - rho))),
         present=present,
+        gear_ratios=motion.gear_ratios,
         motion=motion.lam,
         converged=motion.converged,
     )
@@ -752,7 +1260,7 @@ def synthesise_one(
     The last step is the one that turns a topology optimization into a
     mechanism.  Rounding the presences to zero and one gives a linkage; the
     geometry is then re-optimised with that topology frozen, so what is reported
-    is a real linkage's best fit rather than a blurred one's.
+    is a real mechanism's best fit rather than a blurred one's.
 
     Args:
         layout: The design vector's layout.
@@ -763,7 +1271,7 @@ def synthesise_one(
         schedule: Penalisation exponents.
 
     Returns:
-        The discrete linkage and its score.
+        The discrete mechanism and its score.
     """
     x = np.array(x0, dtype=float)
     for penalty, sharpness in zip(schedule, DISCRETENESS_SCHEDULE, strict=False):
@@ -776,32 +1284,14 @@ def synthesise_one(
     return _describe(layout, x, target, samples=len(target))
 
 
-def harmonic(lam: FloatArray, order: int) -> tuple[float, float]:
-    """The cosine and sine coefficients of one harmonic of a motion.
-
-    The diagnostic that matters for extended expansion.  A motion's *even*
-    harmonics give the two up-and-downs per input revolution; its *odd* ones are
-    what make the two halves differ, so the whole Atkinson asymmetry lives in
-    the first harmonic and nowhere else.  A synthesised mechanism can therefore
-    be read off directly: a first harmonic of zero is an Otto engine whatever
-    else it does.
-    """
-    arr = _centred(lam)
-    theta = np.linspace(0.0, 2.0 * np.pi, arr.size, endpoint=False)
-    return (
-        float(2.0 * np.mean(arr * np.cos(order * theta))),
-        float(2.0 * np.mean(arr * np.sin(order * theta))),
-    )
-
-
 @dataclass(frozen=True)
 class Assessment:
-    """What a synthesised linkage actually delivers, against the requirements."""
+    """What a synthesised mechanism actually delivers, against the requirements."""
 
     rms: float
     """Motion error against the target [mm]."""
     strain: float
-    """Largest strain in a present member; a linkage runs at the stiffness floor."""
+    """Largest strain in a present candidate; a mechanism runs at the floor."""
     four_phases: bool
     """Whether the motion is a four-stroke one at all."""
     expansion_stroke: float
@@ -814,8 +1304,17 @@ class Assessment:
     """Amplitude of the first harmonic [mm] -- the asymmetry, and nothing else."""
     second_harmonic: float
     """Amplitude of the second harmonic [mm] -- the two up-and-downs."""
-    present: tuple[tuple[str, str], ...]
-    """Members that survived."""
+    present: tuple[tuple[str, ...], ...]
+    """Elements that survived."""
+    gear_ratios: tuple[float, ...] = ()
+    """Ratios of the gear pairs that survived."""
+    output_slack: float = 0.0
+    """How undetermined the piston is (:attr:`Motion.output_slack`)."""
+
+    @property
+    def is_mechanism(self) -> bool:
+        """Whether the input actually determines where the piston goes."""
+        return self.output_slack < SLACK_TOLERANCE
 
     @property
     def asymmetry(self) -> float:
@@ -824,8 +1323,12 @@ class Assessment:
 
     @property
     def is_extended_expansion(self) -> bool:
-        """Whether the two strokes actually differ."""
-        return bool(self.four_phases and self.asymmetry > 1.0)
+        """Whether this is a mechanism, and its two strokes actually differ.
+
+        The mobility test comes first on purpose.  An under-constrained answer
+        can report any motion at all, extended expansion included, and one did.
+        """
+        return bool(self.is_mechanism and self.four_phases and self.asymmetry > 1.0)
 
 
 def assess(
@@ -848,8 +1351,8 @@ def assess(
     rho = layout.presences(x)
     names = layout.structure.names
     present = tuple(
-        (names[i], names[j])
-        for m, (i, j) in enumerate(layout.structure.members)
+        tuple(names[n] for n in element.nodes)
+        for m, element in enumerate(layout.structure.elements)
         if rho[m] > PRESENCE_THRESHOLD
     )
     try:
@@ -870,15 +1373,25 @@ def assess(
         first_harmonic=float(np.hypot(*harmonic(motion.lam, 1))),
         second_harmonic=float(np.hypot(*harmonic(motion.lam, 2))),
         present=present,
+        gear_ratios=motion.gear_ratios,
+        output_slack=motion.output_slack,
     )
 
 
 def format_assessment(assessment: Assessment) -> str:
-    """A readable summary of a synthesised linkage."""
+    """A readable summary of a synthesised mechanism."""
+    kept = " ".join("-".join(nodes) for nodes in assessment.present) or "none"
+    gears = (
+        " ".join(f"{r:g}:1" for r in assessment.gear_ratios)
+        if assessment.gear_ratios
+        else "none"
+    )
     lines = [
-        f"members     {' '.join('-'.join(pair) for pair in assessment.present) or 'none'}",
+        f"elements    {kept}",
+        f"gears       {gears}",
         f"motion rms  {assessment.rms:8.3f} mm",
-        f"peak strain {assessment.strain:8.2e}",
+        f"peak strain {assessment.strain:8.2e}   (over-constraint)",
+        f"slack       {assessment.output_slack:8.2e}   (under-constraint)",
         f"harmonic 1  {assessment.first_harmonic:8.3f} mm   (the asymmetry)",
         f"harmonic 2  {assessment.second_harmonic:8.3f} mm   (the two up-and-downs)",
     ]
@@ -891,9 +1404,12 @@ def format_assessment(assessment: Assessment) -> str:
         ]
     else:
         lines.append("            not a four-stroke motion")
-    lines.append(
-        "verdict     extended expansion"
-        if assessment.is_extended_expansion
-        else "verdict     symmetric strokes -- an Otto engine"
-    )
-    return "\n".join(lines)
+    if not assessment.is_mechanism:
+        verdict = "the input does not determine the piston -- not a mechanism"
+    elif assessment.is_extended_expansion:
+        verdict = "extended expansion"
+    elif assessment.four_phases:
+        verdict = "symmetric strokes -- an Otto engine"
+    else:
+        verdict = "not a four-stroke motion"
+    return "\n".join([*lines, f"verdict     {verdict}"])

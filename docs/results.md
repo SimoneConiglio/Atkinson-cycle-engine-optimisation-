@@ -604,13 +604,16 @@ inside a 50-minute cap and one did not.
 | 2 | 37.00 | $1.4\times10^{-6}$ | 2 | 29.32 | 7.43 | no | — | — |
 | **3** | **7.19** | $5.8\times10^{-7}$ | 3 | **0.0000** | 36.89 | **yes** | **73.775** | **73.775** |
 | 5 | 21.43 | $7.9\times10^{-6}$ | 2 | 19.79 | 21.04 | no | — | — |
-| 6 | 29.38 | $7.5\times10^{-5}$ | 1 | 27.12 | 33.85 | no | — | — |
+| 6 | 29.38 | $7.5\times10^{-5}$ | 1 | 27.12 | 33.85 | no† | — | — |
 | 7 | 28.61 | $6.2\times10^{-7}$ | 4 | 36.77 | 3.42 | no | — | — |
 | 1 | *cap reached at rms 5.93, still undecided* | | | | | | | |
 
 The target's own harmonics are 9.02 mm at the first and 32.33 mm at the second,
 and its standard deviation — the score for producing no useful motion at all — is
-23.74 mm.
+23.74 mm. † Start 6 is not a mechanism at all: the mobility test of §5.7 reads
+$4.3\times10^{-2}$ on it against exactly zero for every other row, so its single
+element leaves the piston undetermined. The conclusion below is unaffected, but
+the diagnosis is.
 
 **The method works and produces real linkages.** Every completed start returned a
 discrete mechanism running at a strain of $10^{-7}$ to $10^{-5}$, which is the
@@ -682,3 +685,97 @@ body directly, rather than requiring the search to assemble one from binary
 members, would be the obvious next step. And the objective here is kinematic, so
 even a success would have produced a *candidate* rather than a design: the range
 chain of §3.3 is what would decide whether it beat 3395 km/L.
+
+## 5.7 Giving the synthesis more freedom, and what it exposes
+
+§5.6 concludes that extended expansion needs the piston reached from both
+shafts, and leaves two obvious objections: the domain offered no three-cornered
+body, so the linkage that does the joining could only be assembled from bars
+that are individually useless; and the 2:1 relation was *given* rather than
+chosen, so the run could not say whether a synthesis wants one. Three changes
+answer both.
+
+Every shaft now carries **its own angle as a coordinate of the equilibrium**,
+prescribed only for the input. Candidate **gear pairs** drive them, one presence
+per (pair, ratio) over a catalogue of 1, 2, 3 and 4 to one — whole numbers
+because the cycle has to close, a shaft turning $r$ times per input revolution
+returning to its start only when $r$ is an integer. A pair meshes externally, so
+its pitch radii are read off the centres the search chose, $r_i = dr/(1+r)$ and
+$r_j = d/(1+r)$, and it costs the slip at the pitch point, $\tfrac12
+k(\rho)(r_i\vartheta_i + r_j\vartheta_j - \varphi)^2$; writing it as slip rather
+than as an angular error is what makes the mesh consistent for free, with no
+separate centre-distance constraint. And ten candidate **bodies** join the twelve
+bars — rigid triangles carried as three springs sharing one presence, so a
+three-cornered link switches on as a unit.
+
+The domain grows from 26 design variables to 45. Verified independently: a
+fitted pair holds its ratio to the solver's precision and delivers exactly $r$
+up-and-downs per input revolution, its radii summing to the centre distance; a
+switched-on body holds all three sides; and the bars-only domain remains a
+special case of the same solver, still reproducing the slider-crank's closed
+form to $4.3\times10^{-5}$ mm.
+
+| start | rms [mm] | strain | slack | elements | gear | first harmonic | second | verdict |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 23.74 | $1.9\times10^{-5}$ | 0 | 5 | none | 0.001 | 0.001 | detached from the input |
+| **2** | 46.06 | $1.3\times10^{-5}$ | 0 | 3 | **2:1** | **0.000** | 44.12 | **Otto**, STE = STC = 88.401 |
+| 3 | 46.41 | $5.9\times10^{-4}$ | **0.71** | 2 | none | 59.12 | 7.92 | not a mechanism |
+
+Six starts were run on the same seeds as §5.6, and **three completed inside a
+90-minute cap**: the enriched domain costs about 13 s a gradient against 3.6 s,
+and the three that did not finish were still on their second or third rung. That
+is itself worth recording — freedom is not free, and 45 variables under finite
+differences is close to the limit of what this objective can be searched at.
+
+**The search chooses two to one.** Offered four ratios and the option of none,
+the starts that kept a pair kept 2:1 — the only integer ratio that gives a
+four-stroke from the geared shaft. That is the one thing §5.6 was handed and
+could not test, and it comes back the same.
+
+**A body was used, and it was not enough.** Start 2 is the sharpest result here:
+fully resolved, running at a strain of $1.3\times10^{-5}$, holding a 2:1 pair and
+*two three-cornered bodies* — and still an Otto engine, with the two strokes
+equal to six figures. The reason is visible in its element list, `P2-F1`,
+`P2-F1-F2`, `P2-F1-S`: every one of them hangs off the geared shaft's pin and not
+one touches the input's. So supplying the body removed the barrier §5.6
+measured without removing the outcome: a three-cornered link whose corners all
+come from the same chain is still a one-shaft mechanism, and the identity applies
+to it unchanged. What extended expansion needs is not a body but a body that
+*bridges* — which is exactly what EXlink's trigonal link does, and a sharper
+statement than §5.6 could make.
+
+**The extra freedom brought two failures the smaller domain could not have.**
+
+*Disconnection.* Start 1 resolved to five elements, none of which touches a
+driven node: a mechanism detached from the input, with a piston that does not
+move. The travel floor charges it twice the required stroke and it still cannot
+escape, because SIMP flattens the gradient near $\rho = 0$ — the void is a broad
+flat basin, and once a design drifts in there is nothing to climb.
+
+*Under-constraint, which is the one that lies.* Start 3 reported **extended
+expansion**: four monotone phases, an asymmetry of 70.9 mm, a first harmonic of
+59.1. It is not a mechanism. It kept no gear, so the geared shaft's angle is a
+coordinate nothing resists, and where such a design goes is chosen by the solver's
+ridge and its warm start rather than by the linkage. Strain does not see this —
+a loose mechanism strains nothing — so the reading has to come from the other
+side: the largest component the piston's coordinate has in the null space of the
+reduced Hessian. It is $0.71$ there, against **exactly zero** at every genuine
+answer in this study, §5.6's included.
+
+That last point is the transferable one, and it is a property of the method
+rather than of this engine. **Strain catches an over-constrained answer; nothing
+in the standard formulation catches an under-constrained one, and an
+under-constrained answer can report any motion at all — including the one being
+searched for.** It appeared here only because shaft angles became coordinates,
+and every enrichment of a spring-connected domain has the same exposure: more
+freedom means more ways for the equilibrium to stop determining the output. A
+mobility test belongs beside the strain test in any such run, and re-reading
+§5.6's starts through it reclassifies one of them.
+
+What is still missing is therefore not more freedom but two conditions on it: a
+**connectivity** requirement, that some path of present elements joins the input
+to the piston, and a **mobility** requirement, that the equilibrium determine the
+piston's coordinate. Neither is a volume fraction, which is what SIMP normally
+constrains, and neither is expressible as a bound on a single design variable;
+both are conditions on the graph the presences describe. With them, the domain
+built here is the one to search.

@@ -134,7 +134,7 @@ src/exlink/
 | the sampling check of §5.3 | `python examples/11_sampling_check.py` |
 | the third point on the dimensionality axis, §5.4 | `exlink.slidercrank.SliderCrank(offset=...)` |
 | the restoration and continuation of §5.5 | `exlink.restoration.restore`, `exlink.continuation.reliability_continuation` |
-| the topology synthesis of §5.6 | `python examples/12_topology_synthesis.py` |
+| the topology synthesis of §5.6 and §5.7 | `python examples/12_topology_synthesis.py` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests
