@@ -43,8 +43,11 @@ from exlink.topology import (
     member_lengths,
     motion_error,
     objective,
+    precision_error,
+    precision_heights,
     random_start,
     reachability,
+    requirement_residuals,
     screen_mechanism,
     stiffnesses,
     sweep,
@@ -711,3 +714,54 @@ def test_screening_a_topology_leaves_its_topology_alone() -> None:
     assert np.isfinite(value)
     assert np.array_equal(layout.presences(x), mechanism.presences(structure))
     assert np.all(reachability(layout, x) == 1.0)
+
+
+def test_the_precision_points_state_the_requirement_exactly() -> None:
+    """Heights below top dead centre: nothing, the expansion stroke, nothing again,
+    the compression stroke.  The absolute height is free and so is not among them."""
+    heights = precision_heights()
+    assert heights[0] == 0.0 and heights[2] == 0.0, "both top dead centres, level"
+    assert heights[1] == pytest.approx(-74.0), "the expansion stroke"
+    assert heights[3] == pytest.approx(-55.953, abs=1.0e-3), "the compression stroke"
+    assert heights[3] > heights[1], "the compression bottom is the shallower one"
+
+
+def test_a_motion_through_the_points_scores_zero() -> None:
+    """Built to pass them, it passes them -- and the datum is not charged.
+
+    The witness is a smoothstep on each quarter revolution: it takes the
+    prescribed height at every precision angle, has zero slope and curvature
+    there, and is monotone in between, so those four are the turning points and
+    no others.  Zero curvature too, or the sampled slope picks up the kink.
+    """
+    wanted = precision_heights()
+    per_quarter = 180
+    pieces = []
+    for start, end in zip(wanted, np.roll(wanted, -1), strict=True):
+        t = np.linspace(0.0, 1.0, per_quarter, endpoint=False)
+        ramp = t**3 * (10.0 - 15.0 * t + 6.0 * t**2)
+        pieces.append(start + (end - start) * ramp)
+    lam = 100.0 + np.concatenate(pieces)
+
+    assert precision_error(lam) < 1.0e-2, "it passes the points as extremes"
+    rolled = precision_error(np.roll(lam, 91))
+    assert rolled == pytest.approx(precision_error(lam), abs=1.0e-9), "the datum is free"
+
+
+def test_the_two_readings_of_the_precision_points_differ() -> None:
+    """Fixing the angles is stricter than the engine requires, and measurably so.
+
+    A four-stroke needs four dead centres at the right heights with the two top
+    ones half an input revolution apart, so the valve train can be geared to the
+    cycle.  Where the *bottom* ones fall is an outcome.  EXlink's turning points
+    sit at 10.5, 101.5, 189.5 and 286 degrees, so it nearly satisfies the looser
+    reading and is several millimetres off the stricter one -- which is why the
+    two are kept apart rather than merged.
+    """
+    from exlink.kinematics import solve
+    from exlink.reference import RELIABLE_DESIGN
+
+    lam = solve(RELIABLE_DESIGN, samples=720).lam
+    residual = requirement_residuals(lam)
+    assert 74.0 * float(np.sqrt(np.mean(residual**2))) < 0.5, "the requirements are met"
+    assert precision_error(lam) > 2.0, "the equally spaced angles are not"

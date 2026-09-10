@@ -1219,6 +1219,67 @@ def harmonic_error(target: FloatArray, lam: FloatArray) -> float:
     return reference * float(np.mean(errors)) if errors else 0.0
 
 
+DEGENERATE_ERROR = 1.0e6
+"""What a motion scores when it is not a piston motion at all.
+
+Large enough that the search never prefers it, and finite so that a failed
+sweep does not poison a whole run.
+"""
+
+
+def requirement_error(lam: FloatArray) -> float:
+    """Root-mean-square requirement residual, in millimetres.
+
+    The four conditions of :func:`requirement_residuals`, put back on the scale
+    of the expansion stroke so the number can be read as a motion error and
+    compared against :func:`motion_error`.  A motion with no four-stroke phasing
+    to speak of scores :data:`DEGENERATE_ERROR` rather than raising, because the
+    search has to be able to step through such points.
+    """
+    from .constants import DEFAULT_TARGETS
+    from .cycle import PhaseError
+
+    try:
+        residual = requirement_residuals(lam)
+    except (PhaseError, IndexError, ValueError):
+        return DEGENERATE_ERROR
+    if not np.all(np.isfinite(residual)):
+        return DEGENERATE_ERROR
+    return DEFAULT_TARGETS.expansion_stroke * float(np.sqrt(np.mean(residual**2)))
+
+
+def motion_measure(kind: str, target: FloatArray, lam: FloatArray) -> float:
+    """How close a motion is to what is wanted, in millimetres, three ways.
+
+    Args:
+        kind: ``"target"`` for the distance to a sampled target motion --
+            the measure §5.7's first screen used, and a proxy: a design can
+            beat the studied mechanism on it while missing the requirement.
+            ``"requirements"`` for :func:`requirement_error`, which prescribes
+            the four dead centres and their heights but lets the two bottom
+            ones fall where they fall.  ``"precision"`` for
+            :func:`precision_error`, which additionally fixes them a quarter
+            revolution apart -- stricter than EXlink itself satisfies, and so
+            reported alongside rather than searched on.
+        target: Target piston motion, used by ``"target"`` only.
+        lam: The motion to measure.
+
+    Returns:
+        Millimetres.
+
+    Raises:
+        ValueError: If ``kind`` is not one of the three.
+    """
+    if kind == "target":
+        return motion_error(target, lam)
+    if kind == "requirements":
+        return requirement_error(lam)
+    if kind == "precision":
+        return precision_error(lam)
+    msg = f"unknown motion measure {kind!r}"
+    raise ValueError(msg)
+
+
 def travel_shortfall(target: FloatArray, lam: FloatArray) -> float:
     """Stroke the piston fails to deliver, in millimetres, never negative.
 
@@ -1237,6 +1298,7 @@ def objective(
     samples: int,
     penalty: float,
     discreteness: float = 0.0,
+    measure: str = "target",
 ) -> float:
     """What the search minimises: the motion, and four deterrents.
 
@@ -1247,18 +1309,20 @@ def objective(
         samples: Input angles per sweep.
         penalty: SIMP exponent on the presences.
         discreteness: Millimetres charged for a fully undecided candidate.
+        measure: How the motion is judged; see :func:`motion_measure`.  The
+            default keeps the sampled-target reading the first screen used.
 
     Returns:
         The objective, in millimetres of equivalent motion error.
     """
     motion = sweep(layout, x, samples=samples, penalty=penalty)
     if not np.all(np.isfinite(motion.lam)):
-        return 1.0e6
+        return DEGENERATE_ERROR
     rho = layout.presences(x)
     driven = driven_fraction(layout, x)
     unbridged = float(np.sum(driven * (1.0 - reachability(layout, x))))
     return (
-        motion_error(target, motion.lam)
+        motion_measure(measure, target, motion.lam)
         + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
@@ -1867,3 +1931,138 @@ def screen_mechanism(
         layout, best_x, target, samples, PENALTY_SCHEDULE[-1], iterations, frozen=frozen
     )
     return objective(layout, polished, target, samples, PENALTY_SCHEDULE[-1]), polished
+
+
+PRECISION_ANGLES: tuple[float, ...] = (0.0, 90.0, 180.0, 270.0)
+"""Input-shaft angles, in degrees, at which the motion is prescribed exactly.
+
+One input revolution is one cycle, so these are 0, 180, 360 and 540 degrees of
+crankshaft: the first top dead centre, the deep bottom dead centre that ends
+expansion, the second top dead centre, and the shallow one that ends
+compression.  Prescribing the motion *at points* rather than matching a sampled
+curve is classical precision-point synthesis, and it is the repair for what
+§5.7's screen exposed -- a distance to a target motion is a proxy, and a design
+can beat the studied mechanism on the proxy while missing the requirement.
+Here ``STE`` and the compression ratio are conditions rather than outcomes.
+"""
+
+
+def precision_heights(
+    expansion_stroke: float | None = None,
+    compression_ratio: float | None = None,
+) -> FloatArray:
+    """Piston height at each precision angle, measured down from top dead centre.
+
+    The absolute height is free -- it is set by where the cylinder is bolted --
+    so only the differences are prescribed: both top dead centres at the same
+    height, one bottom dead centre a full expansion stroke below it, the other a
+    compression stroke below it.
+    """
+    from .constants import DEFAULT_SPEC, DEFAULT_TARGETS
+
+    stroke = DEFAULT_TARGETS.expansion_stroke if expansion_stroke is None else expansion_stroke
+    ratio = (
+        DEFAULT_TARGETS.compression_ratio if compression_ratio is None else compression_ratio
+    )
+    compression = (ratio - 1.0) * DEFAULT_SPEC.dead_volume / DEFAULT_SPEC.piston_area
+    return np.array([0.0, -stroke, 0.0, -compression], dtype=float)
+
+
+def precision_residuals(
+    lam: FloatArray,
+    heights: FloatArray | None = None,
+    shift: int = 0,
+) -> FloatArray:
+    """How far a motion is from passing the precision points, as extremes.
+
+    Eight conditions, made dimensionless by the expansion stroke: four on the
+    height, taken relative to the first point so that the cylinder's mounting
+    height is not charged, and four on the slope, because each precision point
+    has to be a dead centre rather than merely a passing height.
+
+    Args:
+        lam: Piston height over one input revolution, on a grid whose length is
+            a multiple of four so the precision angles are grid points.
+        heights: Prescribed heights; :func:`precision_heights` by default.
+        shift: Rotation of the input datum, in grid steps -- free, for the
+            reason :func:`best_datum` gives.
+
+    Returns:
+        Four height residuals then four slope residuals.
+    """
+    wanted = precision_heights() if heights is None else np.asarray(heights, dtype=float)
+    values = np.roll(np.asarray(lam, dtype=float), -shift)
+    n = values.size
+    if n % 4:
+        msg = f"precision angles need a grid divisible by four, got {n}"
+        raise ValueError(msg)
+    step = 2.0 * np.pi / n
+    marks = [(i * n) // 4 for i in range(4)]
+
+    scale = float(np.max(np.abs(wanted))) or 1.0
+    heights_here = values[marks] - values[marks[0]]
+    slopes = (np.roll(values, -1) - np.roll(values, 1))[marks] / (2.0 * step)
+    return np.concatenate([(heights_here - wanted) / scale, slopes / scale])
+
+
+def precision_error(lam: FloatArray, heights: FloatArray | None = None) -> float:
+    """Root-mean-square precision residual in millimetres, datum profiled out.
+
+    The datum is searched rather than assumed, on the same argument as
+    :func:`best_datum`: which crank angle is called zero is a choice, so a
+    mechanism that passes all four points starting somewhere else passes them.
+    """
+    wanted = precision_heights() if heights is None else np.asarray(heights, dtype=float)
+    scale = float(np.max(np.abs(wanted))) or 1.0
+    n = np.asarray(lam).size
+    best = np.inf
+    for shift in range(n):
+        residual = precision_residuals(lam, wanted, shift)
+        best = min(best, float(np.sqrt(np.mean(residual**2))))
+    return scale * best
+
+
+def requirement_residuals(lam: FloatArray) -> FloatArray:
+    """How far a motion is from the four requirements, without fixing their angles.
+
+    The looser reading of the precision points, and the one the engine actually
+    imposes.  What a four-stroke needs is four dead centres in the right order
+    with the right heights, and the two top ones **half an input revolution
+    apart** so that a cycle is 720 degrees of crankshaft and the valve train can
+    be geared to it.  Where the *bottom* dead centres fall between them is an
+    outcome, not a requirement.
+
+    That distinction is worth measuring rather than assuming: EXlink's own
+    turning points sit at 10.5, 101.5, 189.5 and 286 degrees of input shaft, so
+    a target demanding them at 0, 90, 180 and 270 is stricter than the studied
+    mechanism satisfies -- it scores 3.53 mm against that and 0.44 mm against
+    this.
+
+    Returns:
+        Expansion stroke, compression stroke, top-dead-centre height difference
+        and top-dead-centre spacing, each as a fraction of the expansion stroke.
+
+    Raises:
+        PhaseError: If the motion is not a four-stroke one at all.
+    """
+    from .constants import DEFAULT_TARGETS
+    from .cycle import find_phases
+
+    values = np.asarray(lam, dtype=float)
+    phases = find_phases(values)
+    wanted = precision_heights()
+    stroke = DEFAULT_TARGETS.expansion_stroke
+
+    slope = np.sign(np.diff(np.concatenate([values, values[:1]])))
+    turning = np.flatnonzero(slope != np.roll(slope, 1))
+    tops = sorted(turning, key=lambda i: -values[i])[:2]
+    spacing = abs(int(tops[1]) - int(tops[0])) / values.size
+    return np.array(
+        [
+            (phases.expansion_stroke - stroke) / stroke,
+            (phases.compression_stroke + wanted[3]) / stroke,
+            (values[tops[0]] - values[tops[1]]) / stroke,
+            (min(spacing, 1.0 - spacing) - 0.5) / 0.5,
+        ],
+        dtype=float,
+    )
