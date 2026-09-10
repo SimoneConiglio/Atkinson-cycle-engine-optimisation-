@@ -762,6 +762,45 @@ side: the largest component the piston's coordinate has in the null space of the
 reduced Hessian. It is $0.71$ there, against **exactly zero** at every genuine
 answer in this study, §5.6's included.
 
+**Then the domain was checked, and the objective turned out to be at fault.**
+A negative result from a search means nothing until the domain is shown to
+contain the thing being looked for, so EXlink itself was written into it:
+three candidates and a pair — the swing rod `P1-F1`, the trigonal link as a
+*body* `P2-F1-F2`, the piston rod `F2-S`, and a two-to-one mesh. The spring
+model reproduces its analytic kinematics to $6\times10^{-3}$ mm, at a strain of
+$2.3\times10^{-5}$ and no slack, and scores it correctly: STE 74.09 mm, STC
+56.39 mm, an asymmetry of 17.70 mm, $\varepsilon = 16.12$. **The domain was never
+the problem.** Every corner is a design variable — the two free nodes *are* the
+trigonal link's own corners, and the body's three sides follow from where they
+are put — so nothing about its shape was fixed in advance.
+
+What was at fault was the comparison. Where $\theta_1 = 0$ sits is a choice, not
+a property of a mechanism: rotate a design about its input axis and every crank
+phase moves with it, giving the same engine with its cycle starting elsewhere.
+Scoring against the target at a *fixed* datum charges for that, and it charges
+enough to invert the ranking:
+
+| design | as posed | with the datum free | best shift |
+|---|---|---|---|
+| **EXlink itself** | 13.97 mm | **4.05 mm** | 170° |
+| §5.6's best (Otto) | 7.19 mm | 7.19 mm | 0° |
+| §5.7's best (Otto) | 46.06 mm | 10.67 mm | 123° |
+
+The degenerate answers had tuned their phase to the datum and the real mechanism
+had not, so **the objective preferred an Otto engine to the engine being
+searched for** — 7.19 against 13.97 — and no amount of searching could have
+recovered from that. A harmonic coefficient carries a phase too, and a rotation
+by $s$ turns the $n$-th of them by $ns$, so the harmonic term was charging an
+order-one error per harmonic for the same non-quantity. Profiling the datum out
+— one transform pair, since minimising the squared difference over the shift is
+maximising the circular cross-correlation — puts the full objective at **7.53**
+for EXlink against 21.18 and 26.87 for the two searches' best, which is the
+ordering a synthesis needs before it can be said to have searched at all.
+
+That is the honest account of §5.6 and §5.7 as first run: the identity they
+establish stands, and the domain is adequate, but the ranking they were
+searching under was wrong.
+
 That last point is the transferable one, and it is a property of the method
 rather than of this engine. **Strain catches an over-constrained answer; nothing
 in the standard formulation catches an under-constrained one, and an

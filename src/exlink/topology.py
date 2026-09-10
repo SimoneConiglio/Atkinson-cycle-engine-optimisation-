@@ -106,9 +106,13 @@ every angle, which is a study of its own (§6.3).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from .design import Design
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
@@ -1080,15 +1084,42 @@ def _resample(values: FloatArray, size: int) -> FloatArray:
     return np.interp(grid, np.linspace(0.0, 1.0, arr.size, endpoint=False), arr, period=1.0)
 
 
+def best_datum(target: FloatArray, lam: FloatArray) -> int:
+    """The rotation of the input datum that lines a motion up with the target.
+
+    Where :math:`\\theta_1 = 0` sits is a choice, not a property of a mechanism:
+    turn the whole design about the input axis and every crank phase moves with
+    it, giving the same engine with its cycle starting somewhere else.  A
+    comparison that fixes the datum therefore charges a design for something it
+    was never asked to control, and it charges a lot -- the real EXlink sits
+    170 degrees from the target's datum and was scored at 13.97 mm as posed
+    against 4.05 mm once aligned, which put it *behind* a degenerate answer that
+    had tuned its phase.
+
+    Minimising the squared difference over the shift is the same as maximising
+    the circular cross-correlation, so one transform pair settles it.
+    """
+    a, b = _centred(target), _centred(lam)
+    spectrum = np.fft.rfft(a) * np.conj(np.fft.rfft(b))
+    return int(np.argmax(np.fft.irfft(spectrum, a.size)))
+
+
+def align(target: FloatArray, lam: FloatArray) -> FloatArray:
+    """A motion resampled onto the target's angles and rolled onto its datum."""
+    resampled = _resample(_centred(lam), np.asarray(target).size)
+    return np.roll(resampled, best_datum(target, resampled))
+
+
 def motion_error(target: FloatArray, lam: FloatArray) -> float:
-    """Root-mean-square distance between two motions, offset removed.
+    """Root-mean-square distance between two motions, offset and datum removed.
 
     The target's mean height is arbitrary -- it is set by where the cylinder is
-    bolted, not by the mechanism -- so comparing raw heights would charge a
-    design for a quantity the objective does not care about.
+    bolted, not by the mechanism -- and so is the crank angle its cycle is drawn
+    from, for the reason :func:`best_datum` gives.  Both are removed before
+    anything is charged.
     """
     a = _centred(target)
-    return float(np.sqrt(np.mean((a - _resample(_centred(lam), a.size)) ** 2)))
+    return float(np.sqrt(np.mean((a - align(a, lam)) ** 2)))
 
 
 def harmonic(lam: FloatArray, order: int) -> tuple[float, float]:
@@ -1117,9 +1148,15 @@ def harmonic_error(target: FloatArray, lam: FloatArray) -> float:
     deviation, so a design that misses the first harmonic entirely is charged
     the same as one that misses the second entirely -- which a plain distance
     does not do, and which is why §5.6 stalled on an Otto engine.
+
+    Taken on the *aligned* motion, for the reason :func:`best_datum` gives: a
+    harmonic coefficient carries a phase, and rotating the input datum by
+    :math:`s` turns the :math:`n`-th of them by :math:`ns`, so comparing
+    coefficients at a fixed datum charges a design an order-one error per
+    harmonic for a quantity that is not its business.
     """
     reference = float(np.std(_centred(target)))
-    resampled = _resample(_centred(lam), np.asarray(target).size)
+    resampled = align(target, lam)
     errors = []
     for order in HARMONIC_ORDERS:
         wanted = np.array(harmonic(target, order))
@@ -1413,3 +1450,58 @@ def format_assessment(assessment: Assessment) -> str:
     else:
         verdict = "not a four-stroke motion"
     return "\n".join([*lines, f"verdict     {verdict}"])
+
+
+def exlink_in_the_domain(
+    design: Design | None = None,
+    samples: int = 720,
+) -> tuple[GroundStructure, Layout, FloatArray]:
+    """Write the studied mechanism into the synthesis domain, as a design vector.
+
+    The check that says whether a negative result is about the *domain* or about
+    the *search*, and here it says the search.  EXlink is three elements and a
+    gear pair -- the swing rod ``P1-F1``, the trigonal link as a body
+    ``P2-F1-F2``, the piston rod ``F2-S``, and a two-to-one pair -- so it is
+    expressible in :func:`geared_ground_structure` exactly, and the spring model
+    reproduces its analytic motion to about 2e-3 mm.
+
+    Every corner is a design variable, which is what makes this possible: the
+    two free nodes are the trigonal link's corners :math:`A` and :math:`E`, the
+    pins carry a radius and a phase, the piston carries its axis, and each
+    element's lengths follow from where those corners are put.  Nothing about
+    the shape of the three-cornered body is fixed in advance.
+
+    Args:
+        design: The linkage to write in.  Defaults to the study's result.
+        samples: Angles used to read its pose at zero input angle.
+
+    Returns:
+        The geared ground structure, its layout, and the design vector.
+    """
+    from .kinematics import solve
+    from .reference import RELIABLE_DESIGN
+
+    kinematics = solve(RELIABLE_DESIGN if design is None else design, samples=samples)
+    origin = kinematics.R1[0]
+    second = kinematics.R2[0] - origin
+    pin_1 = kinematics.Q[0] - origin
+    pin_2 = kinematics.D[0] - kinematics.R2[0]
+
+    structure, layout = geared_ground_structure()
+    x = np.zeros(layout.size, dtype=float)
+    x[0:2] = second
+    x[2:4] = [-250.0, -250.0]
+    x[4], x[5] = float(np.hypot(*pin_1)), float(np.arctan2(pin_1[1], pin_1[0]))
+    x[6], x[7] = float(np.hypot(*pin_2)), float(np.arctan2(pin_2[1], pin_2[0]))
+    x[8:10] = kinematics.A[0] - origin
+    x[10:12] = kinematics.E[0] - origin
+    x[12:14] = kinematics.P[0] - origin
+
+    names = [tuple(structure.names[n] for n in e.nodes) for e in structure.elements]
+    rho = np.zeros(structure.n_presences, dtype=float)
+    for element in (("P1", "F1"), ("P2", "F1", "F2"), ("F2", "S")):
+        rho[names.index(element)] = 1.0
+    pair = next(g for g, gear in enumerate(structure.gears) if gear.ratio == 2.0)
+    rho[structure.n_members + pair] = 1.0
+    x[layout.presence_offset :] = rho
+    return structure, layout, x

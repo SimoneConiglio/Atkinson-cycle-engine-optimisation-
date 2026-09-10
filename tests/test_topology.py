@@ -23,8 +23,10 @@ from exlink.topology import (
     TRAVEL_WEIGHT,
     _energy_terms,
     assess,
+    best_datum,
     default_bounds,
     engine_ground_structure,
+    exlink_in_the_domain,
     gear_radii,
     geared_ground_structure,
     harmonic,
@@ -180,11 +182,22 @@ def test_travel_shortfall_charges_only_the_shortfall() -> None:
     assert travel_shortfall(target, 2.0 * target) == pytest.approx(0.0)
 
 
-def test_motion_error_ignores_an_offset() -> None:
-    """Where the cylinder is bolted is not the mechanism's business."""
-    lam = np.sin(np.linspace(0.0, 2.0 * np.pi, 60, endpoint=False))
-    assert motion_error(lam, lam + 1000.0) == pytest.approx(0.0, abs=1.0e-12)
-    assert motion_error(lam, -lam) > 1.0
+def test_motion_error_ignores_an_offset_and_a_datum_but_not_a_shape() -> None:
+    """Two nuisances are removed; the thing being measured is not.
+
+    Where the cylinder is bolted and where the cycle is drawn from are both
+    choices.  A *different motion* is not, and the distinction is real for this
+    target: rotating the datum by ``s`` turns the first harmonic by ``s`` and
+    the second by ``2s``, so no single rotation flips both, and an inverted
+    motion is charged.  (For a lone sinusoid it would not be -- negation is a
+    half-turn of the datum -- which is why this uses the real two-harmonic
+    target rather than a sine.)
+    """
+    target = target_motion(samples=360).lam
+    assert motion_error(target, target + 1000.0) == pytest.approx(0.0, abs=1.0e-9)
+    assert motion_error(target, np.roll(target, 91)) == pytest.approx(0.0, abs=1.0e-9)
+    assert motion_error(target, -target) > 1.0, "an inverted motion is a different one"
+    assert motion_error(target, 0.5 * target) > 1.0, "and so is a shallower one"
 
 
 def test_stiffness_runs_from_the_floor_to_one() -> None:
@@ -390,3 +403,88 @@ def test_the_geared_domain_contains_the_older_one() -> None:
     assert new.gears and not old.gears
     assert old.free_shafts == () and new.free_shafts == (1,)
     assert new_layout.size > old_layout.size
+
+
+def test_the_domain_can_express_the_studied_mechanism() -> None:
+    """The check that says whether a negative result is the domain or the search.
+
+    §5.6 and §5.7 searched and found no extended-expansion mechanism.  That
+    means nothing until the domain is shown to contain one, and it does: EXlink
+    is three of its candidates and a gear pair -- the swing rod, the trigonal
+    link as a *body*, the piston rod, and a two-to-one mesh -- and the spring
+    model reproduces its analytic kinematics to a couple of microns.
+
+    Every corner is a design variable, which is what makes it expressible: the
+    two free nodes are the trigonal link's own corners, and the body's three
+    side lengths follow from where they are put.
+    """
+    from exlink.kinematics import solve
+    from exlink.reference import RELIABLE_DESIGN
+
+    _structure, layout, x = exlink_in_the_domain(samples=720)
+    motion = sweep(layout, x, samples=720, penalty=PENALTY_SCHEDULE[-1])
+    exact = solve(RELIABLE_DESIGN, samples=720).lam
+
+    difference = (motion.lam - motion.lam.mean()) - (exact - exact.mean())
+    assert np.max(np.abs(difference)) < 0.05, "the spring model is the same mechanism"
+    assert motion.converged
+    assert motion.strain < 1.0e-3, "it runs as a linkage, not as a deforming structure"
+    assert motion.output_slack == pytest.approx(0.0), "and the input determines it"
+    assert motion.gear_ratios == (2.0,)
+
+    verdict = assess(layout, x, target_motion(samples=720).lam, samples=720)
+    assert verdict.is_extended_expansion
+    assert verdict.expansion_stroke == pytest.approx(74.0, abs=0.2)
+    assert verdict.compression_ratio == pytest.approx(16.0, abs=0.2)
+    assert len(verdict.present) == 3
+    assert any(len(nodes) == 3 for nodes in verdict.present), "one of them is a body"
+
+
+def test_the_objective_does_not_charge_for_the_crank_datum() -> None:
+    """Where theta_1 = 0 sits is a choice, and it used to cost 10 mm.
+
+    Turn a design about its input axis and every crank phase moves with it: the
+    same engine, its cycle starting somewhere else.  Charging for that inverted
+    the ranking between the studied mechanism and a degenerate one -- EXlink
+    sits 170 degrees from the target's datum and scored 13.97 mm as posed
+    against 4.05 mm aligned, which put it behind an Otto engine that had tuned
+    its phase to 7.19 mm.
+    """
+    target = target_motion(samples=360).lam
+    for shift in (0, 37, 180, 259):
+        rolled = np.roll(target - target.mean(), shift) + 100.0
+        assert motion_error(target, rolled) == pytest.approx(0.0, abs=1.0e-9)
+        assert harmonic_error(target, rolled) == pytest.approx(0.0, abs=1.0e-6)
+        assert best_datum(target, rolled) == (target.size - shift) % target.size
+
+
+def test_the_studied_mechanism_now_scores_best() -> None:
+    """With the datum free, the objective ranks EXlink ahead of an Otto engine.
+
+    The point of the repair.  A synthesis that scores the answer it is looking
+    for *behind* a degenerate one cannot find it however long it searches, and
+    under the objective as first posed that is exactly what would have happened.
+    """
+    target = target_motion(samples=720)
+    _structure, layout, x = exlink_in_the_domain(samples=720)
+    ours = objective(layout, x, target.lam, samples=720, penalty=PENALTY_SCHEDULE[-1])
+
+    otto = np.roll(_two_up_and_downs(target.lam), 0)
+    theirs = (
+        motion_error(target.lam, otto)
+        + HARMONIC_WEIGHT * harmonic_error(target.lam, otto)
+        + TRAVEL_WEIGHT * travel_shortfall(target.lam, otto)
+    )
+    assert ours < theirs, "the mechanism with the asymmetry wins"
+    assert ours < 10.0
+
+
+def _two_up_and_downs(target: np.ndarray) -> np.ndarray:
+    """A pure second harmonic of the target's own amplitude: an Otto motion.
+
+    Two equal up-and-downs, no asymmetry at all -- what a piston reached from
+    the geared shaft alone produces, and what both searches converged to.
+    """
+    theta = np.linspace(0.0, 2.0 * np.pi, target.size, endpoint=False)
+    amplitude = float(np.hypot(*harmonic(target, 2)))
+    return amplitude * np.cos(2.0 * theta)
