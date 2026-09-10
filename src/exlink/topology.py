@@ -1219,11 +1219,13 @@ def harmonic_error(target: FloatArray, lam: FloatArray) -> float:
     return reference * float(np.mean(errors)) if errors else 0.0
 
 
-DEGENERATE_ERROR = 1.0e6
+DEGENERATE_ERROR = 1.0e3
 """What a motion scores when it is not a piston motion at all.
 
-Large enough that the search never prefers it, and finite so that a failed
-sweep does not poison a whole run.
+Above anything a real candidate reaches -- the worst of §5.7's four starts
+scored 236 -- and finite, so that a failed sweep does not poison a whole run.
+Not larger than it needs to be, because :func:`requirement_error` adds a real
+error on top of it and the sum has to stay well conditioned.
 """
 
 
@@ -1232,9 +1234,17 @@ def requirement_error(lam: FloatArray) -> float:
 
     The four conditions of :func:`requirement_residuals`, put back on the scale
     of the expansion stroke so the number can be read as a motion error and
-    compared against :func:`motion_error`.  A motion with no four-stroke phasing
-    to speak of scores :data:`DEGENERATE_ERROR` rather than raising, because the
-    search has to be able to step through such points.
+    compared against :func:`motion_error`.
+
+    A motion with no four-stroke phasing to speak of scores
+    :data:`DEGENERATE_ERROR` *plus its precision-point error*, rather than
+    raising or returning a constant.  The constant was tried and it does not
+    work: descent from a random start sat at 1000022 for five iterations and
+    stopped, because a flat penalty is a plateau with no way off it.  The
+    precision-point error is defined for any motion at all -- it reads four
+    heights and four slopes off the grid and needs no phasing -- so adding it
+    makes the plateau a slope that runs towards a motion with dead centres in
+    the right places, which is where the requirement becomes readable again.
     """
     from .constants import DEFAULT_TARGETS
     from .cycle import PhaseError
@@ -1242,9 +1252,9 @@ def requirement_error(lam: FloatArray) -> float:
     try:
         residual = requirement_residuals(lam)
     except (PhaseError, IndexError, ValueError):
-        return DEGENERATE_ERROR
-    if not np.all(np.isfinite(residual)):
-        return DEGENERATE_ERROR
+        residual = None
+    if residual is None or not np.all(np.isfinite(residual)):
+        return DEGENERATE_ERROR + precision_error(lam)
     return DEFAULT_TARGETS.expansion_stroke * float(np.sqrt(np.mean(residual**2)))
 
 
@@ -1393,6 +1403,7 @@ def _minimise(
     frozen: NDArray[np.bool_] | None = None,
     discreteness: float = 0.0,
     measure: str = "target",
+    evaluations: int | None = None,
 ) -> FloatArray:
     """One rung: bound-constrained descent on :func:`objective`.
 
@@ -1401,21 +1412,58 @@ def _minimise(
     objective is stuck with -- an equilibrium sweep is differentiable in
     principle but the branch it follows is chosen by a warm start, so an
     analytic derivative would have to differentiate the warm start too.
+
+    Frozen coordinates are *removed* rather than pinned by equal bounds.  With a
+    finite-difference gradient the difference is the whole cost of the screen:
+    the geared domain has 45 variables of which 26 are presences, so a screen
+    that fixes the topology and pins them still spends 26 of every 46 sweeps
+    differentiating in directions it has forbidden itself to move.  Dropping
+    them cannot change the answer -- the pinned bounds already held those
+    coordinates at their starting values -- and it makes each gradient 19 sweeps
+    instead of 45.
+
+    Args:
+        layout: The design vector's layout.
+        x0: Starting design.
+        target: Target motion.
+        samples: Input angles per sweep.
+        penalty: SIMP exponent on the presences.
+        iterations: L-BFGS-B iterations allowed.
+        frozen: Coordinates to hold at their starting values.
+        discreteness: Millimetres charged for a fully undecided candidate.
+        measure: How the motion is judged; see :func:`motion_measure`.
+        evaluations: Cap on objective evaluations, for a screen that has to
+            budget.  L-BFGS-B spends far more than one evaluation per iteration
+            on this objective -- around five, on the line search -- so an
+            iteration count alone does not bound the work.
+
+    Returns:
+        The design reached, on all of the layout's coordinates.
     """
     from scipy.optimize import minimize
 
     lower, upper = default_bounds(layout)
-    if frozen is not None:
-        lower = np.where(frozen, x0, lower)
-        upper = np.where(frozen, x0, upper)
+    start = np.clip(np.asarray(x0, dtype=float), lower, upper)
+    free = np.ones(layout.size, dtype=bool) if frozen is None else ~np.asarray(frozen)
+
+    def at(v: FloatArray) -> float:
+        whole = start.copy()
+        whole[free] = v
+        return objective(layout, whole, target, samples, penalty, discreteness, measure)
+
+    options: dict[str, float | int] = {"maxiter": int(iterations), "eps": 1.0e-4}
+    if evaluations is not None:
+        options["maxfun"] = int(evaluations)
     result = minimize(
-        lambda v: objective(layout, v, target, samples, penalty, discreteness, measure),
-        np.clip(x0, lower, upper),
+        at,
+        start[free],
         method="L-BFGS-B",
-        bounds=list(zip(lower, upper, strict=True)),
-        options={"maxiter": int(iterations), "eps": 1.0e-4},
+        bounds=list(zip(lower[free], upper[free], strict=True)),
+        options=options,
     )
-    return np.asarray(result.x, dtype=float)
+    out = start.copy()
+    out[free] = np.asarray(result.x, dtype=float)
+    return out
 
 
 def _describe(layout: Layout, x: FloatArray, target: FloatArray, samples: int) -> Candidate:
@@ -1919,6 +1967,7 @@ def screen_mechanism(
     iterations: int = 20,
     samples: int = 24,
     measure: str = "target",
+    evaluations: int | None = None,
 ) -> tuple[float, FloatArray]:
     """Give one topology a cheap chance, and score it.
 
@@ -1937,6 +1986,11 @@ def screen_mechanism(
         iterations: L-BFGS-B iterations allowed.
         samples: Input angles per sweep -- coarse, because this is a screen.
         measure: How the motion is judged; see :func:`motion_measure`.
+        evaluations: Total objective evaluations the topology is allowed, split
+            a third to the warm-up and the rest to the polish.  An iteration
+            count does not bound the work on this objective -- L-BFGS-B spends
+            about five evaluations an iteration on the line search -- and a
+            screen over hundreds of topologies has to be bounded.
 
     Returns:
         The objective reached and the design vector reaching it.
@@ -1973,6 +2027,7 @@ def screen_mechanism(
             PENALTY_SCHEDULE[-1],
             max(1, iterations // 3),
             frozen=frozen,
+            evaluations=None if evaluations is None else max(1, evaluations // 3),
         )
 
     polished = _minimise(
@@ -1984,6 +2039,7 @@ def screen_mechanism(
         iterations,
         frozen=frozen,
         measure=measure,
+        evaluations=None if evaluations is None else evaluations - evaluations // 3,
     )
     reached = objective(
         layout, polished, target, samples, PENALTY_SCHEDULE[-1], measure=measure

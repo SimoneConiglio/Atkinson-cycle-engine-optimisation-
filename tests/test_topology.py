@@ -11,10 +11,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from exlink import topology
 from exlink.synthesis import target_motion
 from exlink.topology import (
     BRIDGE_WEIGHT,
     COUNT_WEIGHT,
+    DEGENERATE_ERROR,
     DISCRETENESS_SCHEDULE,
     GEAR_CATALOGUE,
     HARMONIC_WEIGHT,
@@ -26,6 +28,7 @@ from exlink.topology import (
     TRAVEL_WEIGHT,
     Assessment,
     _energy_terms,
+    _minimise,
     assess,
     best_datum,
     default_bounds,
@@ -47,6 +50,7 @@ from exlink.topology import (
     precision_heights,
     random_start,
     reachability,
+    requirement_error,
     requirement_residuals,
     screen_mechanism,
     stiffnesses,
@@ -765,3 +769,74 @@ def test_the_two_readings_of_the_precision_points_differ() -> None:
     residual = requirement_residuals(lam)
     assert 74.0 * float(np.sqrt(np.mean(residual**2))) < 0.5, "the requirements are met"
     assert precision_error(lam) > 2.0, "the equally spaced angles are not"
+
+
+def test_a_degenerate_motion_still_slopes_towards_the_requirement() -> None:
+    """The penalty for an unreadable motion is a slope, not a plateau.
+
+    A constant piston height has no phasing to read.  Charging every such motion
+    the same constant leaves descent nothing to follow, and it showed: from a
+    random start the screen sat at 1000022 for five iterations and stopped.  Two
+    degenerate motions at different distances from the precision points have to
+    score differently.
+    """
+    flat = np.full(240, 100.0)
+    nearly = 100.0 - 20.0 * np.sin(np.linspace(0.0, 2.0 * np.pi, 240, endpoint=False))
+    assert requirement_error(flat) > DEGENERATE_ERROR, "it is charged the floor"
+    assert requirement_error(nearly) > DEGENERATE_ERROR, "so is this one"
+    assert requirement_error(nearly) < requirement_error(flat), "and the closer one less"
+
+
+def test_freezing_a_coordinate_removes_it_from_the_search() -> None:
+    """Frozen coordinates come back untouched, and on the full layout."""
+    _structure, layout, x = exlink_in_the_domain()
+    frozen = np.zeros(layout.size, dtype=bool)
+    frozen[layout.presence_offset :] = True
+    out = _minimise(
+        layout,
+        x,
+        target_motion(samples=24).lam,
+        24,
+        PENALTY_SCHEDULE[-1],
+        1,
+        frozen=frozen,
+        evaluations=3,
+    )
+    assert out.size == layout.size, "the whole design vector is returned"
+    assert np.array_equal(out[layout.presence_offset :], x[layout.presence_offset :]), (
+        "the topology is exactly as it was"
+    )
+
+
+def test_the_screen_can_be_given_a_budget() -> None:
+    """An iteration count does not bound the work; an evaluation count does."""
+    _structure, layout, _x = exlink_in_the_domain()
+    mechanism = enumerate_mechanisms(layout)[0]
+    target = target_motion(samples=24).lam
+    calls = []
+    real = topology.objective
+
+    def counted(*args: object, **kwargs: object) -> float:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    topology.objective = counted  # type: ignore[assignment]
+    try:
+        screen_mechanism(
+            layout,
+            mechanism,
+            target,
+            np.random.default_rng(0),
+            draws=2,
+            iterations=1000,
+            samples=24,
+            measure="requirements",
+            evaluations=6,
+        )
+    finally:
+        topology.objective = real  # type: ignore[assignment]
+    # A soft cap: L-BFGS-B checks it at iteration boundaries, so a budget of six
+    # buys about fourteen gradients rather than six.  What matters is the order of
+    # magnitude -- a thousand iterations, uncapped, would cost twenty thousand.
+    free = layout.size - layout.structure.n_presences
+    assert len(calls) < 30 * (free + 1), f"the budget held: {len(calls)}"
