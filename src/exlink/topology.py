@@ -1314,6 +1314,16 @@ def objective(
 
     Returns:
         The objective, in millimetres of equivalent motion error.
+
+    Note:
+        The harmonic term is charged only under the sampled-target measure, and
+        deliberately.  It compares a candidate's first two harmonics against a
+        *particular* motion's, so under a precision-point measure it would put
+        the proxy straight back: on EXlink at 48 samples it is 4.09 mm against a
+        requirement error of 0.21, twenty to one, so whatever the four points
+        asked for, the search would still be fitting one nominated curve.  What
+        happens between the precision points is either free or expressed as more
+        precision points -- not as a shape charge.
     """
     motion = sweep(layout, x, samples=samples, penalty=penalty)
     if not np.all(np.isfinite(motion.lam)):
@@ -1321,9 +1331,10 @@ def objective(
     rho = layout.presences(x)
     driven = driven_fraction(layout, x)
     unbridged = float(np.sum(driven * (1.0 - reachability(layout, x))))
+    shape = HARMONIC_WEIGHT * harmonic_error(target, motion.lam) if measure == "target" else 0.0
     return (
         motion_measure(measure, target, motion.lam)
-        + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
+        + shape
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
         + SLACK_WEIGHT * motion.output_slack
@@ -1381,6 +1392,7 @@ def _minimise(
     iterations: int,
     frozen: NDArray[np.bool_] | None = None,
     discreteness: float = 0.0,
+    measure: str = "target",
 ) -> FloatArray:
     """One rung: bound-constrained descent on :func:`objective`.
 
@@ -1397,7 +1409,7 @@ def _minimise(
         lower = np.where(frozen, x0, lower)
         upper = np.where(frozen, x0, upper)
     result = minimize(
-        lambda v: objective(layout, v, target, samples, penalty, discreteness),
+        lambda v: objective(layout, v, target, samples, penalty, discreteness, measure),
         np.clip(x0, lower, upper),
         method="L-BFGS-B",
         bounds=list(zip(lower, upper, strict=True)),
@@ -1435,6 +1447,7 @@ def synthesise_one(
     samples: int = 90,
     iterations: int = 120,
     schedule: tuple[float, ...] = PENALTY_SCHEDULE,
+    measure: str = "target",
 ) -> Candidate:
     """Walk one start up the penalisation schedule and make the answer discrete.
 
@@ -1450,18 +1463,30 @@ def synthesise_one(
         samples: Input angles per sweep during the search.
         iterations: L-BFGS-B iterations per rung.
         schedule: Penalisation exponents.
+        measure: How the motion is judged; see :func:`motion_measure`.
 
     Returns:
         The discrete mechanism and its score.
     """
     x = np.array(x0, dtype=float)
     for penalty, sharpness in zip(schedule, DISCRETENESS_SCHEDULE, strict=False):
-        x = _minimise(layout, x, target, samples, penalty, iterations, discreteness=sharpness)
+        x = _minimise(
+            layout,
+            x,
+            target,
+            samples,
+            penalty,
+            iterations,
+            discreteness=sharpness,
+            measure=measure,
+        )
     rho = layout.presences(x)
     x[layout.presence_offset :] = (rho > PRESENCE_THRESHOLD).astype(float)
     frozen = np.zeros(layout.size, dtype=bool)
     frozen[layout.presence_offset :] = True
-    x = _minimise(layout, x, target, samples, schedule[-1], iterations, frozen=frozen)
+    x = _minimise(
+        layout, x, target, samples, schedule[-1], iterations, frozen=frozen, measure=measure
+    )
     return _describe(layout, x, target, samples=len(target))
 
 
@@ -1893,6 +1918,7 @@ def screen_mechanism(
     draws: int = 4,
     iterations: int = 20,
     samples: int = 24,
+    measure: str = "target",
 ) -> tuple[float, FloatArray]:
     """Give one topology a cheap chance, and score it.
 
@@ -1910,9 +1936,20 @@ def screen_mechanism(
         draws: Random geometries to try before descending from the best.
         iterations: L-BFGS-B iterations allowed.
         samples: Input angles per sweep -- coarse, because this is a screen.
+        measure: How the motion is judged; see :func:`motion_measure`.
 
     Returns:
         The objective reached and the design vector reaching it.
+
+    Note:
+        Under a precision-point measure the draws are still ranked, and a third
+        of the iterations still spent, on the sampled-target measure.  Not a
+        hedge: a precision-point error is *undefined* where the motion has no
+        four-stroke phasing to read, and a random start usually has none, so
+        that measure alone offers a flat :data:`DEGENERATE_ERROR` with no
+        gradient out of it.  The sampled target is smooth everywhere and is used
+        here only to reach a motion the requirement can see; what the topology
+        is finally scored and polished on is the requirement.
     """
     presences = mechanism.presences(layout.structure)
     frozen = np.zeros(layout.size, dtype=bool)
@@ -1927,10 +1964,31 @@ def screen_mechanism(
             best_value, best_x = value, x
     assert best_x is not None
 
+    if measure != "target":
+        best_x = _minimise(
+            layout,
+            best_x,
+            target,
+            samples,
+            PENALTY_SCHEDULE[-1],
+            max(1, iterations // 3),
+            frozen=frozen,
+        )
+
     polished = _minimise(
-        layout, best_x, target, samples, PENALTY_SCHEDULE[-1], iterations, frozen=frozen
+        layout,
+        best_x,
+        target,
+        samples,
+        PENALTY_SCHEDULE[-1],
+        iterations,
+        frozen=frozen,
+        measure=measure,
     )
-    return objective(layout, polished, target, samples, PENALTY_SCHEDULE[-1]), polished
+    reached = objective(
+        layout, polished, target, samples, PENALTY_SCHEDULE[-1], measure=measure
+    )
+    return reached, polished
 
 
 PRECISION_ANGLES: tuple[float, ...] = (0.0, 90.0, 180.0, 270.0)
