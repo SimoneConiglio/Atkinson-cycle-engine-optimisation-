@@ -612,6 +612,7 @@ def _assemble(
     rest: FloatArray,
     gear_stiffness: FloatArray,
     radii: FloatArray,
+    ends: tuple[IntArray, IntArray] | None = None,
 ) -> tuple[float, FloatArray, FloatArray, FloatArray, FloatArray]:
     """Total energy and its reduced derivatives, springs and gears together.
 
@@ -622,7 +623,9 @@ def _assemble(
     """
     structure = layout.structure
     pos, tangents = _place(layout, x, theta, reduced)
-    energy, grad_pos, hess_pos = _energy_terms(pos, structure.ends(), k, rest)
+    energy, grad_pos, hess_pos = _energy_terms(
+        pos, structure.ends() if ends is None else ends, k, rest
+    )
 
     jac = _jacobian(layout, tangents)
     grad = jac.T @ grad_pos
@@ -654,6 +657,7 @@ def _equilibrate(
     rest: FloatArray,
     gear_stiffness: FloatArray,
     radii: FloatArray,
+    ends: tuple[IntArray, IntArray] | None = None,
 ) -> tuple[FloatArray, bool]:
     """Minimise the energy over the free coordinates and shaft angles.
 
@@ -683,7 +687,7 @@ def _equilibrate(
     u = np.array(guess, dtype=float)
     for _ in range(NEWTON_STEPS):
         energy, grad, hess, _pos, _slip = _assemble(
-            layout, x, theta, u, k, rest, gear_stiffness, radii
+            layout, x, theta, u, k, rest, gear_stiffness, radii, ends
         )
         if float(np.max(np.abs(grad))) < tol:
             return u, True
@@ -695,13 +699,16 @@ def _equilibrate(
         alpha = 1.0
         for _back in range(BACKTRACK_STEPS):
             trial = u + alpha * step
-            if _assemble(layout, x, theta, trial, k, rest, gear_stiffness, radii)[0] <= energy:
+            if (
+                _assemble(layout, x, theta, trial, k, rest, gear_stiffness, radii, ends)[0]
+                <= energy
+            ):
                 u = trial
                 break
             alpha *= 0.5
         else:
             return u, False
-    final = _assemble(layout, x, theta, u, k, rest, gear_stiffness, radii)[1]
+    final = _assemble(layout, x, theta, u, k, rest, gear_stiffness, radii, ends)[1]
     return u, float(np.max(np.abs(final))) < tol
 
 
@@ -765,13 +772,20 @@ def sweep(
     structure = layout.structure
     element_rho = layout.element_presences(x)
     gear_rho = layout.gear_presences(x)
-    k = stiffnesses(element_rho, penalty)[structure.spring_owner()]
-    spring_rho = element_rho[structure.spring_owner()]
+    owner = structure.spring_owner()
+    k = stiffnesses(element_rho, penalty)[owner]
+    spring_rho = element_rho[owner]
     gear_stiffness = stiffnesses(gear_rho, penalty)
     radii = gear_radii(layout, x)
     rest = member_lengths(layout, x)
     safe_rest = np.where(rest > 0.0, rest, 1.0)
     first, second = structure.ends()
+
+    # Built once and threaded through, rather than rebuilt inside every Newton
+    # step of every angle -- which is where an enumeration over topologies would
+    # otherwise spend most of its time.
+    ends = (first, second)
+    solve_k, solve_rest = k, rest
 
     start = initial_configuration(layout, x)
     mask = structure.free_mask()
@@ -790,9 +804,13 @@ def sweep(
     worst = 0.0
     slack = 0.0
     for step, theta in enumerate(angles):
-        u, converged = _equilibrate(layout, x, float(theta), u, k, rest, gear_stiffness, radii)
+        u, converged = _equilibrate(
+            layout, x, float(theta), u, solve_k, solve_rest, gear_stiffness, radii, ends
+        )
         ok = ok and converged
-        hess = _assemble(layout, x, float(theta), u, k, rest, gear_stiffness, radii)[2]
+        hess = _assemble(
+            layout, x, float(theta), u, solve_k, solve_rest, gear_stiffness, radii, ends
+        )[2]
         slack = max(slack, _output_slack(hess, slider_row))
         pos, _tangents = _place(layout, x, float(theta), u)
         lam[step] = pos[slider_node, 1]
@@ -1023,7 +1041,7 @@ proportionally, as missing the large one.
 """
 
 BRIDGE_WEIGHT = 30.0
-"""Millimetres charged for a driven pin the linkage does not carry to the piston.
+"""Millimetres charged for a *driven* pin the linkage does not carry to the piston.
 
 The condition §5.6 *derives* rather than assumes: a piston reached from one
 shaft alone is periodic in that shaft's angle, so every odd harmonic vanishes
@@ -1035,6 +1053,13 @@ two three-cornered bodies and hung all of them off the geared shaft.
 Imposing a proven necessary condition is not assuming the answer: nothing here
 says *how* the two chains meet, how many elements it takes, or what shape the
 body that joins them has.
+
+The charge is weighted by how far each pin's shaft is *driven*
+(:func:`driven_fraction`), which is what keeps it honest in both directions.  A
+pin on a shaft no gear turns is not a second source, so reaching it earns
+nothing -- and not reaching it costs nothing either, because a topology with no
+gear at all is a legitimate single-input linkage rather than a broken two-input
+one.  The enumeration of :func:`enumerate_mechanisms` contains both families.
 """
 
 SLACK_WEIGHT = 200.0
@@ -1230,7 +1255,8 @@ def objective(
     if not np.all(np.isfinite(motion.lam)):
         return 1.0e6
     rho = layout.presences(x)
-    unbridged = float(np.sum(1.0 - reachability(layout, x)))
+    driven = driven_fraction(layout, x)
+    unbridged = float(np.sum(driven * (1.0 - reachability(layout, x))))
     return (
         motion_error(target, motion.lam)
         + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
@@ -1596,15 +1622,16 @@ def reachability(layout: Layout, x: FloatArray) -> FloatArray:
     weakest link -- which is what makes it something a gradient can climb rather
     than a yes-or-no test.
 
-    A pin's reach is then gated by how far its shaft is actually *driven*, and
-    that gate is not decoration.  Without it the condition is satisfiable
-    vacuously: a shaft with no gear on it is a passive grounded pivot, joining
-    the piston to it carries no second source of motion, and a run duly reached
-    1.00 on both pins while keeping no pair at all.  The input shaft is driven by
-    definition; any other is driven only as far as a gear presence says.
+    This is the path alone.  Whether a pin is worth reaching is a separate
+    question -- :func:`driven_fraction` answers it -- and keeping the two apart
+    matters in both directions.  Reaching a pin whose shaft nothing drives is
+    vacuous, and a run duly reached 1.00 on both while keeping no gear at all;
+    but *charging* for not reaching it would be wrong too, because a topology
+    with no gear is a legitimate single-input linkage rather than a broken
+    two-input one.
 
     Returns:
-        One value per driven pin, in the order the structure lists its pins.
+        One value per pin, in the order the structure lists its pins.
     """
     structure = layout.structure
     rho = layout.element_presences(x)
@@ -1612,18 +1639,6 @@ def reachability(layout: Layout, x: FloatArray) -> FloatArray:
     for m, element in enumerate(structure.elements):
         for i, j in element.springs:
             weight[i, j] = weight[j, i] = max(weight[i, j], float(rho[m]))
-
-    gear_rho = layout.gear_presences(x)
-    driven = np.ones(len(structure.shafts), dtype=float)
-    for shaft_index, shaft in enumerate(structure.shafts):
-        if not shaft.is_free:
-            continue
-        on_it = [
-            float(gear_rho[g])
-            for g, gear in enumerate(structure.gears)
-            if shaft_index in (gear.first, gear.second)
-        ]
-        driven[shaft_index] = max(on_it) if on_it else 0.0
 
     slider = layout.slider_slot[0]
     out = np.zeros(len(structure.pins), dtype=float)
@@ -1636,5 +1651,219 @@ def reachability(layout: Layout, x: FloatArray) -> FloatArray:
             if np.allclose(better, value):
                 break
             value = better
-        out[p] = min(value[slider], driven[pin.shaft])
+        out[p] = value[slider]
     return out
+
+
+def driven_fraction(layout: Layout, x: FloatArray) -> FloatArray:
+    """How far each pin's shaft is actually driven, from 0 to 1.
+
+    The input shaft is driven by definition.  Any other is driven only as far as
+    a gear presence says, because a shaft carrying no gear is a passive grounded
+    pivot -- a perfectly good linkage element, and not a second *source* of
+    motion.
+
+    Returns:
+        One value per pin, in the order the structure lists its pins.
+    """
+    structure = layout.structure
+    gear_rho = layout.gear_presences(x)
+    driven = np.ones(len(structure.shafts), dtype=float)
+    for shaft_index, shaft in enumerate(structure.shafts):
+        if not shaft.is_free:
+            continue
+        on_it = [
+            float(gear_rho[g])
+            for g, gear in enumerate(structure.gears)
+            if shaft_index in (gear.first, gear.second)
+        ]
+        driven[shaft_index] = max(on_it) if on_it else 0.0
+    return np.array([driven[pin.shaft] for pin in structure.pins], dtype=float)
+
+
+@dataclass(frozen=True)
+class Mechanism:
+    """One discrete topology: which elements are present, and which gear."""
+
+    elements: tuple[int, ...]
+    """Indices into the structure's elements."""
+    gear: int | None
+    """Index of the gear pair fitted, or ``None``."""
+
+    def presences(self, structure: GroundStructure) -> FloatArray:
+        """The presence vector this topology stands for."""
+        rho = np.zeros(structure.n_presences, dtype=float)
+        for m in self.elements:
+            rho[m] = 1.0
+        if self.gear is not None:
+            rho[structure.n_members + self.gear] = 1.0
+        return rho
+
+    def names(self, structure: GroundStructure) -> tuple[tuple[str, ...], ...]:
+        """The elements it keeps, by node name."""
+        return tuple(
+            tuple(structure.names[n] for n in structure.elements[m].nodes)
+            for m in self.elements
+        )
+
+
+def _joins_the_piston(structure: GroundStructure, elements: tuple[int, ...]) -> bool:
+    """Whether both driven pins reach the piston through the chosen elements."""
+    adjacency: dict[int, set[int]] = {i: set() for i in range(structure.n_nodes)}
+    for m in elements:
+        for i, j in structure.elements[m].springs:
+            adjacency[i].add(j)
+            adjacency[j].add(i)
+    slider = next(i for i, kind in enumerate(structure.kinds) if kind == SLIDER)
+    for pin in structure.pins:
+        seen, stack = {pin.node}, [pin.node]
+        while stack:
+            for neighbour in adjacency[stack.pop()]:
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    stack.append(neighbour)
+        if slider not in seen:
+            return False
+    return True
+
+
+def is_determinate(
+    layout: Layout,
+    mechanism: Mechanism,
+    rng: np.random.Generator,
+    tries: int = 3,
+) -> bool:
+    """Whether the input angle fixes every unknown, at a general pose.
+
+    The rank of the reduced Hessian is the test, taken at random geometries so
+    that a topology is not rejected for being singular at one unlucky pose.  A
+    topology failing it is under-constrained however its dimensions are chosen,
+    which is the property §5.7 found reports whatever motion the solver's ridge
+    happens to pick.
+
+    The absent elements are given a stiffness of *exactly* zero rather than the
+    usual floor.  The floor exists so that the continuation always has a Hessian
+    to invert, and it leaves that Hessian nominally full rank whatever the
+    topology, so a rank test taken through it answers a question about the
+    tolerance rather than about the mechanism.
+    """
+    structure = layout.structure
+    for _try in range(tries):
+        x = random_start(layout, rng)
+        x[layout.presence_offset :] = mechanism.presences(structure)
+        k = layout.element_presences(x)[structure.spring_owner()]
+        gear_k = layout.gear_presences(x)
+        radii = gear_radii(layout, x)
+        rest = member_lengths(layout, x)
+        reduced = np.zeros(structure.n_reduced, dtype=float)
+        mask = structure.free_mask()
+        reduced[: int(mask.sum())] = initial_configuration(layout, x).reshape(-1)[mask]
+        hessian = _assemble(layout, x, 0.0, reduced, k, rest, gear_k, radii)[2]
+        if np.linalg.matrix_rank(hessian, tol=1.0e-6 * float(np.max(np.abs(hessian)))) == (
+            structure.n_reduced
+        ):
+            return True
+    return False
+
+
+def enumerate_mechanisms(
+    layout: Layout,
+    seed: int = 0,
+    max_elements: int = 4,
+) -> tuple[Mechanism, ...]:
+    """Every discrete topology in the domain that is a mechanism at all.
+
+    The globalization this problem actually wants.  §5.7 leaves a search
+    problem: the objective ranks the answer an order of magnitude ahead of
+    anything six local runs found, and the runs commit to a short path in their
+    first rung and never leave it.  The discrete part of the problem is small
+    enough not to need a heuristic -- it can be *enumerated*, which is the same
+    treatment §4.4 gives the gear lattice and the exhaustive baseline of
+    Appendix C.3.
+
+    Three conditions, applied in increasing cost.  The elements must supply
+    exactly as many constraints as there are unknowns, counting a bar as one, a
+    body as three and a fitted gear as one.  Both driven pins must reach the
+    piston, which is §5.6's identity as a condition on the graph.  And the
+    reduced Hessian must have full rank at a general pose, which rejects the
+    topologies that are under-constrained however they are dimensioned.
+
+    Args:
+        layout: The design vector's layout.
+        seed: Draws the random poses the rank test uses.
+        max_elements: Largest number of elements to consider.
+
+    Returns:
+        The admissible topologies, smallest first.
+    """
+    from itertools import combinations
+
+    structure = layout.structure
+    cost = [len(element.springs) for element in structure.elements]
+    unknowns = structure.n_reduced
+    rng = np.random.default_rng(seed)
+
+    found: list[Mechanism] = []
+    for size in range(1, max_elements + 1):
+        for elements in combinations(range(structure.n_members), size):
+            supplied = sum(cost[m] for m in elements)
+            if supplied not in (unknowns - 1, unknowns):
+                continue
+            if not _joins_the_piston(structure, elements):
+                continue
+            gears: list[int | None] = (
+                list(range(len(structure.gears))) if supplied == unknowns - 1 else [None]
+            )
+            for gear in gears:
+                candidate = Mechanism(elements=elements, gear=gear)
+                if is_determinate(layout, candidate, rng):
+                    found.append(candidate)
+    return tuple(found)
+
+
+def screen_mechanism(
+    layout: Layout,
+    mechanism: Mechanism,
+    target: FloatArray,
+    rng: np.random.Generator,
+    draws: int = 4,
+    iterations: int = 20,
+    samples: int = 24,
+) -> tuple[float, FloatArray]:
+    """Give one topology a cheap chance, and score it.
+
+    With the presences fixed the problem is no longer a topology optimization at
+    all -- it is the well-conditioned continuous fit :mod:`exlink.synthesis`
+    already solves reliably on a known linkage.  That is the point of enumerating:
+    the hard, deceptive part of the search is the discrete part, and enumeration
+    removes it, leaving each topology a problem that local descent handles.
+
+    Args:
+        layout: The design vector's layout.
+        mechanism: The topology to try.
+        target: Target piston motion.
+        rng: Draws the starting geometries.
+        draws: Random geometries to try before descending from the best.
+        iterations: L-BFGS-B iterations allowed.
+        samples: Input angles per sweep -- coarse, because this is a screen.
+
+    Returns:
+        The objective reached and the design vector reaching it.
+    """
+    presences = mechanism.presences(layout.structure)
+    frozen = np.zeros(layout.size, dtype=bool)
+    frozen[layout.presence_offset :] = True
+
+    best_value, best_x = np.inf, None
+    for _draw in range(draws):
+        x = random_start(layout, rng)
+        x[layout.presence_offset :] = presences
+        value = objective(layout, x, target, samples, PENALTY_SCHEDULE[-1])
+        if value < best_value:
+            best_value, best_x = value, x
+    assert best_x is not None
+
+    polished = _minimise(
+        layout, best_x, target, samples, PENALTY_SCHEDULE[-1], iterations, frozen=frozen
+    )
+    return objective(layout, polished, target, samples, PENALTY_SCHEDULE[-1]), polished

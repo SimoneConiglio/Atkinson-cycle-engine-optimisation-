@@ -29,7 +29,9 @@ from exlink.topology import (
     assess,
     best_datum,
     default_bounds,
+    driven_fraction,
     engine_ground_structure,
+    enumerate_mechanisms,
     exlink_in_the_domain,
     format_assessment,
     gear_radii,
@@ -37,11 +39,13 @@ from exlink.topology import (
     harmonic,
     harmonic_error,
     initial_configuration,
+    is_determinate,
     member_lengths,
     motion_error,
     objective,
     random_start,
     reachability,
+    screen_mechanism,
     stiffnesses,
     sweep,
     travel_shortfall,
@@ -155,7 +159,8 @@ def test_the_objective_is_assembled_from_its_terms() -> None:
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
         + SLACK_WEIGHT * motion.output_slack
-        + BRIDGE_WEIGHT * float(np.sum(1.0 - reachability(layout, x)))
+        + BRIDGE_WEIGHT
+        * float(np.sum(driven_fraction(layout, x) * (1.0 - reachability(layout, x))))
     )
     assert objective(layout, x, target, samples=48, penalty=1.0) == pytest.approx(expected)
 
@@ -179,8 +184,9 @@ def test_absent_members_still_drag_the_piston() -> None:
     motion = sweep(layout, x, samples=48, penalty=1.0)
     assert motion.strain == pytest.approx(0.0), "an absent member is not charged strain"
     assert np.ptp(motion.lam) > 0.0
-    assert float(np.sum(reachability(layout, x))) == pytest.approx(0.0), (
-        "and it carries neither shaft to the piston, which is what is charged"
+    carried = driven_fraction(layout, x) * reachability(layout, x)
+    assert float(np.sum(carried)) == pytest.approx(0.0), (
+        "and it carries no driven shaft to the piston, which is what is charged"
     )
 
 
@@ -575,9 +581,10 @@ def test_bridging_to_an_undriven_shaft_counts_for_nothing() -> None:
 
     ungeared = x.copy()
     ungeared[layout.presence_offset + structure.n_members :] = 0.0
-    reach = reachability(layout, ungeared)
-    assert reach[0] == pytest.approx(1.0), "the input shaft is driven by definition"
-    assert reach[1] == pytest.approx(0.0), "the other is driven only by a gear"
+    driven = driven_fraction(layout, ungeared)
+    assert driven[0] == pytest.approx(1.0), "the input shaft is driven by definition"
+    assert driven[1] == pytest.approx(0.0), "the other is driven only by a gear"
+    assert reachability(layout, ungeared)[1] == pytest.approx(1.0), "the path is still there"
 
     target = target_motion(samples=180).lam
     geared = objective(layout, x, target, samples=180, penalty=PENALTY_SCHEDULE[-1])
@@ -605,6 +612,7 @@ def test_a_prescribed_shaft_needs_no_gear_to_count() -> None:
     reach = reachability(layout, x)
     assert reach[1] == pytest.approx(1.0), "the rod from the geared pin counts in full"
     assert reach[0] == pytest.approx(0.0), "and the input shaft reaches nothing"
+    assert np.all(driven_fraction(layout, x) == 1.0), "both speeds are prescribed here"
 
 
 def test_a_piston_that_barely_moves_is_not_extended_expansion() -> None:
@@ -636,3 +644,70 @@ def test_a_piston_that_barely_moves_is_not_extended_expansion() -> None:
     real = assess(layout, x, target_motion(samples=720).lam, samples=720)
     assert real.travel == pytest.approx(74.0, abs=1.0)
     assert real.delivers_the_stroke and real.is_extended_expansion
+
+
+def test_the_enumeration_contains_the_studied_mechanism() -> None:
+    """The completeness check that makes a negative result mean something.
+
+    An enumeration that cannot produce EXlink cannot be said to have searched
+    for an alternative to it.  Its topology -- swing rod, trigonal body, piston
+    rod -- appears once per catalogue ratio, since the ratio is a separate
+    discrete choice.
+    """
+    structure, layout = geared_ground_structure()
+    mechanisms = enumerate_mechanisms(layout)
+
+    wanted = {("P1", "F1"), ("P2", "F1", "F2"), ("F2", "S")}
+    hits = [m for m in mechanisms if set(m.names(structure)) == wanted]
+    assert len(hits) == len(GEAR_CATALOGUE)
+    assert {GEAR_CATALOGUE[m.gear] for m in hits if m.gear is not None} == set(GEAR_CATALOGUE)
+
+
+def test_every_enumerated_topology_is_a_mechanism() -> None:
+    """The three conditions, applied to the whole enumeration rather than argued.
+
+    Enumerating is only worth doing if what comes out needs no further sifting:
+    each entry supplies exactly as many constraints as there are unknowns,
+    carries both driven pins to the piston, and has a full-rank Hessian at a
+    general pose.
+
+    Determinacy is a *generic* property, so one full-rank pose proves it but a
+    re-test can draw unlucky ones; the retry count here is generous for that
+    reason rather than because the property is marginal.
+    """
+    structure, layout = geared_ground_structure()
+    mechanisms = enumerate_mechanisms(layout)
+    assert mechanisms, "the domain holds admissible topologies"
+
+    cost = [len(element.springs) for element in structure.elements]
+    rng = np.random.default_rng(11)
+    for mechanism in mechanisms[::37]:
+        supplied = sum(cost[m] for m in mechanism.elements)
+        supplied += 1 if mechanism.gear is not None else 0
+        assert supplied == structure.n_reduced, "constraints match unknowns"
+
+        x = random_start(layout, rng)
+        x[layout.presence_offset :] = mechanism.presences(structure)
+        assert np.all(reachability(layout, x) > 0.0), "both pins carried to the piston"
+        assert is_determinate(layout, mechanism, rng, tries=12)
+        if mechanism.gear is None:
+            assert driven_fraction(layout, x)[1] == 0.0, "an ungeared shaft is no source"
+
+
+def test_screening_a_topology_leaves_its_topology_alone() -> None:
+    """The screen searches the geometry only; the discrete choice is the caller's."""
+    structure, layout = geared_ground_structure()
+    mechanism = next(
+        m
+        for m in enumerate_mechanisms(layout)
+        if set(m.names(structure)) == {("P1", "F1"), ("P2", "F1", "F2"), ("F2", "S")}
+        and m.gear is not None
+        and GEAR_CATALOGUE[m.gear] == 2.0
+    )
+    target = target_motion(samples=12).lam
+    value, x = screen_mechanism(
+        layout, mechanism, target, np.random.default_rng(5), draws=2, iterations=2, samples=12
+    )
+    assert np.isfinite(value)
+    assert np.array_equal(layout.presences(x), mechanism.presences(structure))
+    assert np.all(reachability(layout, x) == 1.0)
