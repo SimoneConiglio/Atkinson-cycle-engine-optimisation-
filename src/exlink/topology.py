@@ -1568,10 +1568,12 @@ def reachability(layout: Layout, x: FloatArray) -> FloatArray:
     weakest link -- which is what makes it something a gradient can climb rather
     than a yes-or-no test.
 
-    The gears are deliberately not in this graph.  What matters here is whether
-    the *linkage* carries each shaft's motion to the piston, which is the
-    condition §5.6 derives; whether a shaft is itself driven is the separate
-    question :attr:`Motion.output_slack` answers.
+    A pin's reach is then gated by how far its shaft is actually *driven*, and
+    that gate is not decoration.  Without it the condition is satisfiable
+    vacuously: a shaft with no gear on it is a passive grounded pivot, joining
+    the piston to it carries no second source of motion, and a run duly reached
+    1.00 on both pins while keeping no pair at all.  The input shaft is driven by
+    definition; any other is driven only as far as a gear presence says.
 
     Returns:
         One value per driven pin, in the order the structure lists its pins.
@@ -1582,6 +1584,18 @@ def reachability(layout: Layout, x: FloatArray) -> FloatArray:
     for m, element in enumerate(structure.elements):
         for i, j in element.springs:
             weight[i, j] = weight[j, i] = max(weight[i, j], float(rho[m]))
+
+    gear_rho = layout.gear_presences(x)
+    driven = np.ones(len(structure.shafts), dtype=float)
+    for shaft_index, shaft in enumerate(structure.shafts):
+        if not shaft.is_free:
+            continue
+        on_it = [
+            float(gear_rho[g])
+            for g, gear in enumerate(structure.gears)
+            if shaft_index in (gear.first, gear.second)
+        ]
+        driven[shaft_index] = max(on_it) if on_it else 0.0
 
     slider = layout.slider_slot[0]
     out = np.zeros(len(structure.pins), dtype=float)
@@ -1594,5 +1608,5 @@ def reachability(layout: Layout, x: FloatArray) -> FloatArray:
             if np.allclose(better, value):
                 break
             value = better
-        out[p] = value[slider]
+        out[p] = min(value[slider], driven[pin.shaft])
     return out

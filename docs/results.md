@@ -835,6 +835,15 @@ its weakest presence, the value of a pin is its best route -- which gives 1 for 
 fully built chain, 0 for none, and the weakest link for a half-built one, so it
 is something a gradient can climb rather than a yes-or-no test.
 
+A pin's reach is then *gated* by how far its shaft is actually driven, and that
+gate is not decoration. Without it the condition is satisfiable vacuously: a
+shaft carrying no gear is a passive grounded pivot, so joining the piston to its
+pin carries no second source of motion, and a run duly reached 1.00 on both pins
+while keeping no pair at all. Dropping the pair from EXlink's own linkage takes
+its reach from (1.00, 1.00) to (1.00, 0.00) and its objective from 7.54 to
+215.59. §5.6's domain prescribes both shaft speeds and has no gear element, so
+the gate is inert there and its figures stay comparable.
+
 A fourth change is not a condition but a scale. The bounds are deliberately loose
 because the answer is not known in advance; a *start* drawn that loosely is a
 different thing, and the first runs drew nodes over half a metre apart and

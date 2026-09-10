@@ -557,3 +557,49 @@ def test_a_start_is_drawn_on_the_specification_scale() -> None:
         assert np.max(np.abs(coordinates)) <= START_SPAN + 1.0e-9
         assert np.all(layout.presences(x) == 0.5)
     assert 0.5 * float(np.max(upper[0:4])) > START_SPAN
+
+
+def test_bridging_to_an_undriven_shaft_counts_for_nothing() -> None:
+    """The gate that stops the bridging condition being satisfied vacuously.
+
+    A shaft with no gear on it is a passive grounded pivot, so joining the
+    piston to its pin carries no second source of motion.  Without the gate a
+    run reached 1.00 on both pins while keeping no pair at all -- the letter of
+    the condition, and none of what it is for.
+    """
+    structure, layout, x = exlink_in_the_domain()
+    assert np.allclose(reachability(layout, x), 1.0)
+    assert structure.shafts[1].is_free, "the geared shaft's angle is solved for"
+
+    ungeared = x.copy()
+    ungeared[layout.presence_offset + structure.n_members :] = 0.0
+    reach = reachability(layout, ungeared)
+    assert reach[0] == pytest.approx(1.0), "the input shaft is driven by definition"
+    assert reach[1] == pytest.approx(0.0), "the other is driven only by a gear"
+
+    target = target_motion(samples=180).lam
+    geared = objective(layout, x, target, samples=180, penalty=PENALTY_SCHEDULE[-1])
+    loose = objective(layout, ungeared, target, samples=180, penalty=PENALTY_SCHEDULE[-1])
+    assert loose - geared > BRIDGE_WEIGHT, "dropping the pair is charged, heavily"
+
+
+def test_a_prescribed_shaft_needs_no_gear_to_count() -> None:
+    """§5.6's domain hands both shafts their speeds, so the gate is inert there.
+
+    Its geared shaft turns at minus two by construction and there is no gear
+    element to switch on, so a rod from its pin has to count in full -- which is
+    what makes §5.6's reach figures comparable with §5.7's.
+    """
+    structure, layout = engine_ground_structure()
+    assert all(not shaft.is_free for shaft in structure.shafts)
+    assert not structure.gears
+
+    layout, x = _slider_crank_design()
+    names = [tuple(structure.names[n] for n in e.nodes) for e in structure.elements]
+    rho = np.zeros(structure.n_presences)
+    rho[names.index(("P2", "S"))] = 1.0
+    x[layout.presence_offset :] = rho
+
+    reach = reachability(layout, x)
+    assert reach[1] == pytest.approx(1.0), "the rod from the geared pin counts in full"
+    assert reach[0] == pytest.approx(0.0), "and the input shaft reaches nothing"
