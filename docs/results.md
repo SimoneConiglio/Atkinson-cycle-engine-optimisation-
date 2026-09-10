@@ -954,3 +954,66 @@ the four numbers the engine actually needs — the expansion stroke, the
 compression ratio, two top dead centres at the same height half an input
 revolution apart — are nowhere among the terms. A design can therefore fit the
 curve better on average while failing every one of them, and one did.
+
+### The precision points, and what a screen can and cannot be asked
+
+The repair is to say what the engine needs as **points on the motion** rather
+than as a curve to match. Four of them, one input revolution being one cycle:
+
+| input angle | crankshaft | height below top dead centre | must be |
+|---|---|---|---|
+| $0^\circ$ | $0^\circ$ | $0$ | a turning point |
+| $90^\circ$ | $180^\circ$ | $-74.000$ mm | a turning point |
+| $180^\circ$ | $360^\circ$ | $0$ | a turning point |
+| $270^\circ$ | $540^\circ$ | $-55.953$ mm | a turning point |
+
+Only differences are prescribed, because the absolute height is set by where the
+cylinder is bolted; and the datum is profiled out by searching every rotation of
+it, on the same argument as everywhere else here — which crank angle is called
+zero is a choice, not a result.
+
+Read literally, the four angles are fixed a quarter revolution apart. That
+reading is **stricter than the studied mechanism satisfies**: EXlink's own
+turning points sit at $10.5^\circ$, $101.5^\circ$, $189.5^\circ$ and
+$286^\circ$, so it scores 3.53 mm against the equally spaced target and 0.34 mm
+against a reading that fixes the heights and asks only that the two top dead
+centres be half an input revolution apart. A target that rejects the answer
+known to exist would decide the search before it started, so the looser reading
+is what is minimised and the stricter one is reported alongside.
+
+Two things had to be measured rather than assumed before the screen could rank
+anything at all, and both were found by calibrating it against the known-good
+topology — screening EXlink's own three elements and gear pair from scratch,
+under exactly the budget every other candidate gets.
+
+**The phase test was too strict for a search iterate.**
+{func}`exlink.cycle.find_phases` demands exactly four monotone phases, which is
+right for judging a finished design and wrong for judging an iterate: one
+spurious reversal, and a motion that is plainly a four-stroke on a fine grid
+reads as no motion at all. EXlink's own polished design scored the degenerate
+floor on the 24 angles a screen can afford and 28.7 mm on 240. The requirement
+is now read off the turning points directly — the two highest peaks are the top
+dead centres, the deepest point of each arc between them is a bottom dead
+centre, each refined between samples by the parabola through it — and spurious
+reversals are *charged* instead of refused. A clean four-phase motion travels
+exactly twice its two strokes in a revolution; whatever it travels beyond that
+is movement nobody asked for, and it is that fifth residual which makes the
+precision points the trajectory's extremes rather than merely four points it
+passes through.
+
+**Selecting a start on the coarse objective is deceptive.** Not noisy —
+deceptive. On topology 39 the best-scoring draw out of 24 polishes to 36.08 mm
+while the best out of 4 polishes to 4.68; on EXlink's own topology more draws
+help. Buying draws is nearly free — a draw costs one equilibrium sweep, an
+evaluation of the polish costs twenty, because the gradient is a finite
+difference over nineteen free coordinates — and it still does not buy a reliable
+ranking. So the first stage is treated as a **shortlist and not an ordering**,
+and the second gives each surviving topology several independent descents and
+judges it on the best of them.
+
+That finite-difference factor of twenty is the binding constraint on the whole
+exercise, and it is worth naming as such. A screen that could differentiate the
+equilibrium analytically — by the implicit function theorem, which
+{doc}`Appendix A <theory>` already sets up for exactly this map — would buy an
+order of magnitude more optimisation per unit of compute than any amount of
+tuning the schedule.
