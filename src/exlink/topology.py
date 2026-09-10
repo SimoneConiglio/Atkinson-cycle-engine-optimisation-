@@ -111,6 +111,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
+from .constants import DEFAULT_TARGETS
+
 if TYPE_CHECKING:
     from .design import Design
 
@@ -1399,6 +1401,21 @@ class Assessment:
     """Ratios of the gear pairs that survived."""
     output_slack: float = 0.0
     """How undetermined the piston is (:attr:`Motion.output_slack`)."""
+    travel: float = 0.0
+    """Peak-to-peak piston movement [mm]."""
+
+    @property
+    def delivers_the_stroke(self) -> bool:
+        """Whether the piston moves far enough for the strokes to mean anything.
+
+        A guard the results asked for.  A design whose piston wobbles by two
+        millimetres can still show four monotone phases and an "asymmetry" above
+        a millimetre, and one did -- start 3 of §5.7's re-run, whose harmonics
+        are 1.9 and 2.5 mm against a target's 9.0 and 32.3.  Calling that
+        extended expansion is an artefact of testing the *shape* of a motion
+        without testing its *size*.
+        """
+        return self.travel >= 0.5 * DEFAULT_TARGETS.expansion_stroke
 
     @property
     def is_mechanism(self) -> bool:
@@ -1414,10 +1431,17 @@ class Assessment:
     def is_extended_expansion(self) -> bool:
         """Whether this is a mechanism, and its two strokes actually differ.
 
-        The mobility test comes first on purpose.  An under-constrained answer
-        can report any motion at all, extended expansion included, and one did.
+        The mobility and travel tests come first on purpose.  An
+        under-constrained answer can report any motion at all, extended
+        expansion included, and so can a piston that barely moves.  Both
+        happened.
         """
-        return bool(self.is_mechanism and self.four_phases and self.asymmetry > 1.0)
+        return bool(
+            self.is_mechanism
+            and self.delivers_the_stroke
+            and self.four_phases
+            and self.asymmetry > 1.0
+        )
 
 
 def assess(
@@ -1464,6 +1488,7 @@ def assess(
         present=present,
         gear_ratios=motion.gear_ratios,
         output_slack=motion.output_slack,
+        travel=float(np.ptp(motion.lam)),
     )
 
 
@@ -1481,6 +1506,7 @@ def format_assessment(assessment: Assessment) -> str:
         f"motion rms  {assessment.rms:8.3f} mm",
         f"peak strain {assessment.strain:8.2e}   (over-constraint)",
         f"slack       {assessment.output_slack:8.2e}   (under-constraint)",
+        f"travel      {assessment.travel:8.3f} mm",
         f"harmonic 1  {assessment.first_harmonic:8.3f} mm   (the asymmetry)",
         f"harmonic 2  {assessment.second_harmonic:8.3f} mm   (the two up-and-downs)",
     ]
@@ -1495,6 +1521,8 @@ def format_assessment(assessment: Assessment) -> str:
         lines.append("            not a four-stroke motion")
     if not assessment.is_mechanism:
         verdict = "the input does not determine the piston -- not a mechanism"
+    elif not assessment.delivers_the_stroke:
+        verdict = "the piston barely moves -- the strokes mean nothing"
     elif assessment.is_extended_expansion:
         verdict = "extended expansion"
     elif assessment.four_phases:

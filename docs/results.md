@@ -842,7 +842,12 @@ pin carries no second source of motion, and a run duly reached 1.00 on both pins
 while keeping no pair at all. Dropping the pair from EXlink's own linkage takes
 its reach from (1.00, 1.00) to (1.00, 0.00) and its objective from 7.54 to
 215.59. §5.6's domain prescribes both shaft speeds and has no gear element, so
-the gate is inert there and its figures stay comparable.
+the gate is inert there and its figures stay comparable. A fourth guard came out of the results
+in the same way: an answer must *deliver the stroke*. A piston wobbling by two
+millimetres can show four monotone phases and an asymmetry above one, and start
+3 did — harmonics of 1.9 and 2.5 mm, travel of 7.1 against a required 74 — and
+was reported as extended expansion until the size of a motion was tested
+alongside its shape.
 
 A fourth change is not a condition but a scale. The bounds are deliberately loose
 because the answer is not known in advance; a *start* drawn that loosely is a
@@ -861,8 +866,45 @@ to have searched at all:
 | §5.7's best (Otto) | 0.00, 1.00 | 56.88 |
 | §5.7's under-constrained start | 0.00, 1.00 | 293.18 |
 
-The effect on the search is immediate and is the first thing either version of
-this domain has done differently: within the first rung, **all four re-run starts
-carry both shafts to the piston**, where every start of §5.6 and §5.7 reached it
-from one. One of them arrives at a full bridge on both, 1.00 and 1.00, holding a
-two-to-one pair.
+### What the repaired search finds
+
+Four starts, the same seeds again:
+
+| start | rms [mm] | strain | reach | gear | first harmonic | second | travel [mm] | objective | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| **EXlink itself** | 4.04 | $2.3\times10^{-5}$ | 1.00, 1.00 | 2:1 | 6.80 | 30.95 | 74.1 | **7.54** | extended expansion |
+| 1 | 25.83 | $6.4\times10^{-2}$ | 1.00, 0.00 | — | 29.90 | 2.96 | 62.0 | 169.82 | not a four-stroke |
+| 2 | 30.18 | $3.1\times10^{-5}$ | 1.00, 0.00 | 4:1 | 36.71 | 6.17 | 73.8 | 113.24 | not a four-stroke |
+| 3 | 21.74 | $8.8\times10^{-6}$ | 0.00, 0.00 | — | 1.88 | 2.46 | 7.1 | 236.10 | the piston barely moves |
+| **5** | 30.95 | $4.1\times10^{-5}$ | **1.00, 1.00** | **2:1** | 36.71 | 3.28 | 73.5 | 83.37 | not a four-stroke |
+
+The target's harmonics are 9.02 and 32.33 mm, and its travel 74.0 mm.
+
+**The repairs did what they were for.** Start 5 is the mechanism §5.6 and §5.7
+could not produce: three elements and a two-to-one pair, discrete, running at a
+strain of $4.1\times10^{-5}$, its piston fully determined, reaching that piston
+from *both* shafts and delivering 73.5 mm of the required 74. Every structural
+condition the identity of §5.6 imposes is met, and the search chose the
+two-to-one ratio from a catalogue of four.
+
+**And the motion is still wrong — the other way round.** Its harmonics are 36.71
+and 3.28 against the target's 9.02 and 32.33: where §5.6 and §5.7 returned pure
+*second* harmonic and no asymmetry, this returns almost pure *first* and one
+up-and-down per revolution. The searches have swung from one degenerate extreme
+to the other. Start 5's element list says why — `P1-S` is a rod straight from the
+input crank pin to the piston, so the shortest path dominates and the geared
+shaft, though connected, has almost no authority over where the piston goes.
+
+That is the honest limit of what a graph condition can do. **Bridging is
+necessary and it is not sufficient: both shafts must reach the piston with
+comparable *authority*, and no condition on the presence graph can say so.**
+Only the motion can, and the motion term is exactly what the search must now
+climb — from a start that has already committed to a short path.
+
+What is no longer in doubt is the ranking. EXlink scores 7.54 against 83 to 236
+for everything four starts found, so the objective prefers the answer by an
+order of magnitude and the remaining gap is a **search** problem and nothing
+else: a wider multistart, a continuation that does not let a design commit to a
+short path in its first rung, or restarts constructed near mechanisms that
+already balance the two harmonics. That is a well-posed question, which is more
+than could be said of it three revisions ago.

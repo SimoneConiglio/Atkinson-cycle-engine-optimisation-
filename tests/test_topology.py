@@ -24,12 +24,14 @@ from exlink.topology import (
     STIFFNESS_FLOOR,
     STRAIN_WEIGHT,
     TRAVEL_WEIGHT,
+    Assessment,
     _energy_terms,
     assess,
     best_datum,
     default_bounds,
     engine_ground_structure,
     exlink_in_the_domain,
+    format_assessment,
     gear_radii,
     geared_ground_structure,
     harmonic,
@@ -603,3 +605,34 @@ def test_a_prescribed_shaft_needs_no_gear_to_count() -> None:
     reach = reachability(layout, x)
     assert reach[1] == pytest.approx(1.0), "the rod from the geared pin counts in full"
     assert reach[0] == pytest.approx(0.0), "and the input shaft reaches nothing"
+
+
+def test_a_piston_that_barely_moves_is_not_extended_expansion() -> None:
+    """Testing the shape of a motion without testing its size lets junk through.
+
+    A two-millimetre wobble can show four monotone phases and an "asymmetry"
+    above a millimetre, and one did: start 3 of §5.7's re-run, harmonics of 1.9
+    and 2.5 mm against a target's 9.0 and 32.3, travel of 7.1 mm against a
+    required 74.  It was reported as extended expansion until this guard.
+    """
+    wobble = Assessment(
+        rms=21.7,
+        strain=1.0e-5,
+        four_phases=True,
+        expansion_stroke=4.0,
+        compression_stroke=2.0,
+        compression_ratio=1.1,
+        first_harmonic=1.88,
+        second_harmonic=2.46,
+        present=(("P1", "F1"),),
+        travel=7.1,
+    )
+    assert wobble.is_mechanism and wobble.four_phases and wobble.asymmetry > 1.0
+    assert not wobble.delivers_the_stroke
+    assert not wobble.is_extended_expansion
+    assert "barely moves" in format_assessment(wobble)
+
+    _structure, layout, x = exlink_in_the_domain()
+    real = assess(layout, x, target_motion(samples=720).lam, samples=720)
+    assert real.travel == pytest.approx(74.0, abs=1.0)
+    assert real.delivers_the_stroke and real.is_extended_expansion

@@ -81,6 +81,17 @@ not by itself change the answer: §5.7 offers them, and the start that used two
 of them built both on the geared shaft and returned an Otto engine again. The
 body has to *bridge* the two shafts, not merely exist.
 
+**A synthesis can be told what it is looking for and still be unable to look.**
+The domain was adequate throughout — EXlink is three of its candidates and a gear
+pair, reproduced to $2\times10^{-3}$ mm — but the objective scored a degenerate
+answer ahead of it, because it charged for where the cycle happened to start.
+Profiling that datum out, charging for the two structural conditions the identity
+above implies, and drawing starts on the specification's own scale moves every
+start from a one-shaft answer to a genuinely bridged one, and one of them to a
+discrete mechanism with a two-to-one pair it chose from a catalogue. It is still
+not the right motion. What that leaves is a well-posed search problem rather than
+a formulation that could never have succeeded (§5.7).
+
 **An under-constrained answer can report anything, and nothing standard catches
 it.** Enriching the synthesis domain — three-cornered bodies as single
 candidates, shaft angles as coordinates, gear pairs chosen from a catalogue —
@@ -175,19 +186,19 @@ is a correlated model of the two strengths, second-order treatment of
 the set — and an implementation cheap enough for the optimizer to call rather than
 for a report to quote.
 
-*Constrain the synthesis domain before widening it further.* §5.7 gives the
-search three-cornered bodies, free shaft angles and a catalogue of gear ratios,
-and the extra freedom brings two failures rather than an alternative mechanism: a
-design detached from the input shaft, which the void's flat gradient will not let
-the search leave, and an under-constrained one whose reported extended expansion
-was a solver artefact. What is needed next is not more freedom but two conditions
-on it — a **connectivity** requirement, that some path of present elements joins
-the input to the piston, and a **mobility** requirement, that the equilibrium
-determine the piston's coordinate. Neither is a volume fraction, which is what
-SIMP normally constrains, and both are conditions on the graph the presences
-describe. With them in place, the search should also be much wider: twelve bars,
-ten bodies and six starts is small next to the published spring-connected
-studies.
+*Widen the search; the formulation is now sound.* The conditions §5.7 identified
+as missing are in it — bridging, mobility, a delivered stroke, and a datum that
+is no longer charged for — and they work: a start now returns a discrete,
+rigid, fully determined mechanism reaching the piston from both shafts with a
+two-to-one pair it chose itself. What it does not yet return is the right motion,
+and the reason is the one thing a graph condition cannot express: both shafts
+must reach the piston with comparable *authority*, not merely be connected, and
+the search commits to a short path in its first rung. The objective ranks EXlink
+an order of magnitude ahead of everything four starts found, so what remains is a
+search problem and nothing else — a wider multistart, a continuation that defers
+the commitment, or restarts built near mechanisms that already balance the two
+harmonics. Twelve bars, ten bodies and four starts is small next to the published
+spring-connected studies.
 
 *Then reach past the motion.* A kinematic target produces a candidate, and only
 the range chain of §3.3 decides whether a candidate beats 3395 km/L. The
