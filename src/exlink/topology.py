@@ -1020,6 +1020,30 @@ target's own amplitude there* makes missing the small one cost as much,
 proportionally, as missing the large one.
 """
 
+BRIDGE_WEIGHT = 30.0
+"""Millimetres charged for a driven pin the linkage does not carry to the piston.
+
+The condition §5.6 *derives* rather than assumes: a piston reached from one
+shaft alone is periodic in that shaft's angle, so every odd harmonic vanishes
+exactly and the answer is an Otto engine whatever else it does.  Extended
+expansion therefore needs both pins joined to the piston, and both searches
+spent their budget on designs where one of them was not -- start 2 of §5.7 built
+two three-cornered bodies and hung all of them off the geared shaft.
+
+Imposing a proven necessary condition is not assuming the answer: nothing here
+says *how* the two chains meet, how many elements it takes, or what shape the
+body that joins them has.
+"""
+
+SLACK_WEIGHT = 200.0
+"""Millimetres charged for a piston the equilibrium does not determine.
+
+The other half of §5.7's finding.  Strain charges an over-constrained answer;
+without this, nothing charges an under-constrained one, and an under-constrained
+one can report any motion at all -- start 3 of §5.7 reported 70.9 mm of
+asymmetry from a mechanism whose geared shaft nothing was driving.
+"""
+
 HARMONIC_ORDERS: tuple[int, ...] = (1, 2)
 """Harmonics the relative term is taken over: the asymmetry, and the strokes."""
 
@@ -1204,18 +1228,34 @@ def objective(
     if not np.all(np.isfinite(motion.lam)):
         return 1.0e6
     rho = layout.presences(x)
+    unbridged = float(np.sum(1.0 - reachability(layout, x)))
     return (
         motion_error(target, motion.lam)
         + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
+        + SLACK_WEIGHT * motion.output_slack
+        + BRIDGE_WEIGHT * unbridged
         + discreteness * float(np.mean(4.0 * rho * (1.0 - rho)))
         + COUNT_WEIGHT * float(np.mean(rho))
     )
 
 
+START_SPAN = 110.0
+"""Half-width, in millimetres, of the box a start is drawn from.
+
+Not the same as the box the search runs in, and the difference matters.  The
+bounds are deliberately loose because the answer is not known in advance; a
+*start* drawn that loosely is a different thing -- nodes scattered over half a
+metre, elements three hundred millimetres long, and a piston that has to travel
+74.  The first runs drew from the full box and spent their budget dragging that
+back to scale.  This is a stroke and a half, which is the size of the mechanism
+the specification implies without saying anything about its shape.
+"""
+
+
 def random_start(layout: Layout, rng: np.random.Generator) -> FloatArray:
-    """A design drawn from the box, with every candidate half present.
+    """A design drawn on the specification's own scale, every candidate half present.
 
     Starting the presences at one half rather than at random is deliberate: at
     :math:`p = 1` the stiffnesses enter almost linearly, so a symmetric start
@@ -1223,9 +1263,21 @@ def random_start(layout: Layout, rng: np.random.Generator) -> FloatArray:
     instead of inheriting a decision from the draw.
     """
     lower, upper = default_bounds(layout)
-    x = lower + rng.random(layout.size) * (upper - lower)
+    span = np.minimum(upper - lower, 2.0 * START_SPAN)
+    middle = 0.5 * (np.clip(lower, -START_SPAN, None) + np.clip(upper, None, START_SPAN))
+    x = middle + (rng.random(layout.size) - 0.5) * span
+    for pin in layout.structure.pins:
+        x[pin.slot] = lower[pin.slot] + rng.random() * min(
+            60.0 - lower[pin.slot], upper[pin.slot] - lower[pin.slot]
+        )
+        x[pin.slot + 1] = -np.pi + rng.random() * 2.0 * np.pi
+    for shaft in layout.structure.shafts:
+        if shaft.angle_slot is not None:
+            x[shaft.angle_slot] = -np.pi + rng.random() * 2.0 * np.pi
+    for gear in layout.structure.gears:
+        x[gear.phase_slot] = (rng.random() - 0.5) * 2.0 * START_SPAN * np.pi
     x[layout.presence_offset :] = 0.5
-    return x
+    return np.clip(x, lower, upper)
 
 
 def _minimise(
@@ -1505,3 +1557,42 @@ def exlink_in_the_domain(
     rho[structure.n_members + pair] = 1.0
     x[layout.presence_offset :] = rho
     return structure, layout, x
+
+
+def reachability(layout: Layout, x: FloatArray) -> FloatArray:
+    """How well each driven pin is joined to the piston through the linkage.
+
+    A bottleneck path: the value of a route is the weakest presence along it,
+    and the value of a pin is the best route it has.  Fully present elements all
+    the way give 1, no route at all gives 0, and a half-built chain gives its
+    weakest link -- which is what makes it something a gradient can climb rather
+    than a yes-or-no test.
+
+    The gears are deliberately not in this graph.  What matters here is whether
+    the *linkage* carries each shaft's motion to the piston, which is the
+    condition §5.6 derives; whether a shaft is itself driven is the separate
+    question :attr:`Motion.output_slack` answers.
+
+    Returns:
+        One value per driven pin, in the order the structure lists its pins.
+    """
+    structure = layout.structure
+    rho = layout.element_presences(x)
+    weight = np.zeros((structure.n_nodes, structure.n_nodes), dtype=float)
+    for m, element in enumerate(structure.elements):
+        for i, j in element.springs:
+            weight[i, j] = weight[j, i] = max(weight[i, j], float(rho[m]))
+
+    slider = layout.slider_slot[0]
+    out = np.zeros(len(structure.pins), dtype=float)
+    for p, pin in enumerate(structure.pins):
+        value = np.zeros(structure.n_nodes, dtype=float)
+        value[pin.node] = 1.0
+        for _sweep in range(structure.n_nodes):
+            improved = np.max(np.minimum(value[:, None], weight), axis=0)
+            better = np.maximum(value, improved)
+            if np.allclose(better, value):
+                break
+            value = better
+        out[p] = value[slider]
+    return out

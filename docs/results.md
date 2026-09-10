@@ -811,10 +811,49 @@ freedom means more ways for the equilibrium to stop determining the output. A
 mobility test belongs beside the strain test in any such run, and re-reading
 §5.6's starts through it reclassifies one of them.
 
-What is still missing is therefore not more freedom but two conditions on it: a
-**connectivity** requirement, that some path of present elements joins the input
-to the piston, and a **mobility** requirement, that the equilibrium determine the
-piston's coordinate. Neither is a volume fraction, which is what SIMP normally
-constrains, and neither is expressible as a bound on a single design variable;
-both are conditions on the graph the presences describe. With them, the domain
-built here is the one to search.
+### The three repairs
+
+What was missing was not freedom but conditions on it, and the datum. All three
+are now in the formulation.
+
+**The datum is profiled out**, as above, so a mechanism is no longer charged for
+where its cycle happens to start.
+
+**Mobility is charged.** :attr:`~exlink.topology.Motion.output_slack` was already
+being computed as a diagnostic; it is now a term. An answer the equilibrium does
+not determine costs 200 mm per unit of slack, which prices start 3's 0.71 out of
+contention rather than leaving it to be caught by a reader.
+
+**Bridging is charged**, and this is the one that needed care. §5.6 *derives* --
+it does not assume -- that a piston reached from one shaft alone has every odd
+harmonic identically zero, so extended expansion requires both driven pins joined
+to the piston through the linkage. Imposing a proven necessary condition is not
+assuming the answer: nothing in it says how the two chains meet, how many
+elements it takes, or what shape the body that joins them has. The measure is a
+bottleneck path on the graph the presences describe -- the value of a route is
+its weakest presence, the value of a pin is its best route -- which gives 1 for a
+fully built chain, 0 for none, and the weakest link for a half-built one, so it
+is something a gradient can climb rather than a yes-or-no test.
+
+A fourth change is not a condition but a scale. The bounds are deliberately loose
+because the answer is not known in advance; a *start* drawn that loosely is a
+different thing, and the first runs drew nodes over half a metre apart and
+elements three hundred millimetres long for a piston that travels 74. Starts are
+now drawn on the specification's own scale, a stroke and a half, which says
+nothing about shape.
+
+Together these rank the designs the way a synthesis needs before it can be said
+to have searched at all:
+
+| design | reach | objective |
+|---|---|---|
+| **EXlink itself** | 1.00, 1.00 | **7.54** |
+| §5.6's best (Otto) | 0.00, 1.00 | 51.19 |
+| §5.7's best (Otto) | 0.00, 1.00 | 56.88 |
+| §5.7's under-constrained start | 0.00, 1.00 | 293.18 |
+
+The effect on the search is immediate and is the first thing either version of
+this domain has done differently: within the first rung, **all four re-run starts
+carry both shafts to the piston**, where every start of §5.6 and §5.7 reached it
+from one. One of them arrives at a full bridge on both, 1.00 and 1.00, holding a
+two-to-one pair.

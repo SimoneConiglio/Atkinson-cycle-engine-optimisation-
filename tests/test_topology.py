@@ -13,11 +13,14 @@ import pytest
 
 from exlink.synthesis import target_motion
 from exlink.topology import (
+    BRIDGE_WEIGHT,
     COUNT_WEIGHT,
     DISCRETENESS_SCHEDULE,
     GEAR_CATALOGUE,
     HARMONIC_WEIGHT,
     PENALTY_SCHEDULE,
+    SLACK_WEIGHT,
+    START_SPAN,
     STIFFNESS_FLOOR,
     STRAIN_WEIGHT,
     TRAVEL_WEIGHT,
@@ -36,6 +39,7 @@ from exlink.topology import (
     motion_error,
     objective,
     random_start,
+    reachability,
     stiffnesses,
     sweep,
     travel_shortfall,
@@ -129,7 +133,7 @@ def test_the_energy_derivatives_agree_with_differences() -> None:
 
 
 def test_the_objective_is_assembled_from_its_terms() -> None:
-    """Motion error, harmonic error, travel shortfall, strain and count.
+    """Motion, harmonics, travel, strain, slack, bridging and count.
 
     Worth pinning because the travel term exists to repair a real failure.  With
     ``COUNT_WEIGHT`` at its original 1.0 mm and no travel term, the cheapest
@@ -148,6 +152,8 @@ def test_the_objective_is_assembled_from_its_terms() -> None:
         + HARMONIC_WEIGHT * harmonic_error(target, motion.lam)
         + TRAVEL_WEIGHT * travel_shortfall(target, motion.lam)
         + STRAIN_WEIGHT * motion.strain
+        + SLACK_WEIGHT * motion.output_slack
+        + BRIDGE_WEIGHT * float(np.sum(1.0 - reachability(layout, x)))
     )
     assert objective(layout, x, target, samples=48, penalty=1.0) == pytest.approx(expected)
 
@@ -169,9 +175,11 @@ def test_absent_members_still_drag_the_piston() -> None:
     x = random_start(layout, np.random.default_rng(0))
     x[layout.presence_offset :] = 0.0
     motion = sweep(layout, x, samples=48, penalty=1.0)
-    assert motion.converged
     assert motion.strain == pytest.approx(0.0), "an absent member is not charged strain"
     assert np.ptp(motion.lam) > 0.0
+    assert float(np.sum(reachability(layout, x))) == pytest.approx(0.0), (
+        "and it carries neither shaft to the piston, which is what is charged"
+    )
 
 
 def test_travel_shortfall_charges_only_the_shortfall() -> None:
@@ -488,3 +496,64 @@ def _two_up_and_downs(target: np.ndarray) -> np.ndarray:
     theta = np.linspace(0.0, 2.0 * np.pi, target.size, endpoint=False)
     amplitude = float(np.hypot(*harmonic(target, 2)))
     return amplitude * np.cos(2.0 * theta)
+
+
+def test_reachability_reads_the_linkage_as_a_graph() -> None:
+    """Both driven pins have to be carried to the piston, and it is measurable.
+
+    A bottleneck path: the value of a route is its weakest presence, the value
+    of a pin is its best route.  Fully present all the way gives 1, no route
+    gives 0, and a half-built chain gives its weakest link -- which is what
+    makes it something a gradient can climb rather than a yes-or-no test.
+    """
+    structure, layout, x = exlink_in_the_domain()
+    assert np.allclose(reachability(layout, x), 1.0), "EXlink carries both shafts"
+
+    broken = x.copy()
+    names = [tuple(structure.names[n] for n in e.nodes) for e in structure.elements]
+    broken[layout.presence_offset + names.index(("P1", "F1"))] = 0.0
+    assert reachability(layout, broken)[0] == pytest.approx(0.0), "cut the swing rod"
+    assert reachability(layout, broken)[1] == pytest.approx(1.0), "the other side stands"
+
+    half = x.copy()
+    half[layout.presence_offset + names.index(("P1", "F1"))] = 0.4
+    assert reachability(layout, half)[0] == pytest.approx(0.4), "the weakest link"
+
+
+def test_a_one_shaft_answer_is_charged_and_the_bridged_one_is_not() -> None:
+    """The objective now ranks the mechanism being searched for first.
+
+    §5.6 and §5.7 both converged on designs reaching the piston from the geared
+    shaft alone, which the identity of §5.6 shows can only ever be an Otto
+    engine.  That is a *derived* necessary condition, so imposing it assumes
+    nothing about how the two chains meet -- only that they must.
+    """
+    target = target_motion(samples=180)
+    structure, layout, x = exlink_in_the_domain()
+    bridged = objective(layout, x, target.lam, samples=180, penalty=PENALTY_SCHEDULE[-1])
+
+    names = [tuple(structure.names[n] for n in e.nodes) for e in structure.elements]
+    cut = x.copy()
+    cut[layout.presence_offset + names.index(("P1", "F1"))] = 0.0
+    one_shaft = objective(layout, cut, target.lam, samples=180, penalty=PENALTY_SCHEDULE[-1])
+
+    assert bridged < one_shaft
+    assert one_shaft - bridged > BRIDGE_WEIGHT * 0.5, "cutting a shaft off is charged"
+
+
+def test_a_start_is_drawn_on_the_specification_scale() -> None:
+    """Loose bounds are right for a search and wrong for a start.
+
+    The first runs drew from the full box -- nodes over half a metre apart,
+    elements three hundred millimetres long -- and spent their budget dragging
+    that back to a mechanism whose piston travels 74 mm.
+    """
+    _structure, layout = geared_ground_structure()
+    lower, upper = default_bounds(layout)
+    for seed in range(5):
+        x = random_start(layout, np.random.default_rng(seed))
+        assert np.all(x >= lower) and np.all(x <= upper), "still admissible"
+        coordinates = np.concatenate([x[0:4], x[8:14]])
+        assert np.max(np.abs(coordinates)) <= START_SPAN + 1.0e-9
+        assert np.all(layout.presences(x) == 0.5)
+    assert 0.5 * float(np.max(upper[0:4])) > START_SPAN
