@@ -908,3 +908,49 @@ else: a wider multistart, a continuation that does not let a design commit to a
 short path in its first rung, or restarts constructed near mechanisms that
 already balance the two harmonics. That is a well-posed question, which is more
 than could be said of it three revisions ago.
+
+## 5.8 Enumerating the topologies, and what the ranking was really measuring
+
+§5.7 ends with a search problem rather than a formulation problem: the objective
+puts EXlink an order of magnitude ahead of anything six local runs found, and
+the runs commit to a short path in their first continuation rung and never leave
+it. A multistart is the usual answer and it is the wrong one here, because the
+difficulty is not that the landscape has many basins — it is that the *discrete*
+part of the problem is deceptive while the continuous part, once the topology is
+fixed, is the well-conditioned fit {mod}`exlink.synthesis` already solves
+reliably on a known linkage.
+
+So the discrete part is enumerated rather than searched. Three conditions, in
+increasing order of cost:
+
+1. **Constraint counting.** The elements must supply exactly as many constraints
+   as the reduced system has unknowns, a bar counting one, a rigid body three
+   and a fitted gear pair one. One short is admissible only if a gear pair makes
+   up the difference.
+2. **Connectivity.** Both driven pins must reach the piston through present
+   elements — §5.6's identity, written as a condition on the presence graph.
+3. **Rank.** The reduced Hessian must have full rank at a general pose, taken at
+   three random geometries so that a topology is not rejected for being singular
+   at one unlucky one.
+
+The third test has to be taken with the absent elements at *exactly* zero
+stiffness rather than at the usual floor. The floor exists so that the
+continuation always has a Hessian to invert, and it leaves that Hessian
+nominally full rank whatever the topology is, so a rank test taken through it
+answers a question about the tolerance instead of about the mechanism. Sixteen
+topologies passed on the floor and fail without it.
+
+Of the $2^{26}$ subsets of the geared domain, **748 are mechanisms** in this
+sense, and the enumeration takes two seconds. EXlink is among them, which is
+what makes the list worth screening rather than merely counting.
+
+### A distance to a nominated motion is not the requirement
+
+Screening all 748 produced a champion that beats EXlink on the objective and
+misses the specification. That is not a search failure, and no amount of extra
+compute would have repaired it: the objective was a **proxy**. Matching a
+sampled target motion charges a candidate for the whole shape of a curve, and
+the four numbers the engine actually needs — the expansion stroke, the
+compression ratio, two top dead centres at the same height half an input
+revolution apart — are nowhere among the terms. A design can therefore fit the
+curve better on average while failing every one of them, and one did.
