@@ -2136,8 +2136,25 @@ def precision_error(lam: FloatArray, heights: FloatArray | None = None) -> float
     return scale * best
 
 
+def _peak(values: FloatArray, index: int) -> float:
+    """A turning point's height, refined between samples by a parabola.
+
+    Three samples through an extremum fix a parabola, and its vertex is where
+    the extremum really is.  Worth the four lines: on 24 angles the samples are
+    15 degrees apart, and reading a dead centre off the nearest one costs about
+    a millimetre of stroke on a 74 mm motion.
+    """
+    n = values.size
+    before, here, after = values[index - 1], values[index], values[(index + 1) % n]
+    curvature = before - 2.0 * here + after
+    if curvature == 0.0:
+        return float(here)
+    offset = 0.5 * (before - after) / curvature
+    return float(here - 0.25 * (before - after) * offset)
+
+
 def requirement_residuals(lam: FloatArray) -> FloatArray:
-    """How far a motion is from the four requirements, without fixing their angles.
+    """How far a motion is from the requirements, without fixing their angles.
 
     The looser reading of the precision points, and the one the engine actually
     imposes.  What a four-stroke needs is four dead centres in the right order
@@ -2149,34 +2166,70 @@ def requirement_residuals(lam: FloatArray) -> FloatArray:
     That distinction is worth measuring rather than assuming: EXlink's own
     turning points sit at 10.5, 101.5, 189.5 and 286 degrees of input shaft, so
     a target demanding them at 0, 90, 180 and 270 is stricter than the studied
-    mechanism satisfies -- it scores 3.53 mm against that and 0.44 mm against
+    mechanism satisfies -- it scores 3.53 mm against that and 0.38 mm against
     this.
 
+    The turning points are read off directly rather than through
+    :func:`exlink.cycle.find_phases`, and that is the difference between a
+    screen that ranks and one that does not.  That function demands *exactly*
+    four monotone phases, which is right for judging a finished design and wrong
+    for judging a search iterate: one spurious reversal and a motion that is
+    plainly a four-stroke on a fine grid reads as no motion at all.  It happened
+    to the studied mechanism itself -- screened from scratch on 24 angles it
+    scored 1281, the degenerate floor, while the same design read 28.7 on 240.
+    Here a fifth residual charges the spurious reversals instead of refusing to
+    look: a clean four-phase motion has a total variation of exactly twice its
+    two strokes, and anything above that is movement nobody asked for.
+
     Returns:
-        Expansion stroke, compression stroke, top-dead-centre height difference
-        and top-dead-centre spacing, each as a fraction of the expansion stroke.
+        Expansion stroke, compression stroke, top-dead-centre height difference,
+        top-dead-centre spacing and spurious travel, each as a fraction of the
+        expansion stroke.
 
     Raises:
-        PhaseError: If the motion is not a four-stroke one at all.
+        PhaseError: If the motion has no two peaks and two troughs to read.
     """
     from .constants import DEFAULT_TARGETS
-    from .cycle import find_phases
+    from .cycle import PhaseError
 
     values = np.asarray(lam, dtype=float)
-    phases = find_phases(values)
+    n = values.size
     wanted = precision_heights()
     stroke = DEFAULT_TARGETS.expansion_stroke
 
     slope = np.sign(np.diff(np.concatenate([values, values[:1]])))
+    for index in np.flatnonzero(slope == 0.0):
+        slope[index] = slope[index - 1]
     turning = np.flatnonzero(slope != np.roll(slope, 1))
-    tops = sorted(turning, key=lambda i: -values[i])[:2]
-    spacing = abs(int(tops[1]) - int(tops[0])) / values.size
+    peaks = [int(i) for i in turning if slope[i] < 0.0]
+    troughs = [int(i) for i in turning if slope[i] > 0.0]
+    if len(peaks) < 2 or len(troughs) < 2:
+        msg = (
+            f"lambda(theta_1) has {len(peaks)} peaks and {len(troughs)} troughs, "
+            "and needs two of each"
+        )
+        raise PhaseError(msg)
+
+    heights = {i: _peak(values, i) for i in peaks}
+    tops = sorted(peaks, key=lambda i: -heights[i])[:2]
+    first, second = sorted(tops)
+    top = max(heights[i] for i in tops)
+
+    arcs = (
+        values[first : second + 1],
+        np.concatenate([values[second:], values[: first + 1]]),
+    )
+    shallow, deep = sorted(top - float(np.min(arc)) for arc in arcs)
+
+    spacing = (second - first) / n
+    variation = float(np.sum(np.abs(np.diff(np.concatenate([values, values[:1]])))))
     return np.array(
         [
-            (phases.expansion_stroke - stroke) / stroke,
-            (phases.compression_stroke + wanted[3]) / stroke,
-            (values[tops[0]] - values[tops[1]]) / stroke,
+            (deep - stroke) / stroke,
+            (shallow + wanted[3]) / stroke,
+            (heights[tops[0]] - heights[tops[1]]) / stroke,
             (min(spacing, 1.0 - spacing) - 0.5) / 0.5,
+            (variation - 2.0 * (deep + shallow)) / (2.0 * stroke),
         ],
         dtype=float,
     )

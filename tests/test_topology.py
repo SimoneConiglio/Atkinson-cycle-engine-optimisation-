@@ -840,3 +840,43 @@ def test_the_screen_can_be_given_a_budget() -> None:
     # magnitude -- a thousand iterations, uncapped, would cost twenty thousand.
     free = layout.size - layout.structure.n_presences
     assert len(calls) < 30 * (free + 1), f"the budget held: {len(calls)}"
+
+
+def test_the_requirement_survives_a_coarse_grid() -> None:
+    """The screen's grid must not turn a four-stroke into no motion at all.
+
+    Read through ``find_phases``, the studied mechanism scored the degenerate
+    floor on the 24 angles a screen can afford, because one spurious reversal is
+    enough for a test that demands exactly four monotone phases.  Read off the
+    turning points, it scores what it deserves on every grid.
+    """
+    _structure, layout, x = exlink_in_the_domain()
+    scores = [
+        requirement_error(sweep(layout, x, samples=n, penalty=PENALTY_SCHEDULE[-1]).lam)
+        for n in (24, 48, 240, 720)
+    ]
+    assert max(scores) < 2.0, f"readable on every grid: {scores}"
+
+
+def test_spurious_reversals_are_charged() -> None:
+    """A motion that passes the four points and wobbles on the way is not free.
+
+    The user's fourth condition -- the precision points must be the trajectory's
+    extremes -- has to bite somewhere, and this is where.  A clean four-phase
+    motion travels exactly twice its two strokes in a revolution; a ripple on
+    top of it travels further, and the excess is what is charged.
+    """
+    wanted = precision_heights()
+    n = 720
+    theta = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+    pieces = []
+    for start, end in zip(wanted, np.roll(wanted, -1), strict=True):
+        t = np.linspace(0.0, 1.0, n // 4, endpoint=False)
+        pieces.append(start + (end - start) * t**3 * (10.0 - 15.0 * t + 6.0 * t**2))
+    clean = 100.0 + np.concatenate(pieces)
+    rippled = clean + 0.5 * np.sin(24.0 * theta)
+
+    assert float(np.abs(requirement_residuals(clean)[4])) < 1.0e-6, "nothing spurious"
+    charge = float(requirement_residuals(rippled)[4]) * 2.0 * 74.0
+    assert charge > 1.0, f"the ripple is charged, in millimetres: {charge:.2f}"
+    assert requirement_error(rippled) > requirement_error(clean), "and it costs"
