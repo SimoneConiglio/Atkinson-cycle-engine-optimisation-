@@ -1996,14 +1996,17 @@ def screen_mechanism(
         The objective reached and the design vector reaching it.
 
     Note:
-        Under a precision-point measure the draws are still ranked, and a third
-        of the iterations still spent, on the sampled-target measure.  Not a
-        hedge: a precision-point error is *undefined* where the motion has no
-        four-stroke phasing to read, and a random start usually has none, so
-        that measure alone offers a flat :data:`DEGENERATE_ERROR` with no
-        gradient out of it.  The sampled target is smooth everywhere and is used
-        here only to reach a motion the requirement can see; what the topology
-        is finally scored and polished on is the requirement.
+        There was a warm-up here, a third of the iterations spent on the
+        sampled-target measure before handing over.  It existed because a
+        precision-point error used to be *undefined* wherever the motion had no
+        four-stroke phasing to read, which is most random starts, so that
+        measure alone offered a plateau with no gradient off it.  Reading the
+        requirement off the turning points removed the plateau and with it the
+        warm-up's reason to exist, and measuring says it had become actively
+        harmful: on the studied mechanism's own topology, dropping it took the
+        screened error from 18.84 mm to 11.52 and the time from 49 seconds to
+        31.  It was pulling the geometry towards one nominated curve before the
+        requirement was allowed to speak.
     """
     presences = mechanism.presences(layout.structure)
     frozen = np.zeros(layout.size, dtype=bool)
@@ -2013,22 +2016,10 @@ def screen_mechanism(
     for _draw in range(draws):
         x = random_start(layout, rng)
         x[layout.presence_offset :] = presences
-        value = objective(layout, x, target, samples, PENALTY_SCHEDULE[-1])
+        value = objective(layout, x, target, samples, PENALTY_SCHEDULE[-1], measure=measure)
         if value < best_value:
             best_value, best_x = value, x
     assert best_x is not None
-
-    if measure != "target":
-        best_x = _minimise(
-            layout,
-            best_x,
-            target,
-            samples,
-            PENALTY_SCHEDULE[-1],
-            max(1, iterations // 3),
-            frozen=frozen,
-            evaluations=None if evaluations is None else max(1, evaluations // 3),
-        )
 
     polished = _minimise(
         layout,
