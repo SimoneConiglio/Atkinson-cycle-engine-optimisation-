@@ -1017,3 +1017,70 @@ equilibrium analytically — by the implicit function theorem, which
 {doc}`Appendix A <theory>` already sets up for exactly this map — would buy an
 order of magnitude more optimisation per unit of compute than any amount of
 tuning the schedule.
+
+### What the global search finds, and what it fails to find
+
+Eighty topologies survived the shortlist, each given three independent descents
+and judged on the best, with EXlink's own dimensions polished alongside as a
+reference. Of the eighty-one, **twenty-one converged to mechanisms** — strain
+and slack both below $10^{-3}$ — and sixty did not, reaching their motion by
+straining the linkage or by leaving the piston under-determined. The objective
+charges both heavily; the table below reports the motion error alone, so the
+sixty are excluded from it rather than flattered by it.
+
+| | id | req [mm] | strict [mm] | STE [mm] | STC [mm] | $\epsilon$ | elements | gear |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **EXlink** | **0.366** | 3.53 | 74.17 | 56.46 | 16.14 | P1-F1  F2-S  P2-F1-F2 | 2:1 |
+| 2 | #79 | 5.919 | 5.83 | 67.46 | 67.46 | 19.08 | P1-F2  P2-S  P2-F1-F2 | 2:1 |
+| 3 | #47 | 7.543 | 5.97 | 72.78 | 72.78 | 20.51 | P1-F1  F1-S  P2-F2-S | 2:1 |
+| 4 | #31 | 8.332 | 16.79 | 74.58 | 74.58 | 20.99 | P1-F1  P2-S  P2-F1-F2 | 2:1 |
+| 5 | #35 | 8.577 | 7.02 | 75.10 | 75.10 | 21.13 | P1-F1  P2-S  F1-F2-S | 2:1 |
+| 6 | #195 | 9.226 | 14.51 | 76.44 | 76.44 | 21.49 | P2-S  F1-S  P1-F1-F2 | 2:1 |
+| 7 | #63 | 9.495 | 8.37 | 64.93 | 61.63 | 17.52 | P1-F2  P2-F1  F1-F2-S | 2:1 |
+| 9 | #187 | 13.993 | 12.44 | 53.08 | 38.61 | 11.35 | P2-F2  F2-S  P1-F1-F2 | 2:1 |
+| 10 | #43 | 14.600 | 22.59 | 75.48 | 45.95 | 13.32 | P1-F1  F1-S  P2-F1-F2 | 2:1 |
+
+*Required: STE 74.000, STC 55.953, $\epsilon$ 16. "req" is the requirement
+error, "strict" the equally spaced reading. Rank 8 is omitted: it is #64, which
+matters below.*
+
+**Ranks two to six are Otto engines.** Their two strokes are equal to the digit
+— 67.46 and 67.46, 72.78 and 72.78, 74.58 and 74.58 — so the piston does two
+identical up-and-downs per input revolution. They satisfy three of the four
+conditions outright: two top dead centres at the same height, half an input
+revolution apart, with a stroke of roughly the right size. What they cannot do
+is make the two bottom dead centres *differ*, which is the entire content of
+extended expansion. Pushed to hit the precision points, the search reverts to
+the symmetric answer — the same behaviour §5.6 and §5.7 found by other means,
+now reached from a formulation that states the requirement rather than a curve.
+
+**The half-speed relation is chosen, not assumed, and the comparison is
+controlled.** Every one of the seven best mechanisms took 2:1 from a catalogue of
+1, 2, 3 and 4 to one. Better, two pairs in the list differ in nothing but the
+ratio: #63 and #64 are the same three elements, at 2:1 and 3:1, scoring 9.495
+and 13.803; #43 and #44 likewise, scoring 14.600 and 17.963. Same topology, same
+treatment, same budget — only the gear differs, and 2:1 wins both times. That is
+the strongest evidence in this study for §5.6's identity, because it is the only
+place where the alternative was actually tried rather than argued away.
+
+**And the search cannot be trusted to have answered the question it was asked.**
+The control says so plainly. EXlink's own topology is #51, and it was in the
+shortlist; polished from three starts under exactly the treatment every other
+candidate received, it returns a strained non-mechanism scoring 20.27 mm —
+against the 0.366 mm that same topology supports when started from dimensions
+that are already right. **Given the correct topology, the search does not
+recover the correct dimensions.** A negative result about alternatives, from a
+search that would miss the known answer, is not evidence that alternatives do
+not exist; it is a measurement of the search.
+
+So the answer to "is there another mechanism in this domain that passes the four
+precision points" is: **not one that this search can find, and this search would
+not find EXlink either.** What survives is the structural reading — the
+architecture is two bars, a three-cornered body and a half-speed pair; the
+asymmetry is the hard part and the symmetric answer is the attractor; and the
+gear ratio is selected by the requirement in a controlled comparison. Making the
+negative result mean anything more requires the derivative
+{doc}`Appendix A <theory>` already provides in principle: at twenty equilibrium
+sweeps per finite-difference gradient, each topology here received about nine
+hundred sweeps of optimisation, which is two orders of magnitude short of what
+the continuous fit needs.
