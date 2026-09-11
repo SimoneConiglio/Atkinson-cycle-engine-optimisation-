@@ -1,0 +1,80 @@
+"""The geared five-bar: does the closed form describe the mechanism found?"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from exlink import fivebar, topology
+from exlink.fivebar import SYNTHESISED, AssemblyError, FiveBar, in_the_domain, solve
+
+
+def test_the_closed_form_matches_the_spring_model() -> None:
+    """Two independent solvers, one mechanism, agreeing to microns.
+
+    The closed form here and the spring model of :mod:`exlink.topology` share no
+    code: one intersects circles, the other minimises an elastic energy by
+    Newton's method on a penalised ground structure.  Agreement to a few microns
+    is the check that the five-bar written down here really is the mechanism the
+    synthesis found, and what is left is the spring model's own compliance.
+    """
+    _structure, layout, x = in_the_domain(SYNTHESISED)
+    motion = topology.sweep(layout, x, samples=720, penalty=topology.PENALTY_SCHEDULE[-1])
+    closed = solve(SYNTHESISED, samples=720)
+
+    assert float(np.max(np.abs(closed.lam - motion.lam))) < 0.01, "the same motion"
+    assert motion.strain < 1.0e-4, "it runs as a mechanism, not a strained structure"
+    assert motion.output_slack < topology.SLACK_TOLERANCE, "the input determines the piston"
+
+
+def test_writing_it_into_the_domain_and_reading_it_back_is_exact() -> None:
+    """A round trip through the ground structure changes no dimension."""
+    _structure, _layout, x = in_the_domain(SYNTHESISED)
+    recovered, offset = fivebar.from_topology(x)
+
+    assert offset == pytest.approx(0.0, abs=1.0e-12), "the datum is the crank pin"
+    assert np.allclose(recovered.to_array(), SYNTHESISED.to_array(), atol=1.0e-9)
+
+
+def test_it_meets_the_specification_it_was_synthesised_for() -> None:
+    """The strokes and the compression ratio §5.9 reports, from the closed form."""
+    closed = solve(SYNTHESISED, samples=1440)
+    assert topology.requirement_error(closed.lam) < 0.6, "the four conditions"
+    assert float(np.ptp(closed.lam)) == pytest.approx(74.12, abs=0.05), "the stroke"
+
+
+def test_and_is_mechanically_indefensible_as_synthesised() -> None:
+    """The finding that motivates pricing it: the rod is nowhere near the axis.
+
+    Not a defect of the topology -- a defect of judging a mechanism by its
+    motion.  A conventional engine keeps this ratio below about 0.3.
+    """
+    closed = solve(SYNTHESISED, samples=1440)
+    assert closed.side_load_ratio > 1.5, "the piston is pressed into the liner"
+    assert float(np.degrees(np.max(np.abs(closed.rod_angle)))) > 55.0
+
+
+def test_a_linkage_that_cannot_close_says_so() -> None:
+    """Not a worse design: not a design.  So it raises rather than returning nan."""
+    with pytest.raises(AssemblyError, match="do not reach each other"):
+        solve(SYNTHESISED.replace(L_1=5.0), samples=90)
+    with pytest.raises(AssemblyError, match="cylinder axis"):
+        solve(SYNTHESISED.replace(e=10.0), samples=90)
+
+
+def test_the_design_vector_round_trips_through_its_representations() -> None:
+    """Array, mapping and dataclass all carry the same nine numbers."""
+    values = SYNTHESISED.to_array()
+    assert values.size == len(fivebar.VARIABLE_NAMES)
+    assert np.allclose(FiveBar.from_array(values).to_array(), values)
+    assert np.allclose(FiveBar.from_mapping(SYNTHESISED.to_mapping()).to_array(), values)
+    with pytest.raises(ValueError, match="expected 9 design variables"):
+        FiveBar.from_array(np.zeros(3))
+    with pytest.raises(ValueError, match="unknown design variables"):
+        SYNTHESISED.replace(nonsense=1.0)
+
+
+def test_every_variable_is_described() -> None:
+    """A reader of the results table should not have to read the source."""
+    assert set(fivebar.VARIABLE_DESCRIPTIONS) == set(fivebar.VARIABLE_NAMES)
+    assert set(fivebar.VARIABLE_NAMES) >= fivebar.ANGULAR_VARIABLES
