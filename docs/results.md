@@ -1073,14 +1073,106 @@ recover the correct dimensions.** A negative result about alternatives, from a
 search that would miss the known answer, is not evidence that alternatives do
 not exist; it is a measurement of the search.
 
-So the answer to "is there another mechanism in this domain that passes the four
-precision points" is: **not one that this search can find, and this search would
-not find EXlink either.** What survives is the structural reading — the
-architecture is two bars, a three-cornered body and a half-speed pair; the
-asymmetry is the hard part and the symmetric answer is the attractor; and the
-gear ratio is selected by the requirement in a controlled comparison. Making the
-negative result mean anything more requires the derivative
-{doc}`Appendix A <theory>` already provides in principle: at twenty equilibrium
-sweeps per finite-difference gradient, each topology here received about nine
-hundred sweeps of optimisation, which is two orders of magnitude short of what
-the continuous fit needs.
+So this screen answers nothing about whether alternatives exist. What survives
+it is the structural reading — the architecture is two bars, a three-cornered
+body and a half-speed pair; the asymmetry is the hard part and the symmetric
+answer is the attractor; and the gear ratio is selected by the requirement in a
+controlled comparison. §5.9 takes the control's complaint seriously, changes the
+solver it indicts, and reaches a different conclusion.
+
+## 5.9 Alternatives, once the fit is posed as root-finding
+
+§5.8's control is an indictment of a solver, not of a domain, and it names the
+defect precisely: descent on an aggregated scalar could not recover the studied
+mechanism's dimensions when handed its topology. Precision-point synthesis is
+not a minimisation. It is **root-finding** — five conditions in fourteen free
+coordinates, underdetermined, with a solution *manifold* rather than an isolated
+minimum — and collapsing those conditions into one number discards exactly the
+structure a Gauss-Newton step lives on.
+
+So the conditions are handed over as a vector instead, with two structural
+residuals riding along so that no fit can buy its motion by straining the
+linkage or by leaving the piston under-determined. Nothing else changes: the same
+domain, the same requirement, the same finite-difference derivative, the same
+order of compute.
+
+### The family, counted properly
+
+The architecture the literature describes — {cite:t}`watanabe2006`'s four-jointed
+linkage between connecting rod and crank pin, its end turning at half crankshaft
+speed — is not one mechanism but a signature: two bars, one three-cornered body,
+one 2:1 pair. **Forty-nine members of the enumeration carry it**, and all were
+fitted, six starts each.
+
+Forty-nine is an overcount, for a reason worth recording. Some topologies have a
+**dead corner**: a body whose third vertex does not move the piston at all, which
+makes that body a binary link and the topology simpler than its element list
+says. Moving F1 by 7 mm shifts the piston by 0.0001 mm in one of the best
+candidates and by 4.15 mm in EXlink. Removing dead corners, and quotienting the
+interchangeable labels F1 and F2 while keeping the two crank pins distinct —
+P1 turns at input speed and P2 through the gear, so exchanging them is a
+different machine — the twenty-six that converged to mechanisms fall into
+**seventeen architectures**.
+
+### A certificate: what a symmetric engine can and cannot score
+
+Eight of those architectures converged to *exactly* 5.707 mm, at strokes between
+64.98 and 65.11 mm. That is not a coincidence and not a plateau. If a motion is
+symmetric, STE $=$ STC $= c$, the last three residuals can all be driven to zero
+and the score is fixed by the two stroke residuals alone; minimising over $c$
+gives
+
+$$
+c = \tfrac12(74.000 + 55.953) = 64.9765\ \text{mm},
+\qquad
+\text{score} = \sqrt{\tfrac{1}{5}\left[\left(\tfrac{c - 74.000}{74}\right)^2 +
+\left(\tfrac{c - 55.953}{74}\right)^2\right]} \times 74 = 5.7070\ \text{mm}.
+$$
+
+**5.7070 mm is therefore the best score any Otto engine can achieve against this
+requirement**, and eight independent fits sit on it to four figures. Those fits
+are provably at their global optimum — which settles that the solver converges,
+and that what was hard in §5.8 was the problem's posing rather than the
+optimizer's strength. It also gives the results a free reading: *any score below
+5.707 mm is a certificate of genuine asymmetry.*
+
+### Three architectures break the symmetric barrier
+
+| architecture | best [mm] | STE | STC | $\epsilon$ | reached as |
+|---|---|---|---|---|---|
+| bar P1-F2, bar P2-F2, link F2-S | **0.484** | 74.12 | 55.89 | 15.98 | #75, #95, #159, #43 |
+| bar P2-F2, bar F1-S, body P1-F1-F2 | **0.830** | 74.09 | 56.08 | 16.03 | #183, #167 |
+| bar P1-F1, bar F2-S, body P2-F1-F2 — **EXlink** | 4.229 | 73.98 | 56.05 | 16.03 | #91, #51 |
+| bar P1-F1, bar P2-F2, body F1-F2-S | 5.766 | 65.62 | 51.77 | 14.88 | #27 |
+| *the symmetric barrier* | *5.707* | *64.98* | *64.98* | *18.42* | *eight architectures* |
+
+*Required: STE 74.000 mm, STC 55.953 mm, $\epsilon$ 16. EXlink's published
+dimensions score 0.305 mm.*
+
+**The best is not EXlink, and it is not a six-bar.** Its three elements reduce,
+once the dead corner goes, to a floating pin held by two rods — one to the input
+crank pin, one to the half-speed crank pin — driving the piston through a
+connecting rod: a **geared five-bar**. It meets the specification with the
+expansion stroke 0.118 mm long, the compression stroke 0.067 mm short and a
+compression ratio of 15.98 against 16, running at a strain of $4.4\times10^{-6}$
+with the piston fully determined. Four of the forty-nine topologies are this one
+mechanism wearing different labels, and it was the easiest thing in the family to
+fit — which is what one would expect of a mechanism with fewer effective links
+and so a larger feasible set.
+
+**The second is EXlink with its two shafts exchanged.** Its body hangs on the
+*input* crank pin (P1-F1-F2) with the swing rod on the *geared* one, where
+EXlink's hangs on the geared pin (P2-F1-F2) with the swing rod on the input. One
+edge of the graph differs, and it too meets the specification, at 0.830 mm.
+
+### What this does and does not establish
+
+The existence results are sound: a fit that reaches a valid mechanism exhibits
+it, and three architectures beat a barrier that no symmetric motion can. **The
+ranking between them is not sound**, and the control still says why — EXlink's
+own architecture fitted to 4.229 mm here against the 0.305 mm its published
+dimensions achieve, a factor of fourteen. A search that is this far from optimal
+on the one architecture whose answer is known cannot be trusted to order the
+others, so nothing here says the five-bar is *better* than EXlink. What it says
+is that **both meet the requirement, and the domain contains more than one
+answer** — which is the question §5.8 could not answer and got wrong.
