@@ -36,6 +36,7 @@ from exlink.topology import (
     engine_ground_structure,
     enumerate_mechanisms,
     exlink_in_the_domain,
+    fit_to_the_points,
     format_assessment,
     gear_radii,
     geared_ground_structure,
@@ -55,6 +56,7 @@ from exlink.topology import (
     screen_mechanism,
     stiffnesses,
     sweep,
+    synthesis_residuals,
     travel_shortfall,
 )
 
@@ -880,3 +882,48 @@ def test_spurious_reversals_are_charged() -> None:
     charge = float(requirement_residuals(rippled)[4]) * 2.0 * 74.0
     assert charge > 1.0, f"the ripple is charged, in millimetres: {charge:.2f}"
     assert requirement_error(rippled) > requirement_error(clean), "and it costs"
+
+
+def test_the_residual_vector_is_the_conditions_not_their_sum() -> None:
+    """Seven residuals under the requirement reading, ten under the strict one."""
+    _structure, layout, x = exlink_in_the_domain()
+    assert synthesis_residuals(layout, x, samples=48).size == 7
+    assert synthesis_residuals(layout, x, samples=48, measure="precision").size == 10
+    with pytest.raises(ValueError, match="unknown synthesis measure"):
+        synthesis_residuals(layout, x, samples=48, measure="nonsense")
+
+
+def test_the_studied_mechanism_nearly_zeroes_the_residuals() -> None:
+    """Every condition, including the two structural ones, at once."""
+    _structure, layout, x = exlink_in_the_domain()
+    residual = synthesis_residuals(layout, x, samples=48)
+    assert float(np.max(np.abs(residual[:5]))) < 0.01, "the engine's five conditions"
+    assert residual[5] < 0.2, "it is a mechanism, not a strained structure"
+    assert residual[6] == pytest.approx(0.0, abs=1.0e-6), "the piston is determined"
+
+
+def test_the_fit_reduces_the_residual_it_is_given() -> None:
+    """The honest property, and the one that caught a misreading.
+
+    A five-millimetre perturbation of the studied mechanism raises the strain
+    residual to 32 -- a geared exact-constraint linkage puts its loop closure
+    and its mesh in conflict as soon as the geometry moves -- and the fit spends
+    its budget making it a mechanism again.  Judged on the motion alone it looks
+    like the fit made things worse, which is why the test is on the norm of what
+    is actually being driven.
+    """
+    _structure, layout, x = exlink_in_the_domain()
+    frozen = np.zeros(layout.size, dtype=bool)
+    frozen[layout.presence_offset :] = True
+    rng = np.random.default_rng(0)
+    start = x.copy()
+    start[: layout.presence_offset] += rng.normal(0.0, 5.0, layout.presence_offset)
+
+    before = float(np.sum(synthesis_residuals(layout, start, samples=48) ** 2))
+    after_x = fit_to_the_points(layout, start, samples=48, evaluations=40, frozen=frozen)
+    after = float(np.sum(synthesis_residuals(layout, after_x, samples=48) ** 2))
+
+    assert after < before, f"the fit descends: {before:.1f} -> {after:.1f}"
+    assert np.array_equal(after_x[layout.presence_offset :], start[layout.presence_offset :]), (
+        "and leaves the topology alone"
+    )

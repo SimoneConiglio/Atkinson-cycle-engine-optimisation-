@@ -1488,6 +1488,139 @@ def _describe(layout: Layout, x: FloatArray, target: FloatArray, samples: int) -
     )
 
 
+def synthesis_residuals(
+    layout: Layout,
+    x: FloatArray,
+    samples: int = 48,
+    penalty: float = 4.0,
+    measure: str = "requirements",
+) -> FloatArray:
+    """The precision-point conditions as a *vector*, for a least-squares fit.
+
+    The objective of :func:`objective` aggregates these into one number, which
+    throws away the structure a Gauss-Newton method lives on.  Precision-point
+    synthesis is classically a root-finding problem -- five conditions in
+    fourteen free coordinates, underdetermined, with a solution manifold rather
+    than an isolated minimum -- and that is what this exposes.
+
+    Two structural residuals ride along, so that a fit cannot buy the motion by
+    straining the linkage or by leaving the piston under-determined.  They enter
+    as square roots because a least-squares fit squares whatever it is handed,
+    and the weights are the ones :func:`objective` charges.
+
+    Args:
+        layout: The design vector's layout.
+        x: Design vector.
+        samples: Input angles per sweep.
+        penalty: SIMP exponent on the presences.
+        measure: ``"requirements"`` for the five conditions the engine imposes,
+            ``"precision"`` for the eight that additionally fix the angles.
+
+    Returns:
+        Seven residuals, or ten under ``"precision"``.
+
+    Raises:
+        ValueError: If ``measure`` is neither.
+    """
+    from .cycle import PhaseError
+
+    if measure == "requirements":
+        width = 5
+    elif measure == "precision":
+        width = 8
+    else:
+        msg = f"unknown synthesis measure {measure!r}"
+        raise ValueError(msg)
+
+    motion = sweep(layout, x, samples=samples, penalty=penalty)
+    if not np.all(np.isfinite(motion.lam)):
+        return np.full(width + 2, np.sqrt(DEGENERATE_ERROR), dtype=float)
+
+    structural = np.array(
+        [
+            np.sqrt(STRAIN_WEIGHT * max(motion.strain, 0.0)),
+            np.sqrt(SLACK_WEIGHT * max(motion.output_slack, 0.0)),
+        ],
+        dtype=float,
+    )
+
+    if measure == "precision":
+        wanted = precision_heights()
+        n = motion.lam.size
+        shifts = range(n)
+        best = min(
+            shifts, key=lambda k: float(np.sum(precision_residuals(motion.lam, wanted, k) ** 2))
+        )
+        return np.concatenate([precision_residuals(motion.lam, wanted, best), structural])
+
+    try:
+        residual = requirement_residuals(motion.lam)
+    except (PhaseError, IndexError, ValueError):
+        residual = None
+    if residual is None or not np.all(np.isfinite(residual)):
+        # Unreadable: charge the floor, but slope it towards a motion with dead
+        # centres in the right places, exactly as requirement_error does.
+        from .constants import DEFAULT_TARGETS
+
+        escape = precision_error(motion.lam) / DEFAULT_TARGETS.expansion_stroke
+        residual = np.full(width, np.sqrt(DEGENERATE_ERROR) + escape, dtype=float)
+    return np.concatenate([residual, structural])
+
+
+def fit_to_the_points(
+    layout: Layout,
+    x0: FloatArray,
+    samples: int = 48,
+    evaluations: int = 60,
+    measure: str = "requirements",
+    frozen: NDArray[np.bool_] | None = None,
+) -> FloatArray:
+    """Drive the precision-point residuals to zero, by Gauss-Newton.
+
+    A trust-region least-squares step rather than a quasi-Newton one on the
+    aggregated objective.  The two cost the same per iteration -- both build
+    their derivative by finite differences over the free coordinates -- but this
+    one knows that the thing it is driving to zero is a *vector*, and that the
+    problem has more coordinates than conditions.  §5.8's control is what
+    motivates the change: descent on the scalar could not recover the studied
+    mechanism's dimensions even when handed its topology.
+
+    Args:
+        layout: The design vector's layout.
+        x0: Starting design.
+        samples: Input angles per sweep.
+        evaluations: Cap on residual evaluations.
+        measure: Which conditions to drive; see :func:`synthesis_residuals`.
+        frozen: Coordinates to hold at their starting values.
+
+    Returns:
+        The design reached, on all of the layout's coordinates.
+    """
+    from scipy.optimize import least_squares
+
+    lower, upper = default_bounds(layout)
+    start = np.clip(np.asarray(x0, dtype=float), lower, upper)
+    free = np.ones(layout.size, dtype=bool) if frozen is None else ~np.asarray(frozen)
+
+    def at(v: FloatArray) -> FloatArray:
+        whole = start.copy()
+        whole[free] = v
+        return synthesis_residuals(layout, whole, samples, PENALTY_SCHEDULE[-1], measure)
+
+    result = least_squares(
+        at,
+        start[free],
+        bounds=(lower[free], upper[free]),
+        method="trf",
+        jac="2-point",
+        diff_step=1.0e-4,
+        max_nfev=int(evaluations),
+    )
+    out = start.copy()
+    out[free] = np.asarray(result.x, dtype=float)
+    return out
+
+
 def synthesise_one(
     layout: Layout,
     x0: FloatArray,
