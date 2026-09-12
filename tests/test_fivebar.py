@@ -78,3 +78,76 @@ def test_every_variable_is_described() -> None:
     """A reader of the results table should not have to read the source."""
     assert set(fivebar.VARIABLE_DESCRIPTIONS) == set(fivebar.VARIABLE_NAMES)
     assert set(fivebar.VARIABLE_NAMES) >= fivebar.ANGULAR_VARIABLES
+
+
+def _loaded(speed_rpm: float, samples: int = 720) -> fivebar.FiveBarLoads:
+    """The synthesised five-bar, sized crudely and loaded at one speed."""
+    from exlink import cycle
+    from exlink.constants import DEFAULT_SPEC
+    from exlink.materials import DEFAULT_MATERIAL
+
+    motion = solve(SYNTHESISED, samples=samples)
+    thermo = cycle.solve(motion.lam, DEFAULT_SPEC)
+    diameters = dict.fromkeys([member[0] for member in fivebar.MEMBERS], 12.0)
+    properties = fivebar.mass_properties(
+        motion,
+        SYNTHESISED,
+        diameters,
+        DEFAULT_MATERIAL.density,
+        piston_mass=2.0e-4,
+        piston_length=DEFAULT_SPEC.piston_length,
+    )
+    return fivebar.solve_loads(
+        motion,
+        SYNTHESISED,
+        thermo.piston_force,
+        properties,
+        speed_rpm * 2.0 * np.pi / 60.0,
+        pressure_angle=DEFAULT_SPEC.pressure_angle,
+        piston_length=DEFAULT_SPEC.piston_length,
+    )
+
+
+@pytest.mark.parametrize("rpm", [0.0, 3000.0])
+def test_the_equilibrium_conserves_power(rpm: float) -> None:
+    """Shaft work must equal the p-V loop area, and that is what fixes the signs.
+
+    The two are computed by different routes: one integrates the unknown torque
+    the equilibrium returns, the other integrates the applied gas force against
+    the piston velocity.  Nothing forces them to agree unless every sign and
+    every moment arm in the eighteen equations is right.  It caught the torque
+    sign, which came out reading minus one.
+    """
+    loads = _loaded(rpm)
+    assert loads.shaft_work / loads.indicated_work == pytest.approx(1.0, abs=1.0e-3)
+
+
+def test_inertia_does_no_net_work_over_a_cycle() -> None:
+    """A second check, and an independent one: the balance cannot depend on speed.
+
+    Inertia forces are internal to a closed cycle, so spinning the mechanism up
+    changes every reaction but not the work delivered.  If the inertia terms were
+    entered with a wrong arm, the two speeds would disagree.
+    """
+    still, running = _loaded(0.0), _loaded(3000.0)
+    assert running.shaft_work == pytest.approx(still.shaft_work, rel=1.0e-9)
+    assert running.peak_bearing_load != pytest.approx(still.peak_bearing_load, rel=1.0e-3)
+
+
+def test_the_inertia_relief_is_the_right_way_round() -> None:
+    """Spinning it up unloads the journals and loads the gear teeth.
+
+    Both follow from where the mass is: the reciprocating inertia opposes the gas
+    force near top dead centre, which is where the bearings see their worst load,
+    while the gear pair has to accelerate the crank throws and so sees more.
+    """
+    still, running = _loaded(0.0), _loaded(3000.0)
+    assert running.peak_bearing_load < still.peak_bearing_load
+    assert np.max(np.abs(running.gear_force)) > np.max(np.abs(still.gear_force))
+
+
+def test_the_liner_load_is_as_bad_as_the_geometry_promised() -> None:
+    """A side-load ratio of 1.77 is not an abstraction; it is kilonewtons."""
+    loads = _loaded(3000.0)
+    assert float(np.max(np.abs(loads.liner_force))) > 3000.0, "thousands of newtons"
+    assert loads.conditioning < 1.0e8, "the system is still solvable"

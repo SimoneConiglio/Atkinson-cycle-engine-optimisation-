@@ -469,3 +469,349 @@ That contrast is the point of carrying it further.  A synthesis asked for a
 motion will buy the motion with whatever it is not charged for, and what it is
 not charged for here is the entire mechanical design.  §5.10 puts a price on it.
 """
+
+
+#: The five moving links, and the design variable each takes its length from.
+MEMBERS: tuple[tuple[str, str, str, str], ...] = (
+    ("crank_1", "q_1", "O1", "P1"),
+    ("rod_1", "L_1", "P1", "F"),
+    ("crank_2", "q_2", "O2", "P2"),
+    ("rod_2", "L_2", "P2", "F"),
+    ("con_rod", "e", "F", "S"),
+)
+"""``(name, length attribute, start joint, end joint)`` for each link.
+
+Every body is one member here, where the EX-link's trigonal link is three.  That
+is the whole structural difference between the two mechanisms, and it is why this
+one is worth pricing: five moving members against seven, four journals against
+seven, and the same gear pair.
+"""
+
+#: Order of the unknowns in the equilibrium system.
+_UNKNOWNS: tuple[str, ...] = (
+    "O1x", "O1y", "P1x", "P1y", "F1x", "F1y",
+    "O2x", "O2y", "P2x", "P2y", "F2x", "F2y",
+    "Sx", "Sy", "N", "M_liner", "W", "T",
+)  # fmt: skip
+_INDEX = {name: i for i, name in enumerate(_UNKNOWNS)}
+_N_UNKNOWNS = len(_UNKNOWNS)
+
+
+@dataclass(frozen=True)
+class FiveBarMassProperties:
+    """Mass, centre of mass, inertia and orientation of every body."""
+
+    member_mass: dict[str, float]
+    """[tonne]"""
+    body_com: dict[str, FloatArray]
+    """Centre of mass over the revolution, ``(n, 2)`` [mm]."""
+    body_inertia: dict[str, float]
+    """About the body's own centre of mass [tonne.mm^2]."""
+    body_angle: dict[str, FloatArray]
+    """Orientation [rad], for the angular acceleration."""
+
+
+def mass_properties(
+    kinematics: FiveBarKinematics,
+    design: FiveBar,
+    diameters: dict[str, float],
+    density: float,
+    piston_mass: float,
+    piston_length: float,
+    bore_ratio: float = 0.0,
+) -> FiveBarMassProperties:
+    """Mass properties of the five links and the piston.
+
+    Identical in form to :func:`exlink.dynamics.mass_properties`: a link is a
+    uniform bar of its own diameter and length, its centre of mass at its
+    midpoint, its inertia that of a cylinder about a transverse axis through its
+    centroid, and the piston translates so its rotational inertia never enters.
+    Using the same formulae is what makes the mass comparison a comparison of
+    mechanisms rather than of modelling conventions.
+    """
+    joints = {
+        "O1": np.zeros_like(kinematics.P1),
+        "O2": np.zeros_like(kinematics.P1) + design.crank_centre,
+        "P1": kinematics.P1,
+        "P2": kinematics.P2,
+        "F": kinematics.F,
+        "S": kinematics.S,
+    }
+
+    member_mass: dict[str, float] = {}
+    body_com: dict[str, FloatArray] = {}
+    body_inertia: dict[str, float] = {}
+    for name, attribute, start, end in MEMBERS:
+        length = abs(float(getattr(design, attribute)))
+        diameter = float(diameters[name])
+        area = math.pi * diameter**2 / 4.0 * (1.0 - bore_ratio**2)
+        mass = density * area * length
+        member_mass[name] = mass
+        body_com[name] = 0.5 * (joints[start] + joints[end])
+        body_inertia[name] = (
+            mass * (0.75 * diameter**2 * (1.0 + bore_ratio**2) + length**2) / 12.0
+        )
+
+    body_com["piston"] = kinematics.S + np.array([0.0, 0.5 * piston_length])
+    body_inertia["piston"] = 0.0
+
+    zeros = np.zeros_like(kinematics.theta)
+    crank = design.theta_f_rad + CRANK_RATIO * kinematics.theta
+    body_angle = {
+        "crank_1": kinematics.theta,
+        "rod_1": np.arctan2(
+            kinematics.F[:, 1] - kinematics.P1[:, 1], kinematics.F[:, 0] - kinematics.P1[:, 0]
+        ),
+        "crank_2": crank,
+        "rod_2": np.arctan2(
+            kinematics.F[:, 1] - kinematics.P2[:, 1], kinematics.F[:, 0] - kinematics.P2[:, 0]
+        ),
+        "con_rod": np.arctan2(
+            kinematics.S[:, 1] - kinematics.F[:, 1], kinematics.S[:, 0] - kinematics.F[:, 0]
+        ),
+        "piston": zeros,
+    }
+    masses = dict(member_mass)
+    masses["piston"] = piston_mass
+    return FiveBarMassProperties(
+        member_mass=masses,
+        body_com=body_com,
+        body_inertia=body_inertia,
+        body_angle=body_angle,
+    )
+
+
+@dataclass(frozen=True)
+class FiveBarLoads:
+    """Joint reactions, gear load and output torque over one cycle."""
+
+    kinematics: FiveBarKinematics
+    speed: float
+    """Crankshaft speed [rad/s]."""
+    properties: FiveBarMassProperties
+    reaction: dict[str, FloatArray]
+    """Force transmitted forward along the chain at each joint, ``(n, 2)`` [N].
+
+    Keys ``O1``, ``P1``, ``F1`` follow the half-speed branch; ``O2``, ``P2``,
+    ``F2`` the crankshaft branch; ``S`` the wrist pin.
+    """
+    liner_force: FloatArray
+    """Side force from the cylinder liner [N]."""
+    liner_moment: FloatArray
+    """Reaction moment on the piston from the guide [N.mm]."""
+    gear_force: FloatArray
+    """Tooth load along the line of action [N]."""
+    torque: FloatArray
+    """Output torque on the crankshaft [N.mm]."""
+    gas_force: FloatArray
+    """Applied gas force on the crown [N], as solved with."""
+    conditioning: float
+    """Worst condition number of the equilibrium matrix."""
+
+    @property
+    def peak_bearing_load(self) -> float:
+        """Largest load on either main journal [N]."""
+        return float(
+            max(
+                np.max(np.linalg.norm(self.reaction["O1"], axis=1)),
+                np.max(np.linalg.norm(self.reaction["O2"], axis=1)),
+            )
+        )
+
+    @property
+    def indicated_work(self) -> float:
+        """Work the gas does on the piston over the cycle [N.mm].
+
+        Read off the gas force and the piston motion, independently of the
+        torque, so that the two can be compared -- which is the check that says
+        whether the equilibrium was assembled correctly.
+        """
+        step = 2.0 * math.pi / self.kinematics.theta.size
+        velocity = np.gradient(self.kinematics.lam, step, edge_order=2)
+        return float(-np.sum(self.gas_force * velocity) * step)
+
+    @property
+    def shaft_work(self) -> float:
+        """Work delivered at the crankshaft over the cycle [N.mm].
+
+        The crankshaft turns :data:`CRANK_RATIO` times for each turn of the
+        half-speed shaft, so its angle advances by that factor per step.
+        """
+        step = 2.0 * math.pi / self.kinematics.theta.size
+        return float(np.sum(self.torque) * abs(CRANK_RATIO) * step)
+
+
+def solve_loads(
+    kinematics: FiveBarKinematics,
+    design: FiveBar,
+    gas_force: FloatArray,
+    properties: FiveBarMassProperties,
+    speed: float,
+    pressure_angle: float,
+    piston_length: float,
+) -> FiveBarLoads:
+    """Equilibrium of all six bodies at once, inertia included.
+
+    Eighteen unknowns and eighteen equations: seven joint force pairs, the liner
+    normal force and its reaction moment, the gear tooth load and the output
+    torque.  Assembled exactly as :func:`exlink.dynamics.solve` assembles the
+    EX-link's, and solved simultaneously for the same reason -- with mass in the
+    rods nothing is a two-force member and sequential elimination does not close.
+
+    The floating pin is carried by the connecting rod, so both rods push on that
+    body and no separate massless-pin equation is needed.
+
+    Args:
+        kinematics: A solved five-bar.
+        design: Its dimensions.
+        gas_force: Gas force on the crown at each angle [N], positive downwards.
+        properties: Masses, centres of mass and inertias.
+        speed: Crankshaft speed [rad/s].  Zero recovers the quasi-static result.
+        pressure_angle: Gear pressure angle [rad].
+        piston_length: Piston length [mm], for the crown offset.
+
+    Returns:
+        Reactions, tooth load and torque over one revolution of the half-speed
+        shaft, which is one four-stroke cycle.
+    """
+    from .derivatives import ramp_derivative, spectral_derivative
+
+    n = kinematics.theta.size
+    half_speed = speed / abs(CRANK_RATIO)
+
+    def second(points: FloatArray) -> FloatArray:
+        return np.stack(
+            [spectral_derivative(points[:, 0], 2), spectral_derivative(points[:, 1], 2)],
+            axis=-1,
+        )
+
+    # Derivatives are taken with respect to the half-speed shaft's angle, since
+    # that is the variable the trajectories are sampled in, so the scale is its
+    # speed and not the crankshaft's.
+    scale = half_speed**2
+    body_acceleration = {body: scale * second(com) for body, com in properties.body_com.items()}
+    body_angular_acceleration = {
+        body: scale * ramp_derivative(angle, 2) for body, angle in properties.body_angle.items()
+    }
+    # Both shafts turn at a constant rate; force the exact zero rather than
+    # leaving spectral round-off in the inertia couples.
+    for body in ("crank_1", "crank_2", "piston"):
+        body_angular_acceleration[body] = np.zeros(n)
+
+    joints = {
+        "O1": np.zeros((n, 2)),
+        "O2": np.zeros((n, 2)) + design.crank_centre,
+        "P1": kinematics.P1,
+        "P2": kinematics.P2,
+        "F": kinematics.F,
+        "S": kinematics.S,
+    }
+    crown = np.stack([np.full(n, design.x_1), kinematics.lam], axis=-1)
+
+    # -- gear mesh geometry, on the EX-link's convention --------------------------
+    axis = np.array([math.cos(design.theta_r_rad), math.sin(design.theta_r_rad)])
+    line_of_action = np.array(
+        [
+            math.cos(design.theta_r_rad - math.pi / 2.0 + pressure_angle),
+            math.sin(design.theta_r_rad - math.pi / 2.0 + pressure_angle),
+        ]
+    )
+    radius_1 = design.I * abs(CRANK_RATIO) / (1.0 + abs(CRANK_RATIO))
+    radius_2 = design.I / (1.0 + abs(CRANK_RATIO))
+    contact_1 = np.zeros((n, 2)) + radius_1 * axis
+    contact_2 = joints["O2"] - radius_2 * axis
+
+    matrix = np.zeros((n, _N_UNKNOWNS, _N_UNKNOWNS))
+    rhs = np.zeros((n, _N_UNKNOWNS))
+
+    def add_joint(row: int, body: str, joint: str, key: str, sign: float) -> None:
+        """Enter an unknown joint force into a body's three equations."""
+        ix, iy = _INDEX[key + "x"], _INDEX[key + "y"]
+        matrix[:, row, ix] += sign
+        matrix[:, row + 1, iy] += sign
+        arm = joints[joint] - properties.body_com[body]
+        matrix[:, row + 2, ix] += -sign * arm[:, 1]
+        matrix[:, row + 2, iy] += sign * arm[:, 0]
+
+    def set_inertia(row: int, body: str) -> None:
+        mass = properties.member_mass[body]
+        rhs[:, row] += mass * body_acceleration[body][:, 0]
+        rhs[:, row + 1] += mass * body_acceleration[body][:, 1]
+        rhs[:, row + 2] += properties.body_inertia[body] * body_angular_acceleration[body]
+
+    def add_gear(row: int, body: str, contact: FloatArray, sign: float) -> None:
+        matrix[:, row, _INDEX["W"]] += sign * line_of_action[0]
+        matrix[:, row + 1, _INDEX["W"]] += sign * line_of_action[1]
+        arm = contact - properties.body_com[body]
+        matrix[:, row + 2, _INDEX["W"]] += sign * (
+            arm[:, 0] * line_of_action[1] - arm[:, 1] * line_of_action[0]
+        )
+
+    # -- the half-speed shaft's crank throw ---------------------------------------
+    add_joint(0, "crank_1", "O1", "O1", +1.0)
+    add_joint(0, "crank_1", "P1", "P1", -1.0)
+    add_gear(0, "crank_1", contact_1, -1.0)
+    set_inertia(0, "crank_1")
+
+    # -- the rod from that crank to the floating pin ------------------------------
+    add_joint(3, "rod_1", "P1", "P1", +1.0)
+    add_joint(3, "rod_1", "F", "F1", -1.0)
+    set_inertia(3, "rod_1")
+
+    # -- the crankshaft's crank throw, which the work is taken from ---------------
+    add_joint(6, "crank_2", "O2", "O2", +1.0)
+    add_joint(6, "crank_2", "P2", "P2", -1.0)
+    add_gear(6, "crank_2", contact_2, +1.0)
+    # Signed so that a positive unknown is torque delivered *out* of the shaft.
+    # The check that fixes the sign is that its integral must equal the p-V loop
+    # area, not a convention -- and it did fix it: the opposite sign balanced the
+    # power to one part in twelve thousand with the ratio at minus one.
+    matrix[:, 8, _INDEX["T"]] += +1.0
+    set_inertia(6, "crank_2")
+
+    # -- the rod from the crankshaft to the floating pin --------------------------
+    add_joint(9, "rod_2", "P2", "P2", +1.0)
+    add_joint(9, "rod_2", "F", "F2", -1.0)
+    set_inertia(9, "rod_2")
+
+    # -- the connecting rod, which carries the floating pin -----------------------
+    add_joint(12, "con_rod", "F", "F1", +1.0)
+    add_joint(12, "con_rod", "F", "F2", +1.0)
+    add_joint(12, "con_rod", "S", "S", -1.0)
+    set_inertia(12, "con_rod")
+
+    # -- the piston ---------------------------------------------------------------
+    add_joint(15, "piston", "S", "S", +1.0)
+    matrix[:, 15, _INDEX["N"]] += 1.0
+    matrix[:, 17, _INDEX["M_liner"]] += 1.0
+    set_inertia(15, "piston")
+    arm = crown - properties.body_com["piston"]
+    # The gas resultant is (0, -gas_force) on the crown, so it crosses to the
+    # right-hand side as +gas_force.
+    rhs[:, 16] += gas_force
+    rhs[:, 17] += arm[:, 0] * gas_force
+
+    solution: FloatArray = np.linalg.solve(matrix, rhs[..., None])[..., 0].astype(
+        np.float64, copy=False
+    )
+    reaction = {
+        "O1": solution[:, 0:2],
+        "P1": solution[:, 2:4],
+        "F1": solution[:, 4:6],
+        "O2": solution[:, 6:8],
+        "P2": solution[:, 8:10],
+        "F2": solution[:, 10:12],
+        "S": solution[:, 12:14],
+    }
+    return FiveBarLoads(
+        kinematics=kinematics,
+        speed=speed,
+        properties=properties,
+        reaction=reaction,
+        liner_force=solution[:, _INDEX["N"]],
+        liner_moment=solution[:, _INDEX["M_liner"]],
+        gear_force=solution[:, _INDEX["W"]],
+        torque=solution[:, _INDEX["T"]],
+        gas_force=np.asarray(gas_force, dtype=float),
+        conditioning=float(np.max(np.linalg.cond(matrix))),
+    )
