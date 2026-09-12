@@ -92,6 +92,8 @@ OUTPUT_NAMES: tuple[str, ...] = (
     "side_load_ratio",
     "stroke_error",
     "ratio_error",
+    "cycle_error",
+    "transmission_margin",
     "side_load_margin",
     "assembly_margin",
     "converged",
@@ -149,10 +151,12 @@ class FiveBarOutcome:
         if self.performance is None or not self.performance.result.converged:
             return False
         result = self.performance.result
+        from .topology import requirement_error
+
         return bool(
-            abs(result.expansion_stroke - 74.0) <= 0.5
-            and abs(result.compression_ratio - 16.0) <= 0.2
+            requirement_error(result.kinematics.lam) <= 0.5 + 1.0e-6
             and self.performance.side_load_ratio <= SIDE_LOAD_LIMIT + 1.0e-6
+            and result.kinematics.transmission >= MIN_TRANSMISSION - 1.0e-6
         )
 
 
@@ -173,6 +177,7 @@ def analyse(
     worse than any design that runs.
     """
     from .cycle import PhaseError
+    from .topology import requirement_error
 
     # Every constraint is reported *violated* in the failure branches, not zero.
     # Zero was tried and it is wrong in a way that quietly ruins the solve: a
@@ -187,6 +192,8 @@ def analyse(
         "side_load_ratio": 0.0,
         "stroke_error": 10.0,
         "ratio_error": 10.0,
+        "cycle_error": 100.0,
+        "transmission_margin": 10.0,
         "side_load_margin": 10.0,
         "assembly_margin": 1.0,
         "converged": 0.0,
@@ -224,6 +231,8 @@ def analyse(
         "side_load_ratio": float(performance.side_load_ratio),
         "stroke_error": float(result.expansion_stroke - 74.0),
         "ratio_error": float(result.compression_ratio - 16.0),
+        "cycle_error": float(requirement_error(result.kinematics.lam)),
+        "transmission_margin": float(MIN_TRANSMISSION - result.kinematics.transmission),
         "side_load_margin": float(performance.side_load_ratio - SIDE_LOAD_LIMIT),
         # A mass spiral that never closed is not a structure, so it is reported as
         # a constraint violation rather than left to the objective's ladder alone.
@@ -237,8 +246,9 @@ def maximise_range(
     speed_rpm: float = 2000.0,
     samples: int = 240,
     max_iterations: int = 120,
-    band: float = 0.15,
+    band: float = 0.5,
     bounds: dict[str, tuple[float, float]] | None = None,
+    side_load_limit: float | None = SIDE_LOAD_LIMIT,
 ) -> FiveBarOutcome:
     """Maximise the five-bar's range under every constraint, through GEMSEO.
 
@@ -249,7 +259,16 @@ def maximise_range(
             2000, which is where the synthesised geometry cannot be sized at all.
         samples: Crank angles per cycle.
         max_iterations: SLSQP iteration budget.
-        band: Half-width allowed on the two stroke requirements.
+        band: Largest requirement error allowed [mm].
+        side_load_limit: Cap on the connecting-rod side load, or ``None`` to
+            leave it to the objective.  ``None`` is the more informative
+            setting and not a relaxation: the range already charges the piston
+            friction the side load causes, at the study's own coefficient, so
+            the cap is a design rule standing in for a cost that is being
+            computed anyway.  It is worth switching off here because for this
+            topology the cap is not reachable -- holding the four-stroke cycle
+            costs a side-load ratio of about 1.2 whatever else is done -- and a
+            constraint nothing satisfies tells the optimizer nothing.
         bounds: The design box; :data:`BOUNDS` by default.
 
     Returns:
@@ -299,11 +318,12 @@ def maximise_range(
     )
     # The two stroke requirements as relaxed inequalities, the way §4.7 relaxes
     # them: an equality gives SLSQP nowhere to stand when the range is a ladder.
-    scenario.add_constraint("stroke_error", constraint_type="ineq", positive=False, value=band)
-    scenario.add_constraint("stroke_error", constraint_type="ineq", positive=True, value=-band)
-    scenario.add_constraint("ratio_error", constraint_type="ineq", positive=False, value=band)
-    scenario.add_constraint("ratio_error", constraint_type="ineq", positive=True, value=-band)
-    scenario.add_constraint("side_load_margin", constraint_type="ineq")
+    scenario.add_constraint("cycle_error", constraint_type="ineq", value=band)
+    scenario.add_constraint("transmission_margin", constraint_type="ineq")
+    if side_load_limit is not None:
+        scenario.add_constraint(
+            "side_load_ratio", constraint_type="ineq", value=side_load_limit
+        )
     scenario.add_constraint("assembly_margin", constraint_type="ineq")
 
     # There is no analytic Jacobian to be had here: the outputs come through a
@@ -335,7 +355,7 @@ def maximise_range(
 def restore_feasibility(
     start: FiveBar | None = None,
     samples: int = 360,
-    band: float = 0.05,
+    band: float = 0.5,
     max_iterations: int = 300,
     bounds: dict[str, tuple[float, float]] | None = None,
 ) -> FiveBar:
@@ -358,8 +378,14 @@ def restore_feasibility(
 
     Args:
         start: Initial design; the synthesised one by default.
-        samples: Crank angles per cycle.
-        band: Half-width allowed on the stroke and ratio requirements.
+        samples: Crank angles per cycle.  Not a free choice: the assembly and
+            transmission margins are read off this grid, so a coarse one can miss
+            the angle where the linkage is worst and return a design that comes
+            apart when checked more finely.  At 240 angles that happens; 360 is
+            the floor used here.  A guarantee would need interval arithmetic over
+            the whole revolution rather than a sample of it.
+        band: Largest requirement error allowed [mm], as
+            :func:`exlink.topology.requirement_error` measures it.
         max_iterations: SLSQP iteration budget.
         bounds: The design box; :data:`BOUNDS` by default.
 
@@ -368,16 +394,14 @@ def restore_feasibility(
     """
     from scipy.optimize import minimize
 
-    from .constants import DEFAULT_SPEC
-    from .cycle import PhaseError, find_phases
+    from .cycle import PhaseError
     from .fivebar import VARIABLE_NAMES, solve
+    from .topology import requirement_error
 
     start = SYNTHESISED if start is None else start
     box = BOUNDS if bounds is None else bounds
     lower = np.array([box[name][0] for name in VARIABLE_NAMES])
     upper = np.array([box[name][1] for name in VARIABLE_NAMES])
-    area = DEFAULT_SPEC.piston_area
-    dead = DEFAULT_SPEC.dead_volume
 
     def measure(vector: FloatArray) -> tuple[float, ...] | None:
         design = FiveBar.from_array(
@@ -385,14 +409,12 @@ def restore_feasibility(
         )
         try:
             motion = solve(design, samples=samples)
-            phases = find_phases(motion.lam)
+            error = requirement_error(motion.lam)
         except (AssemblyError, PhaseError):
             return None
-        ratio = 1.0 + phases.compression_stroke * area / dead
         return (
             motion.side_load_ratio,
-            phases.expansion_stroke,
-            ratio,
+            error,
             motion.closure,
             motion.reach,
             motion.transmission,
@@ -415,19 +437,19 @@ def restore_feasibility(
     def constraints(vector: FloatArray) -> FloatArray:
         got = cached(vector)
         if got is None:
-            return np.full(7, -1.0)
-        _side, stroke, ratio, closure, reach, transmission = got
+            return np.full(4, -1.0)
+        _side, error, closure, reach, transmission = got
         return np.array(
             [
-                band - (stroke - 74.0),
-                band + (stroke - 74.0),
-                band - (ratio - 16.0),
-                band + (ratio - 16.0),
-                # Keep clear of both ways a five-bar comes apart.  Without these
-                # the restoration walks straight onto the locking configuration,
-                # where the rod angle is small because the mechanism has stopped
-                # working: the first attempt came back with a design that closed
-                # on 360 angles and failed by 0.1 mm^2 on 1440.
+                # The *whole* requirement, not two of its five parts.  Holding
+                # only the expansion stroke and the compression ratio does not
+                # specify a four-stroke cycle, and this restoration proved it:
+                # asked for those two alone it dropped one top dead centre 47 mm
+                # below the other -- a motion find_phases still accepts, whose
+                # peak pressure then came out at 0.098 MPa instead of 5.5.
+                band - error,
+                # Clear of both ways a five-bar comes apart, and of the
+                # transmission-angle singularity it is otherwise drawn towards.
                 closure - ASSEMBLY_MARGIN,
                 reach - ASSEMBLY_MARGIN,
                 transmission - MIN_TRANSMISSION,
