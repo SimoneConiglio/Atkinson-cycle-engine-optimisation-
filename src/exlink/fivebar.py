@@ -19,10 +19,12 @@ one to a pin on the crankshaft -- driving the piston through a connecting rod:
                                |
                                S                the piston, on x = x_1
 
-Five moving members against the EX-link's seven, and four journals against
-seven, which is the whole reason it is worth pricing: a mechanism that meets the
-same kinematic specification with fewer parts should win on friction and on
-mass, and the question is whether it does once the loads are carried through.
+Five moving members against the EX-link's seven -- but **not** fewer journals,
+which is the first thing carrying it further reveals.  A pin where three links
+meet carries two bearings side by side, so the floating pin counts twice and the
+tally is O1, O2, P1, P2, F twice and S: seven, exactly the EX-link's.  The
+five-bar saves two *members* and no *joints*, so whatever it wins it wins on mass
+and not on friction.
 
 A warning the kinematics alone already gives.  The fit that found this mechanism
 was asked for a motion and nothing else, and it bought the motion with a 322 mm
@@ -482,9 +484,9 @@ MEMBERS: tuple[tuple[str, str, str, str], ...] = (
 """``(name, length attribute, start joint, end joint)`` for each link.
 
 Every body is one member here, where the EX-link's trigonal link is three.  That
-is the whole structural difference between the two mechanisms, and it is why this
-one is worth pricing: five moving members against seven, four journals against
-seven, and the same gear pair.
+is the structural difference between the two mechanisms: five moving members
+against seven, the same gear pair, the same prismatic guide -- and the same seven
+journals, because the floating pin carries two bearings rather than one.
 """
 
 #: Order of the unknowns in the equilibrium system.
@@ -518,7 +520,7 @@ def mass_properties(
     density: float,
     piston_mass: float,
     piston_length: float,
-    bore_ratio: float = 0.0,
+    bore_ratio: float | dict[str, float] = 0.0,
 ) -> FiveBarMassProperties:
     """Mass properties of the five links and the piston.
 
@@ -544,13 +546,12 @@ def mass_properties(
     for name, attribute, start, end in MEMBERS:
         length = abs(float(getattr(design, attribute)))
         diameter = float(diameters[name])
-        area = math.pi * diameter**2 / 4.0 * (1.0 - bore_ratio**2)
+        bore = bore_ratio[name] if isinstance(bore_ratio, dict) else bore_ratio
+        area = math.pi * diameter**2 / 4.0 * (1.0 - bore**2)
         mass = density * area * length
         member_mass[name] = mass
         body_com[name] = 0.5 * (joints[start] + joints[end])
-        body_inertia[name] = (
-            mass * (0.75 * diameter**2 * (1.0 + bore_ratio**2) + length**2) / 12.0
-        )
+        body_inertia[name] = mass * (0.75 * diameter**2 * (1.0 + bore**2) + length**2) / 12.0
 
     body_com["piston"] = kinematics.S + np.array([0.0, 0.5 * piston_length])
     body_inertia["piston"] = 0.0
@@ -814,4 +815,525 @@ def solve_loads(
         torque=solution[:, _INDEX["T"]],
         gas_force=np.asarray(gas_force, dtype=float),
         conditioning=float(np.max(np.linalg.cond(matrix))),
+    )
+
+
+#: Kind of each member, deciding its Euler end fixity and whether it may be bored.
+MEMBER_KINDS: tuple[str, ...] = ("cantilever", "link", "cantilever", "link", "link")
+
+MEMBER_NAMES: tuple[str, ...] = tuple(member[0] for member in MEMBERS)
+
+
+@dataclass(frozen=True)
+class FiveBarResult:
+    """A sized, loaded five-bar at one operating point."""
+
+    design: FiveBar
+    speed: float
+    """Crankshaft speed [rad/s]."""
+    kinematics: FiveBarKinematics
+    loads: FiveBarLoads
+    diameters: dict[str, float]
+    sizing: dict[str, object]
+    """``{member: MemberSizing}`` from :func:`exlink.sizing.size_from_arrays`."""
+    member_mass: dict[str, float]
+    """[tonne]"""
+    piston_mass: float
+    """[tonne]"""
+    indicated_work: float
+    """Work per cycle from the p-V loop [N.mm]."""
+    heat_release: float
+    """Heat added per cycle [N.mm]."""
+    peak_pressure: float
+    """Peak gauge pressure [MPa]."""
+    compression_ratio: float
+    expansion_stroke: float
+    compression_stroke: float
+    converged: bool
+
+    @property
+    def height(self) -> float:
+        """Envelope along the stroke [mm]."""
+        return float(np.max(self.kinematics.lam) - np.min(self.kinematics.lam)) + 2.0 * max(
+            self.design.q_1, self.design.q_2
+        )
+
+    @property
+    def width(self) -> float:
+        """Envelope across the stroke [mm].
+
+        The five-bar's footprint is set by how far apart its parts actually
+        travel, and the synthesised one is wide because its connecting rod lies
+        almost across the engine rather than along it.
+        """
+        xs = np.concatenate(
+            [
+                self.kinematics.P1[:, 0],
+                self.kinematics.P2[:, 0],
+                self.kinematics.F[:, 0],
+                self.kinematics.S[:, 0],
+            ]
+        )
+        return float(np.max(xs) - np.min(xs))
+
+
+def solve_sized(
+    design: FiveBar,
+    speed_rpm: float,
+    samples: int = 360,
+    material: object | None = None,
+    safety: object | None = None,
+    spec: object | None = None,
+    section: object | None = None,
+    max_iterations: int = 24,
+    tolerance: float = 1.0e-4,
+) -> FiveBarResult:
+    """Size the five members against their own loads, then report the mechanism.
+
+    A fixed point, as for the EX-link and the slider-crank: the members' masses
+    set the inertia loads, the inertia loads set the diameters, and the diameters
+    set the masses.  Every structural check is
+    :func:`exlink.sizing.size_from_arrays` -- the same yield, fatigue and
+    buckling model, called with this mechanism's member list -- because a
+    comparison between mechanisms is only a comparison of mechanisms if the
+    structural model is literally the same code.
+
+    Args:
+        design: The dimensions.
+        speed_rpm: Crankshaft speed [rev/min].
+        samples: Angles over one cycle.
+        material: Material; the study's steel by default.
+        safety: Design factors; the study's by default.
+        spec: Fixed engine data; the study's by default.
+        section: Cross-section shape; solid round bars by default.
+        max_iterations: Fixed-point iterations allowed.
+        tolerance: Convergence tolerance on the diameters [mm].
+
+    Returns:
+        The sized mechanism, its loads and its cycle.
+
+    Raises:
+        AssemblyError: If the linkage does not close.
+        exlink.cycle.PhaseError: If its motion is not a four-stroke one.
+    """
+    from . import cycle as cycle_module
+    from .constants import DEFAULT_SPEC
+    from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY
+    from .sections import SOLID, area_factor
+    from .sizing import (
+        END_FIXITY,
+        STATIONS,
+        internal_loads,
+        piston_mass_from_pressure,
+        size_from_arrays,
+    )
+
+    material = DEFAULT_MATERIAL if material is None else material
+    safety = DEFAULT_SAFETY if safety is None else safety
+    spec = DEFAULT_SPEC if spec is None else spec
+    section = SOLID if section is None else section
+
+    motion = solve(design, samples=samples)
+    thermo = cycle_module.solve(motion.lam, spec)
+    gas = np.asarray(thermo.piston_force, dtype=float)
+    peak_pressure = float(np.max(np.asarray(thermo.gauge_pressure)))
+    speed = speed_rpm * 2.0 * math.pi / 60.0
+
+    _crown, piston = piston_mass_from_pressure(peak_pressure, material, safety, spec)
+
+    bores = section.ratios(MEMBER_KINDS)
+    floor = section.minimum_diameter(MEMBER_KINDS)
+    hollow = area_factor(bores)
+    fixity = np.array([END_FIXITY[kind] for kind in MEMBER_KINDS])
+    lengths = np.array([abs(float(getattr(design, member[1]))) for member in MEMBERS])
+
+    joints = {
+        "O1": np.zeros_like(motion.P1),
+        "O2": np.zeros_like(motion.P1) + design.crank_centre,
+        "P1": motion.P1,
+        "P2": motion.P2,
+        "F": motion.F,
+        "S": motion.S,
+    }
+    # Each member is sized by the force at the end listed first, which is the
+    # loaded end: a crank throw is a cantilever rooted at its shaft.
+    loaded_end = {
+        "crank_1": ("P1", "O1", "P1", -1.0),
+        "rod_1": ("P1", "F", "P1", +1.0),
+        "crank_2": ("P2", "O2", "P2", -1.0),
+        "rod_2": ("P2", "F", "P2", +1.0),
+        "con_rod": ("F", "S", "F1", +1.0),
+    }
+
+    diameters = np.full(len(MEMBERS), 8.0)
+    converged = False
+    loads: FiveBarLoads | None = None
+    sized: dict[str, object] = {}
+    for _iteration in range(max_iterations):
+        current = dict(zip(MEMBER_NAMES, diameters.tolist(), strict=True))
+        properties = mass_properties(
+            motion,
+            design,
+            current,
+            material.density,
+            piston,
+            spec.piston_length,
+            bore_ratio=dict(zip(MEMBER_NAMES, bores.tolist(), strict=True)),
+        )
+        guess = {name: properties.member_mass[name] for name in MEMBER_NAMES}
+        loads = solve_loads(
+            motion,
+            design,
+            gas,
+            properties,
+            speed,
+            pressure_angle=spec.pressure_angle,
+            piston_length=spec.piston_length,
+        )
+        accelerations = _joint_accelerations(joints, speed)
+
+        axial = []
+        bending = []
+        for name in MEMBER_NAMES:
+            start, end, key, sign = loaded_end[name]
+            a, b = internal_loads(
+                joints[start],
+                joints[end],
+                sign * loads.reaction[key],
+                guess[name],
+                accelerations[start],
+                accelerations[end],
+                stations=STATIONS,
+            )
+            axial.append(a)
+            bending.append(b)
+
+        sized = size_from_arrays(
+            np.stack(axial),
+            np.stack(bending),
+            lengths,
+            material,
+            safety,
+            fixity=fixity,
+            names=MEMBER_NAMES,
+            ratios=bores,
+            floor=floor,
+        )
+        updated = np.array([sized[name].diameter for name in MEMBER_NAMES])  # type: ignore[attr-defined]
+        residual = float(np.max(np.abs(updated - diameters)))
+        diameters = updated
+        if residual <= tolerance:
+            converged = True
+            break
+
+    assert loads is not None
+    area = math.pi * diameters**2 / 4.0 * hollow
+    member_mass = {
+        name: float(material.density * area[i] * lengths[i])
+        for i, name in enumerate(MEMBER_NAMES)
+    }
+    heat = (
+        spec.dead_volume
+        * (thermo.p_combustion - thermo.p_compression_end)
+        / (spec.heat_capacity_ratio - 1.0)
+    )
+    return FiveBarResult(
+        design=design,
+        speed=speed,
+        kinematics=motion,
+        loads=loads,
+        diameters=dict(zip(MEMBER_NAMES, diameters.tolist(), strict=True)),
+        sizing=sized,
+        member_mass=member_mass,
+        piston_mass=piston,
+        indicated_work=loads.indicated_work,
+        heat_release=float(heat),
+        peak_pressure=peak_pressure,
+        compression_ratio=thermo.compression_ratio,
+        expansion_stroke=thermo.phases.expansion_stroke,
+        compression_stroke=thermo.phases.compression_stroke,
+        converged=converged,
+    )
+
+
+def _joint_accelerations(joints: dict[str, FloatArray], speed: float) -> dict[str, FloatArray]:
+    """Acceleration of every joint, in the half-speed shaft's angle."""
+    from .derivatives import spectral_derivative
+
+    scale = (speed / abs(CRANK_RATIO)) ** 2
+    out = {}
+    for name, points in joints.items():
+        out[name] = scale * np.stack(
+            [spectral_derivative(points[:, 0], 2), spectral_derivative(points[:, 1], 2)],
+            axis=-1,
+        )
+    return out
+
+
+#: Which two bodies meet at each journal, and so what rubs there.
+JOURNALS: tuple[tuple[str, str, str], ...] = (
+    ("O1", "ground", "crank_1"),
+    ("P1", "crank_1", "rod_1"),
+    ("F1", "rod_1", "con_rod"),
+    ("O2", "ground", "crank_2"),
+    ("P2", "crank_2", "rod_2"),
+    ("F2", "rod_2", "con_rod"),
+    ("S", "con_rod", "piston"),
+)
+"""``(reaction key, inner body, outer body)`` for each of the seven journals.
+
+The floating pin appears twice on purpose.  Three links meet there, which in
+metal is two bearings side by side on one pin, and each rubs at its own relative
+speed.  Counting it once would hand the five-bar a friction advantage it does not
+have.
+"""
+
+
+def friction_work(
+    result: FiveBarResult,
+    journal_friction: float | None = None,
+    piston_friction: float | None = None,
+    ring_tension: float | None = None,
+    mesh_efficiency: float | None = None,
+) -> dict[str, float]:
+    """Mechanical loss over one cycle [N.mm], itemised.
+
+    The same three mechanisms :mod:`exlink.friction` charges the EX-link for, at
+    the same coefficients: Coulomb friction at every journal through its own
+    relative rotation, Coulomb friction at the liner against the side load plus
+    the ring tension, and a flat efficiency across the gear mesh.
+
+    Returns:
+        ``{"bearings": ..., "piston": ..., "mesh": ..., "total": ...}``.
+    """
+    from .derivatives import ramp_derivative, spectral_derivative
+    from .friction import (
+        JOURNAL_FRICTION,
+        MESH_EFFICIENCY,
+        PISTON_FRICTION,
+        RING_TENSION,
+    )
+
+    journal_friction = JOURNAL_FRICTION if journal_friction is None else journal_friction
+    piston_friction = PISTON_FRICTION if piston_friction is None else piston_friction
+    ring_tension = RING_TENSION if ring_tension is None else ring_tension
+    mesh_efficiency = MESH_EFFICIENCY if mesh_efficiency is None else mesh_efficiency
+
+    loads = result.loads
+    angles = result.kinematics.theta
+    n = angles.size
+    step = 2.0 * math.pi / n
+
+    # Body rotation rates with respect to the half-speed shaft's angle.
+    rate = {
+        "ground": np.zeros(n),
+        "crank_1": np.ones(n),
+        "crank_2": np.full(n, CRANK_RATIO),
+        "piston": np.zeros(n),
+    }
+    for body in ("rod_1", "rod_2", "con_rod"):
+        rate[body] = ramp_derivative(loads.properties.body_angle[body], 1)
+
+    radius = {
+        "O1": 0.5 * result.diameters["crank_1"],
+        "P1": 0.5 * max(result.diameters["crank_1"], result.diameters["rod_1"]),
+        "F1": 0.5 * max(result.diameters["rod_1"], result.diameters["con_rod"]),
+        "O2": 0.5 * result.diameters["crank_2"],
+        "P2": 0.5 * max(result.diameters["crank_2"], result.diameters["rod_2"]),
+        "F2": 0.5 * max(result.diameters["rod_2"], result.diameters["con_rod"]),
+        "S": 0.5 * result.diameters["con_rod"],
+    }
+
+    bearings = 0.0
+    for key, inner, outer in JOURNALS:
+        slip = np.abs(rate[outer] - rate[inner])
+        force = np.linalg.norm(loads.reaction[key], axis=1)
+        bearings += journal_friction * radius[key] * float(np.sum(force * slip)) * step
+
+    slide = np.abs(spectral_derivative(result.kinematics.lam, 1))
+    normal = np.abs(loads.liner_force) + ring_tension
+    piston = piston_friction * float(np.sum(normal * slide)) * step
+
+    mesh = max(result.indicated_work, 0.0) * (1.0 - mesh_efficiency)
+    return {
+        "bearings": float(bearings),
+        "piston": float(piston),
+        "mesh": float(mesh),
+        "total": float(bearings + piston + mesh),
+    }
+
+
+def mass_budget(result: FiveBarResult, spec: object | None = None) -> object:
+    """The five-bar's engine mass, itemised on the EX-link's terms.
+
+    Every item comes from the same function :mod:`exlink.mass_budget` uses for the
+    EX-link -- journal sizing, bearings, crankcase, cylinder head, flywheel and
+    the gear pair -- so that the comparison is a comparison of mechanisms and not
+    of modelling conventions.  The flywheel is sized over one cycle, which is two
+    crankshaft revolutions, because this engine fires once per cycle exactly as
+    the EX-link does.
+    """
+    from .constants import DEFAULT_SPEC
+    from .derivatives import spectral_derivative
+    from .gears import size_pair
+    from .mass_budget import (
+        CASE_CLEARANCE,
+        FLYWHEEL_WEB_FACTOR,
+        SPEED_FLUCTUATION,
+        MassBudget,
+        bearing_mass,
+        crankcase_mass,
+        cylinder_mass,
+        flywheel_requirement,
+        shaft_diameter,
+    )
+    from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY
+
+    spec = DEFAULT_SPEC if spec is None else spec
+    material, safety = DEFAULT_MATERIAL, DEFAULT_SAFETY
+    loads = result.loads
+
+    peak_reaction = loads.peak_bearing_load
+    peak_torque = float(np.max(np.abs(loads.torque)))
+    overhang = max(result.design.q_1, result.design.q_2)
+    journal = shaft_diameter(peak_reaction, peak_torque, overhang, material, safety)
+
+    case_depth = spec.bore + 2.0 * (0.55 * journal + 3.0) + 4.0 * CASE_CLEARANCE
+    shaft_length = case_depth + 2.0 * (0.55 * journal + 3.0)
+    # Two shafts, as the EX-link has.
+    shaft = 2.0 * material.density * math.pi * journal**2 / 4.0 * shaft_length
+    bearings = bearing_mass(journal, 4, material.density)
+
+    pair = size_pair(
+        result.design.I,
+        float(np.max(np.abs(loads.gear_force))),
+        shaft_bore=journal,
+        material=material,
+        safety=safety,
+    )
+
+    torque_gas = -result.loads.gas_force * spectral_derivative(result.kinematics.lam, 1)
+    required, _swing = flywheel_requirement(
+        torque_gas, result.speed, SPEED_FLUCTUATION, span=2.0 * math.pi
+    )
+    inherent = (
+        result.member_mass["crank_1"] * result.design.q_1**2 / 3.0
+        + result.member_mass["crank_2"] * result.design.q_2**2 / 3.0
+    )
+    deficit = max(required - inherent, 0.0)
+    flywheel_radius = min(max(0.45 * result.width, 30.0), 150.0)
+    flywheel = FLYWHEEL_WEB_FACTOR * deficit / flywheel_radius**2
+
+    case, _wall = crankcase_mass(result.height, result.width, case_depth, peak_reaction)
+    stroke = float(np.ptp(result.kinematics.lam))
+    cylinder = cylinder_mass(stroke, result.peak_pressure, spec, material, safety)
+
+    items = {
+        "linkage": float(sum(result.member_mass.values())),
+        "piston": float(result.piston_mass),
+        "gears": float(pair.mass),
+        "shafts": float(shaft),
+        "bearings": float(bearings),
+        "crankcase": float(case),
+        "cylinder_head": float(cylinder),
+        "flywheel": float(flywheel),
+    }
+    return MassBudget(
+        items=items,
+        gears=pair,
+        shaft_diameter=journal,
+        flywheel_inertia=deficit,
+        flywheel_radius=flywheel_radius,
+        required_inertia=required,
+        inherent_inertia=inherent,
+    )
+
+
+@dataclass(frozen=True)
+class FiveBarPerformance:
+    """What the five-bar delivers, in the terms the study's objective is written in."""
+
+    result: FiveBarResult
+    friction: dict[str, float]
+    budget: object
+    """A :class:`exlink.mass_budget.MassBudget`."""
+    engine_mass: float
+    """[kg]"""
+    indicated_efficiency: float
+    mechanical_efficiency: float
+    brake_efficiency: float
+    brake_power: float
+    """[W]"""
+    range_km_per_litre: float
+
+    @property
+    def side_load_ratio(self) -> float:
+        """Worst ``tan`` of the connecting-rod angle -- the study's own measure."""
+        return self.result.kinematics.side_load_ratio
+
+
+def evaluate(
+    design: FiveBar,
+    speed_rpm: float,
+    samples: int = 360,
+    vehicle: object | None = None,
+    spec: object | None = None,
+    section: object | None = None,
+) -> FiveBarPerformance:
+    """Carry the five-bar all the way to range, on the EX-link's models.
+
+    Nothing in this chain is written twice: the cycle is :mod:`exlink.cycle`, the
+    structural sizing :mod:`exlink.sizing`, the friction coefficients
+    :mod:`exlink.friction`, the mass items :mod:`exlink.mass_budget` and the
+    burn-and-coast strategy :func:`exlink.vehicle.best_strategy`.  Only the
+    kinematics and the equilibrium are this mechanism's own, which is exactly the
+    split that makes the comparison mean something.
+
+    Args:
+        design: The dimensions.
+        speed_rpm: Crankshaft speed [rev/min].
+        samples: Angles over one cycle.
+        vehicle: The car; the study's Eco-marathon prototype by default.
+        spec: Fixed engine data.
+        section: Cross-section shape.
+
+    Returns:
+        Efficiencies, mass, power and range.
+
+    Raises:
+        AssemblyError: If the linkage does not close.
+        exlink.cycle.PhaseError: If its motion is not a four-stroke one.
+    """
+    from .vehicle import Vehicle, best_strategy, brake_efficiency
+
+    vehicle = Vehicle() if vehicle is None else vehicle
+    result = solve_sized(design, speed_rpm, samples=samples, spec=spec, section=section)
+    friction = friction_work(result)
+    budget = mass_budget(result, spec=spec)
+
+    brake_work = result.indicated_work - friction["total"]
+    indicated = (
+        result.indicated_work / result.heat_release if result.heat_release > 0.0 else 0.0
+    )
+    mechanical = brake_work / result.indicated_work if result.indicated_work > 0.0 else 0.0
+    brake = brake_efficiency(brake_work, result.heat_release)
+
+    # One cycle per revolution of the half-speed shaft, so the firing rate is the
+    # crankshaft speed halved -- the same rate the EX-link fires at.
+    cycles_per_second = speed_rpm / 60.0 / abs(CRANK_RATIO)
+    # N.mm per cycle into watts.
+    power = brake_work * cycles_per_second * 1.0e-3
+    mass_kg = float(sum(budget.items.values())) * 1.0e3  # type: ignore[attr-defined]
+
+    reach = best_strategy(vehicle, mass_kg, max(power, 0.0), brake)
+    return FiveBarPerformance(
+        result=result,
+        friction=friction,
+        budget=budget,
+        engine_mass=mass_kg,
+        indicated_efficiency=indicated,
+        mechanical_efficiency=mechanical,
+        brake_efficiency=brake,
+        brake_power=power,
+        range_km_per_litre=float(reach.km_per_litre),
     )

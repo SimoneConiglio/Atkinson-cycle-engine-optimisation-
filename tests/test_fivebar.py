@@ -151,3 +151,59 @@ def test_the_liner_load_is_as_bad_as_the_geometry_promised() -> None:
     loads = _loaded(3000.0)
     assert float(np.max(np.abs(loads.liner_force))) > 3000.0, "thousands of newtons"
     assert loads.conditioning < 1.0e8, "the system is still solvable"
+
+
+def test_the_five_bar_saves_members_but_not_journals() -> None:
+    """Seven journals, exactly the EX-link's, because the floating pin carries two.
+
+    The naive count says a five-member mechanism must rub less than a
+    seven-member one.  It does not: three links meet at the floating pin, which
+    in metal is two bearings side by side, each turning at its own relative
+    speed.  Counting that pin once would hand the five-bar a friction advantage
+    it has not got.
+    """
+    from exlink.dynamics import MEMBERS as EXLINK_MEMBERS
+
+    assert len(fivebar.MEMBERS) == 5
+    assert len(EXLINK_MEMBERS) == 7
+    assert len(fivebar.JOURNALS) == 7
+    assert sum(1 for key, _a, _b in fivebar.JOURNALS if key.startswith("F")) == 2
+
+
+def test_the_chain_to_range_is_internally_consistent() -> None:
+    """Brake efficiency is the product of the two it is built from."""
+    performance = fivebar.evaluate(SYNTHESISED, 1000.0, samples=360)
+    assert performance.result.converged
+    assert performance.brake_efficiency == pytest.approx(
+        performance.indicated_efficiency * performance.mechanical_efficiency, rel=1.0e-9
+    )
+    assert performance.range_km_per_litre > 0.0
+    assert performance.engine_mass > 0.0
+
+
+def test_the_side_load_is_where_the_five_bar_loses() -> None:
+    """Friction at the liner, not at the bearings, is what eats this design.
+
+    The reason to carry a synthesised mechanism through to physics rather than
+    stopping at its motion: the piston rubs away most of the indicated work,
+    because the connecting rod the fit chose runs 60 degrees off the cylinder.
+    """
+    result = fivebar.solve_sized(SYNTHESISED, 1000.0, samples=360)
+    losses = fivebar.friction_work(result)
+    assert losses["piston"] > losses["bearings"], "the liner dominates"
+    assert losses["piston"] > 0.5 * result.indicated_work, "over half the output"
+
+
+def test_the_mass_spiral_diverges_above_about_a_thousand_rpm() -> None:
+    """A physical result, reported rather than hidden behind a converged flag.
+
+    Heavier members carry more inertia, which needs heavier members.  For this
+    geometry the loop closes below roughly 1000 rpm and runs away above it, so the
+    mechanism as synthesised cannot be built for the study's own 2000 rpm
+    operating point.  The flag says so instead of returning a fixed point that is
+    not one.
+    """
+    assert fivebar.solve_sized(SYNTHESISED, 1000.0, samples=360).converged
+    fast = fivebar.solve_sized(SYNTHESISED, 2000.0, samples=360)
+    assert not fast.converged
+    assert fast.diameters["con_rod"] > 2.0 * 19.85, "it is running away, not merely rough"
