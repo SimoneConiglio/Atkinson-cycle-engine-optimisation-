@@ -99,9 +99,20 @@ OUTPUT_NAMES: tuple[str, ...] = (
     "converged",
 )
 
-#: What an unanalysable design scores.
-RANGE_UNAVAILABLE: float = 1.0e4
-CYCLE_PENALTY: float = 1.0e5
+#: Kilometres per litre the objective is divided by, so that it is of order one.
+RANGE_SCALE: float = 1000.0
+"""Scaling, and it is not cosmetic.
+
+SLSQP builds a quadratic subproblem from the objective and the constraints
+together.  Unscaled, this objective runs to 1e5 while the constraints it must
+respect are tenths of a millimetre, and the solve duly walked away from a cycle
+error of 0.5 mm to one of 39.8 mm in exchange for a range worse than the one it
+started with.  Dividing by a thousand puts both on the same footing.
+"""
+
+#: What an unanalysable design scores, on the scaled objective.
+RANGE_UNAVAILABLE: float = 10.0
+CYCLE_PENALTY: float = 100.0
 
 #: Largest side-load ratio a design may carry, the EX-link's own constraint.
 MIN_TRANSMISSION: float = 0.50
@@ -214,14 +225,14 @@ def analyse(
         # A mass spiral that never closed is not a structure.  Lighter designs are
         # the ones that close, so the mass is the tie-break that points the way
         # out -- scaled down so it cannot outweigh the rung itself.
-        objective = RANGE_UNAVAILABLE + 0.1 * performance.engine_mass
+        objective = RANGE_UNAVAILABLE + 1.0e-3 * performance.engine_mass
     elif reach <= 0.0:
         # It sizes, but friction eats more than the gas delivers.  The *signed*
         # brake work says how close it is to delivering anything at all; the
         # clamped efficiency is flat here and would stall the search.
-        objective = 0.5 * RANGE_UNAVAILABLE - 1.0e-3 * performance.brake_work
+        objective = 0.5 * RANGE_UNAVAILABLE - 1.0e-6 * performance.brake_work
     else:
-        objective = -reach
+        objective = -reach / RANGE_SCALE
 
     return {
         "neg_range": float(objective),
@@ -246,7 +257,7 @@ def maximise_range(
     speed_rpm: float = 2000.0,
     samples: int = 240,
     max_iterations: int = 120,
-    band: float = 0.5,
+    band: float = 0.8,
     bounds: dict[str, tuple[float, float]] | None = None,
     side_load_limit: float | None = SIDE_LOAD_LIMIT,
 ) -> FiveBarOutcome:
