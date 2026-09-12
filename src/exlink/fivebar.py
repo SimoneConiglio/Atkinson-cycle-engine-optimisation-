@@ -211,6 +211,36 @@ class FiveBarKinematics:
     """The piston, ``(n, 2)`` [mm]."""
     lam: FloatArray
     """Piston height ``lambda(theta)`` [mm] -- the ordinate of ``S``."""
+    closure: float
+    """Smallest half-chord between the two rod circles over the cycle [mm].
+
+    How far the mechanism stays from the configuration where the two rods lie
+    along one line, which is where it locks.  A restoration phase asked only to
+    point the connecting rod down the bore will walk straight into that
+    singularity -- the rod angle is small there and the mechanism does not work --
+    so this is the quantity that has to be held away from zero.
+    """
+    reach: float
+    """Smallest clearance the connecting rod has to the cylinder axis [mm].
+
+    The other way a five-bar comes apart: the rod is too short to reach the bore
+    at some angle.
+    """
+    transmission: float
+    """Worst ``|sin mu|`` at the floating pin over the cycle, dimensionless.
+
+    Alt's transmission angle, for the dyad that drives the floating pin: the
+    angle at ``F`` between the two rods.  As it closes on zero or on pi the two
+    rods line up, the pin's effective lever arm vanishes, and the force needed to
+    drive it grows without bound.
+
+    It is the quantity §5.1 of this study is about, and the five-bar reproduces
+    that finding exactly.  A restoration phase asked only to point the connecting
+    rod down the bore drove this to its floor and came back with a design whose
+    side load was a model 0.045 and whose main bearings carried 2.34 MN -- the
+    quasi-static optimum sitting on its own singularity, in a topology the
+    original finding was not drawn from.
+    """
 
     @property
     def rod_angle(self) -> FloatArray:
@@ -298,7 +328,25 @@ def solve(
     piston_height = floating[:, 1] + design.piston_branch * np.sqrt(reach_squared)
     piston = np.stack([np.full(samples, design.x_1), piston_height], axis=1)
 
-    return FiveBarKinematics(theta=theta, P1=p1, P2=p2, F=floating, S=piston, lam=piston_height)
+    return FiveBarKinematics(
+        theta=theta,
+        P1=p1,
+        P2=p2,
+        F=floating,
+        S=piston,
+        lam=piston_height,
+        closure=float(np.min(height)),
+        reach=float(np.min(np.sqrt(reach_squared))),
+        transmission=float(
+            np.min(
+                np.abs(
+                    (floating[:, 0] - p1[:, 0]) * (floating[:, 1] - p2[:, 1])
+                    - (floating[:, 1] - p1[:, 1]) * (floating[:, 0] - p2[:, 0])
+                )
+            )
+            / (design.L_1 * design.L_2)
+        ),
+    )
 
 
 def from_topology(x: ArrayLike, layout: object | None = None) -> tuple[FiveBar, float]:
@@ -1264,6 +1312,14 @@ class FiveBarPerformance:
     brake_efficiency: float
     brake_power: float
     """[W]"""
+    brake_work: float
+    """Work leaving the crankshaft per cycle [N.mm], *signed*.
+
+    Negative when friction exceeds the indicated work, which happens often on
+    this mechanism and is exactly the region an optimizer has to cross.  The
+    clamped brake efficiency cannot express it, so the signed work is carried
+    separately to give a search something to descend.
+    """
     range_km_per_litre: float
 
     @property
@@ -1335,5 +1391,6 @@ def evaluate(
         mechanical_efficiency=mechanical,
         brake_efficiency=brake,
         brake_power=power,
+        brake_work=float(brake_work),
         range_km_per_litre=float(reach.km_per_litre),
     )
