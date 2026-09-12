@@ -1176,3 +1176,128 @@ on the one architecture whose answer is known cannot be trusted to order the
 others, so nothing here says the five-bar is *better* than EXlink. What it says
 is that **both meet the requirement, and the domain contains more than one
 answer** — which is the question §5.8 could not answer and got wrong.
+
+## 5.10 Pricing the alternative: what the five-bar is actually worth
+
+§5.9 found a mechanism that meets the specification and is not EXlink. A
+specification is not an engine, so this section carries it through the rest of
+the study's models — the cycle of §3.3, the yield, fatigue and buckling sizing of
+§4.4, the Coulomb friction of §3.4, the mass budget of §5.4 and the
+burn-and-coast strategy of §3.5 — and asks what it delivers.
+
+Only the kinematics and the equilibrium are the five-bar's own. Every other model
+is the *same code* the EX-link goes through, which is what makes the comparison a
+comparison of mechanisms rather than of modelling conventions; it is the discipline
+{mod}`exlink.slidercrank` established for the Otto baseline, applied to a third
+topology.
+
+### The mechanism, and one correction to the count
+
+Once its dead corner is removed the winner of §5.9 is a **geared five-bar**: a
+floating pin held by two rods, one to a pin on the half-speed shaft and one to a
+pin on the crankshaft, driving the piston through a connecting rod. Its closed
+form is two circle intersections, and it agrees with the penalised spring model
+that found it to **1.4 μm** — that model's own elastic compliance — which is the
+check that says the mechanism written down is the mechanism synthesised.
+
+It has **five moving members against the EX-link's seven, and the same seven
+journals.** The naive count says otherwise and the naive count is wrong: three
+links meet at the floating pin, which in metal is two bearings side by side, each
+turning at its own relative speed. So whatever this topology wins, it wins on
+mass and not on friction.
+
+### As synthesised, it is indefensible
+
+| | EXlink | five-bar, as synthesised |
+|---|---|---|
+| side-load ratio | 0.018 | **1.774** |
+| transmission angle $\lvert\sin\mu\rvert$ | — | **0.378** (Alt's limit is 0.5) |
+| connecting rod | 63 mm | **322 mm** |
+| brake efficiency | 0.251 | 0.152 |
+| range | 3395 km/L | 1283 km/L at 1000 rpm |
+| sizing at 2000 rpm | converges | **diverges** |
+
+Piston friction alone takes 9385 of its 15730 N·mm of indicated work — over half
+the output rubbed away by a rod running 60° off the cylinder axis. And its sizing
+fixed point, which couples member masses to inertia loads to diameters and back,
+closes only below about 1000 rpm: at 2000 it reaches a 45 mm connecting rod, at
+3000 a 126 mm one, and the mechanism cannot be built for the study's own
+operating point.
+
+None of that is a property of the topology. The precision-point fit was asked for
+a motion and charged for nothing else, so it spent nine degrees of freedom on the
+motion alone. **A synthesis buys its objective with whatever it is not charged
+for**, and what it was not charged for here is the entire mechanical design.
+
+### Given the nine variables back, it is redeemable — and still loses
+
+So the geometry was re-optimised, and the first attempts are worth recording
+because each failed for a reason that is about the problem rather than the solver.
+
+**Two constraints do not specify a four-stroke engine.** Held to the expansion
+stroke and the compression ratio — the two the EX-link is solved under — the
+search dropped one top dead centre **46.7 mm** below the other. That motion still
+passes {func}`exlink.cycle.find_phases`, still reports a 73.95 mm expansion stroke
+and a compression ratio of 15.95, and has a peak gauge pressure of 0.13 MPa where
+it should be 5.5. The EX-link's formulation needs no more because its topology
+makes the two top dead centres level as a matter of geometry; a five-bar's does
+not. §5.9's whole precision-point measure has to be carried in as a constraint.
+
+**And minimising the side load walks the mechanism onto its own singularity.**
+Asked to align the connecting rod, the search returned a design with a side-load
+ratio of 0.045, every stroke met — and **2.34 MN** on its main journals, a 250 mm
+connecting rod and a 535 kg engine. Its two rods had lined up, so the floating pin
+had no lever arm left. That is §5.1's central finding reproducing itself in a
+topology it was not drawn from, and it is what Alt's transmission angle is for:
+constrained to $\lvert\sin\mu\rvert \ge 0.5$, the same search returns a mechanism.
+
+With both repairs, at the study's own operating point — 2000 rev/min at the
+output, one firing per cycle, the same car:
+
+| | EXlink | best five-bar found |
+|---|---|---|
+| indicated efficiency | 0.4802 | **0.4790** |
+| mechanical efficiency | **0.8654** | **0.3471** |
+| brake efficiency | 0.4155 | 0.1662 |
+| engine mass | 12.86 kg | **4.24 kg** |
+| side-load ratio | 0.018 | 1.461 |
+| **range** | **3396 km/L** | **1408 km/L** |
+
+**The thermodynamics are identical and the mechanics are not.** Indicated
+efficiency agrees to a part in four hundred — it must, because both mechanisms
+meet the same cycle specification, and that is the clearest possible statement
+that §5.9's synthesis did its job. The five-bar is also three times lighter, which
+on a mass-sensitive objective ought to be decisive. It loses anyway, by a factor
+of 2.4, because it rubs away **65 % of its indicated work against 13.5 %** for the
+EX-link. One number explains all of it: a side-load ratio of 1.461 against 0.018.
+
+### Why that number will not come down, and what is left uncertain
+
+The side load and the cycle are in direct conflict for this topology. With the
+cycle held, the best of fifty restoration starts reaches 1.46; drop the cycle
+constraint and the same code reaches 0.045. Raising the connecting rod's bound
+from 340 mm to 2000 mm changes nothing — the search does not use the extra length
+— so the floor is not an artefact of the box. The geometric reason is visible in
+the mechanism: the floating pin has to swing widely to produce two unequal strokes
+per revolution, and a widely swinging pin drives a piston through an oblique rod
+unless something else absorbs the sideways travel. EXlink's trigonal link is that
+something.
+
+Two limits on this conclusion, stated rather than buried.
+
+**The top-level range optimization does not converge.** The objective is a penalty
+ladder over a feasible set whose boundary is not smooth — a mechanism stops being
+one at an assembly limit, and the requirement is read off turning points that
+switch — and SLSQP on finite differences walks out of it: the first solve traded a
+0.5 mm cycle error for a 39.8 mm one and a worse range, and after scaling it
+reached a design that cannot be analysed at all. The number above comes from a
+multistart over the *kinematic* restoration, each survivor then priced through the
+full analysis. That converges and is honest, but it searches a smaller space than
+the full problem does, so **1408 km/L is a lower bound on this topology, not its
+optimum.**
+
+**And it is one topology of three that met the specification.** §5.9 found the
+geared five-bar, an EX-link variant with its shafts exchanged, and EX-link itself.
+Only the first has been priced. The variant scoring 0.830 mm keeps a trigonal
+link, so the argument above does not obviously apply to it, and it is the obvious
+next thing to carry through.
