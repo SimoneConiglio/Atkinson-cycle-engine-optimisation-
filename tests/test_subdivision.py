@@ -359,3 +359,90 @@ def test_the_range_problem_keeps_its_coupling() -> None:
     space = scenario.formulation.sub_problem_scenario_adapter.scenario.design_space
     assert "I" not in space
     assert "I_normalized" not in space
+
+
+@pytest.mark.parametrize("problem", ["efficiency", "range"])
+def test_no_constraint_is_named_anything_but_a_discipline_output(problem) -> None:
+    """The invariant the Benders adapter imposes, on both problems.
+
+    ``MDOScenarioAdapterBenders._compute_jacobian`` differentiates every
+    sub-problem constraint by looking its **name** up among the discipline
+    outputs. A constraint GEMSEO renamed -- ``constraint_name=`` for a band,
+    or the ``-`` prefix ``positive=True`` produces -- is not an output of
+    anything, so it raises ``KeyError``.
+
+    The failure does not appear until the master linearises the adapter, which
+    a one-iteration run never reaches, so it has to be pinned structurally.
+    """
+    from exlink.subdivision import (
+        build_subdivided_range_scenario,
+        build_subdivided_scenario,
+    )
+
+    if problem == "efficiency":
+        scenario = build_subdivided_scenario(GRID, samples=SAMPLES, restoring=False)
+    else:
+        scenario = build_subdivided_range_scenario(
+            {"q_1": 2, "theta_f": 2}, samples=SAMPLES, restoring=False
+        )
+
+    sub_scenario = scenario.formulation.sub_problem_scenario_adapter.scenario
+    outputs: set[str] = set()
+    stack = list(sub_scenario.disciplines)
+    while stack:
+        discipline = stack.pop()
+        outputs.update(discipline.io.output_grammar)
+        stack.extend(getattr(discipline, "disciplines", ()))
+
+    names = sub_scenario.formulation.optimization_problem.constraints.get_names()
+    assert names
+    unknown = [name for name in names if name not in outputs]
+    assert not unknown, f"constraints the adapter cannot differentiate: {unknown}"
+
+
+def test_the_range_margins_arrive_already_negated() -> None:
+    """``runs_margin >= 0`` has to reach the problem as ``runs_violation <= 0``."""
+    from gemseo.core.chains.chain import MDOChain
+
+    from exlink.disciplines import ExlinkDiscipline
+    from exlink.reference import PUBLISHED_DESIGN
+    from exlink.scenarios import RANGE_INEQUALITY_OUTPUTS
+    from exlink.subdivision import _negated_disciplines
+
+    _, names = _negated_disciplines(RANGE_INEQUALITY_OUTPUTS)
+    assert names == ("runs_violation", "gear_violation")
+
+    # The sign flip itself, on a discipline cheap enough to check directly.
+    chain = MDOChain([
+        ExlinkDiscipline(samples=SAMPLES),
+        *_negated_disciplines(("tdc_gap_margin",))[0],
+    ])
+    output = chain.execute(PUBLISHED_DESIGN.to_mapping())
+    assert float(np.ravel(output["tdc_gap_violation"])[0]) == pytest.approx(
+        -float(np.ravel(output["tdc_gap_margin"])[0])
+    )
+
+
+def test_the_master_can_linearise_the_range_adapter() -> None:
+    """The run that actually exercised the ``KeyError``, at its smallest.
+
+    Two master iterations over two boxes is enough to reach the adapter's
+    Jacobian, which is where a renamed constraint fails; a single iteration is
+    not, which is how this went unnoticed.
+    """
+    from gemseo_box_subdivision import BoxSubdivisionSettings
+
+    from exlink.subdivision import build_subdivided_range_scenario
+
+    scenario = build_subdivided_range_scenario(
+        {"q_1": 2, "theta_f": 2},
+        samples=SAMPLES,
+        seed=0,
+        probes=32,
+        restarts=1,
+        settings=BoxSubdivisionSettings(
+            convexity_margin=200.0, max_iter=3, sub_problem_max_iter=2
+        ),
+    )
+    scenario.execute()
+    assert type(scenario.formulation.sub_problem_scenario_adapter).starts

@@ -728,6 +728,36 @@ def _relaxed_equality_disciplines() -> tuple[list[Discipline], tuple[str, ...]]:
     return disciplines, tuple(names)
 
 
+def _negated_disciplines(
+    output_names: Sequence[str],
+) -> tuple[list[Discipline], tuple[str, ...]]:
+    """One discipline per constraint written the wrong way round.
+
+    ``runs_margin`` and ``gear_margin`` are *margins*: positive means the
+    engine runs and the mesh fits, so they are attached with ``positive=True``.
+    GEMSEO implements that by negating the function and naming the constraint
+    ``-runs_margin``, and the Benders adapter then looks that name up among the
+    discipline outputs and raises ``KeyError`` on the first linearisation --
+    the same limitation the relaxed equalities hit, reached by a different
+    route, and it does not appear until the master linearises the adapter, so
+    a short run does not show it.
+
+    Negating them in a discipline instead gives a violation, ``<= 0`` like
+    every other constraint, under a name the adapter can find.
+    """
+    from gemseo.disciplines.linear_combination import LinearCombination
+
+    disciplines: list[Discipline] = []
+    names: list[str] = []
+    for name in output_names:
+        violation = name.removesuffix("_margin") + "_violation"
+        disciplines.append(
+            LinearCombination([name], violation, input_coefficients={name: -1.0})
+        )
+        names.append(violation)
+    return disciplines, tuple(names)
+
+
 def build_subdivided_scenario(
     n_subdivisions: Mapping[str, int],
     bounds: Bounds = GLOBAL_BOUNDS,
@@ -1167,6 +1197,45 @@ def format_subdivision(outcome: SubdivisionOutcome, title: str = "box subdivisio
     return "\n".join(lines)
 
 
+def _mda_ignoring_its_own_couplings(mda: Any) -> Any:
+    """Stop an MDA inside a chain from being differentiated w.r.t. its couplings.
+
+    ``MDOChain`` treats every input no earlier discipline produces as an input
+    of the chain, and an MDA both consumes and produces its couplings, so
+    ``diameters`` is one.  The chain then asks the MDA to differentiate with
+    respect to it, and the Jacobian assembly refuses outright::
+
+        ValueError: Variable diameters is both a coupling and a design variable
+
+    Dropping it is not a workaround, it is the right derivative.  The coupling
+    enters the MDA as an initial guess and leaves it converged, and a converged
+    fixed point does not depend on where the iteration started, so the
+    derivative with respect to it is zero.  Under ``MDF`` the formulation knows
+    that and never asks; inside a chain nothing does, so the MDA has to say so
+    itself.
+
+    Args:
+        mda: The MDA, which is modified in place.
+
+    Returns:
+        The same MDA, differentiated with respect to design variables only.
+    """
+    couplings = frozenset(mda.coupling_structure.all_couplings)
+
+    # The MDA's class is only known at run time -- it is whichever one
+    # ``create_mda`` built -- so the base is dynamic by construction.
+    class CoupledBlock(type(mda)):  # type: ignore[misc]
+        """The MDA as one block of a chain, with its couplings internal."""
+
+        def add_differentiated_inputs(self, input_names: Sequence[str] = ()) -> None:
+            super().add_differentiated_inputs([
+                name for name in input_names if name not in couplings
+            ])
+
+    mda.__class__ = CoupledBlock
+    return mda
+
+
 def build_subdivided_range_scenario(
     n_subdivisions: Mapping[str, int],
     bounds: Bounds = GLOBAL_BOUNDS,
@@ -1295,7 +1364,7 @@ def build_subdivided_range_scenario(
 
     geometry = ExlinkDiscipline(samples=crank_samples, spec=spec, targets=targets)
     geometry.set_cache(geometry.CacheType.MEMORY_FULL)
-    mda = create_mda(
+    mda = _mda_ignoring_its_own_couplings(create_mda(
         DEFAULT_MDA if mda_name is None else mda_name,
         [
             DynamicsDiscipline(
@@ -1313,8 +1382,9 @@ def build_subdivided_range_scenario(
             ),
         ],
         **{**DEFAULT_MDA_SETTINGS, **(mda_settings or {})},
-    )
+    ))
     sides, side_names = _relaxed_equality_disciplines()
+    negated, negated_names = _negated_disciplines(RANGE_INEQUALITY_OUTPUTS)
     disciplines: list[Discipline] = [
         geometry,
         *sides,
@@ -1330,6 +1400,7 @@ def build_subdivided_range_scenario(
             safety=the_safety,
             spec=spec,
         ),
+        *negated,
     ]
     # ``I`` leaves the design space, so every discipline has to be told the
     # value the gear pair pinned it at; they would otherwise fall back to the
@@ -1370,12 +1441,16 @@ def build_subdivided_range_scenario(
     )
     # Two sign conventions meet here, exactly as in ``build_range_scenario``:
     # the coupled margins are violations and the range margins are margins.
-    for name in (*INEQUALITY_OUTPUTS, *side_names, *COUPLED_INEQUALITY_OUTPUTS):
+    # Unlike there, the second pair cannot be attached with ``positive=True``
+    # -- see :func:`_negated_disciplines` -- so they arrive already negated and
+    # every constraint of this problem is attached the same way.
+    for name in (
+        *INEQUALITY_OUTPUTS,
+        *side_names,
+        *COUPLED_INEQUALITY_OUTPUTS,
+        *negated_names,
+    ):
         scenario.formulation.add_constraint(
             name, constraint_type="ineq", main_level=main_level
-        )
-    for name in RANGE_INEQUALITY_OUTPUTS:
-        scenario.formulation.add_constraint(
-            name, constraint_type="ineq", positive=True, main_level=main_level
         )
     return scenario
