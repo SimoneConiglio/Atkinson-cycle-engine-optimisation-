@@ -200,6 +200,21 @@ the commitment, or restarts built near mechanisms that already balance the two
 harmonics. Twelve bars, ten bodies and four starts is small next to the published
 spring-connected studies.
 
+*Give a global method a design space it can stand in.* §5.11 applies the
+box-subdivision outer approximation to the geometric problem, and the obstacle it
+hits is not the multimodality the method targets: 94 % of the design box has no
+value at all, and a method that starts each sub-problem at the center of a box
+finds nothing there. A restoration per box repairs that and the method runs, at
+sixty to a hundred and sixty times the cost of the local solve it ties. Two
+specific things would change the answer, and neither is a setting. A box start
+that finds the **best** feasible point of a box rather than the nearest interior
+one: on the one box holding a better design than the study's, exactly one of
+sixty iterates lands inside the 0.05 mm band, so which box "has" a design is
+currently decided by chance. And a master whose **feasibility** cuts are as
+relaxable as its objective cuts: with most boxes infeasible, those cuts are what
+steers the search, and the convexity margin — the method's headline tuning
+decision — measurably does nothing here.
+
 *Then reach past the motion.* A kinematic target produces a candidate, and only
 the range chain of §3.3 decides whether a candidate beats 3395 km/L. The
 top-dead-centre gap that §5.2 shows governs this mechanism is a functional of the

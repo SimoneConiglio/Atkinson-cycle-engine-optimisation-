@@ -49,6 +49,9 @@ moea = ["gemseo-pymoo>=2.0"]
 # The Benders formulation and the bi-level outer-approximation master, for the
 # mixed-integer gear choice in ``exlink.minlp``.
 minlp = ["gemseo-bilevel-outer-approximation>=0.1"]
+# The box-subdivision outer approximation, for the global search in
+# ``exlink.subdivision``.  It pulls in the bi-level plugin above.
+subdivision = ["gemseo-box-subdivision>=0.2"]
 # Sampling and Taylor-polynomial uncertainty estimators, for the reliability
 # reference in ``exlink.robustness``.
 uq = ["gemseo-umdo>=4.0"]
@@ -65,7 +68,7 @@ docs = [
     "myst-parser>=2.0",
     "sphinxcontrib-bibtex>=2.6",
 ]
-all = ["exlink-opt[moea,minlp,uq,dev,docs]"]
+all = ["exlink-opt[moea,minlp,subdivision,uq,dev,docs]"]
 
 [project.urls]
 Homepage = "https://github.com/SimoneConiglio/Atkinson-cycle-engine-optimisation-"

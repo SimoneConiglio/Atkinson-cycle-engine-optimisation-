@@ -1301,3 +1301,154 @@ geared five-bar, an EX-link variant with its shafts exchanged, and EX-link itsel
 Only the first has been priced. The variant scoring 0.830 mm keeps a trigonal
 link, so the argument above does not obviously apply to it, and it is the obvious
 next thing to carry through.
+
+## 5.11 The design box cut into boxes: box subdivision on this problem
+
+Every search in this study is local. §4.2's answer is one SLSQP solve from the
+refined reference; §4.6's multistart perturbs that reference and projects the
+perturbation back onto the equality manifold; §5.10's five-bar number comes from
+a multistart over the kinematic restoration. None of them has a rule for *where
+to look next* or a bound saying when there is nothing left to find. That is what
+a global method is for, and
+[`gemseo-box-subdivision`](https://simoneconiglio.github.io/gemseo-box-subdivision/)
+is one: it cuts the design space into a Cartesian grid of boxes, makes the choice
+of a box a categorical variable, and hands a mixed-integer master the job of
+deciding which box to open next from the cuts of the boxes already solved. On its
+own benchmark it reaches the optimum of Rastrigin in five dimensions from every
+starting point.
+
+This section applies it here. The answer has three parts: the method cannot be
+applied to this design space as it stands, the reason is a property of the
+problem rather than of the method, and once repaired it runs and reaches nothing
+the local search had not already reached.
+
+### The obstacle: a box is not somewhere a solver can start
+
+`analyse` gates a design twice, and over 20 000 uniform draws from the global
+box:
+
+| outcome | share |
+|---|---|
+| kinematically incompatible, $W \ge 1$ | 91.2 % |
+| $\lambda(\theta_1)$ has the wrong number of monotone phases | 2.8 % |
+| analysable | 6.0 % |
+| **feasible** | **0** |
+
+On the 94 % that are not analysable the disciplines return `PenaltyValues` —
+$\eta = 0$, $H = B = 1000$ — and the penalty is a **constant**. So the objective
+and five of the seven constraints are a flat plateau there, with an exactly zero
+gradient. Only $W$ and the rod angle carry information, because they are what the
+gate is computed from.
+
+A box subdivision starts each sub-problem at the **center of its box**. That is
+the right policy on a problem that has a value everywhere: the center is inside
+the box, and unlike warm-starting from the previous sub-problem it does not make
+the answer depend on the order the boxes are visited. Here it is almost surely on
+the plateau, SLSQP terminates after one evaluation, and the master builds that
+box's cut from a point at which nothing was computed. Run over a $2\times2\times3$
+grid on $(q_1, q_2, \theta_f)$, the method spends 65 analyses and **reports no
+design at all**.
+
+This is not the method failing for the reason a method usually fails. It is an
+assumption — that a box is somewhere a solver can start — that this design space
+denies.
+
+### The repair: restore a startable point inside each box
+
+`gemseo-box-subdivision` had no way to express a different policy under its
+recommended formulation, so one was added upstream: `scenario_adapter_cls`, the
+adapter that runs a box's sub-problem and therefore decides where it begins.
+{mod}`exlink.subdivision` fills it with three stages, run inside the box the
+master has just chosen:
+
+1. **Probe** the box uniformly and keep what is analysable. An analysis costs
+   0.29 ms, so a few hundred probes cost a fraction of one evaluation of the
+   range problem.
+2. **Descend to analysability** when no probe lands there, by minimising $W$
+   inside the box — the one quantity of the penalised branch that still has a
+   gradient, and an exact one.
+3. **Restore**, by maximising the *smallest* scaled constraint margin in the
+   epigraph form of §6.3, so the start is interior rather than merely feasible.
+
+Stage 3 needs one piece of bookkeeping that is easy to omit and decides whether
+it works at all. The restoration is free to step back onto the plateau, where
+every margin is the floor and every gradient is zero, and SLSQP does not come
+back; so every iterate is scored as it is evaluated and the solve returns the
+best **analysable** point it ever saw, which is not where it stopped. Without
+that, five restorations in nine ended worse than the probe they started from.
+
+The nine margins are also scaled, each by its own bound. A clearance violation is
+tens of millimetres and a side-load violation is hundredths; unscaled, the
+smallest margin is always the same row and maximising it ignores the other four.
+
+With this, the method runs. The same grid opens five to eight of its twelve boxes
+and returns designs from two to four of them.
+
+### What it is worth
+
+Everything below is the geometric efficiency problem of §4.2 over the global box,
+the same $2\times2\times3$ grid, SLSQP inside every box with the same budget, and
+three seeds where the result depends on one.
+
+| | $\eta$ | analyses | boxes opened | boxes yielding a design |
+|---|---|---|---|---|
+| one SLSQP solve from the reference (§4.2) | **0.2842** | 60 | — | — |
+| multistart, 12 restarts (§4.6) | 0.2842 | 12 x 60 | — | 1 restart of 12 |
+| box subdivision, box-centre starts | *none found* | 65 | 0 | 0 |
+| box subdivision, restored starts | 0.2842 | 3 800 – 9 700 | 5 – 8 | 2 – 4 |
+| **every box enumerated**, restored starts | 0.2842, once **0.2964** | 10 900 – 14 400 | 12 | 3 – 5 |
+
+Three things in that table are worth saying out loud.
+
+**The subdivision costs 60 to 160 times the solve it ties.** 0.2842 is what one
+SLSQP run from the reference reaches in 60 analyses. Most of the subdivision's
+cost is the box starts, not the sub-problems: 6 514 analyses against 421 in the
+seed-0 run. That ratio is the price of a design space whose feasible set has to
+be searched for before it can be optimised in.
+
+**There is a better design in the grid, and finding it is a coin flip.** Box
+$(1,0,1)$ — $q_1$ in the upper half, $\theta_f$ in the middle third — yields
+$\eta = 0.2964$, 4.3 % above the reference, at seed 0. At seeds 1 and 2 the same
+exhaustive enumeration of the same twelve boxes does not find it. The reason is
+visible one level down: of the sixty iterates that box's sub-problem passes
+through, exactly **one** lies inside the 0.05 mm band on the expansion stroke.
+Whether a box "yields a design" is decided by whether one iterate in sixty lands
+in a sliver, not by the method choosing well. The same fragility is what §4.1
+reports as no feasible point in 12 000 uniform samples, seen from the inside.
+
+**The master never opens that box.** With feasibility cuts on, it converges after
+eight boxes and reports success at 0.2842 — the failure mode the method's own
+documentation warns about, a master whose cuts are invalid on a non-convex
+landscape converging early and reporting success far from the optimum. The
+documented guard against it is the convexity margin, and here it does nothing:
+0, 0.13, 1.0 and 100 — the last some eight hundred times the spread of the
+objective over the boxes that yield anything — all open eight boxes and all
+return 0.2842.
+
+That is the most transferable finding of this section, and it is about the method
+rather than about this engine. **The convexity margin relaxes the objective cuts,
+and on a problem where most boxes are infeasible the master is steered by the
+feasibility cuts, which it does not relax.** Detaching the feasibility cuts
+(`main_level=False`) and setting a margin far above the objective's range does
+make the master open all twelve boxes — and it still returns 0.2842, because the
+one iterate in sixty fell elsewhere.
+
+### What this establishes
+
+The method transfers to this problem in the sense that matters: with a box start
+it can evaluate, it runs, it explores, and it returns designs. It does not
+transfer in the sense a user cares about. It costs two orders of magnitude more
+than the local solve it matches, its headline tuning decision has no effect here,
+and the one better design its grid contains is found by exhaustive enumeration in
+one seed of three.
+
+The obstacle is not the multimodality the method targets. It is that 94 % of this
+design box has no value at all and the feasible set inside the remaining 6 % is a
+codimension-two sliver. A box subdivision assumes a box is a region where a
+sub-problem can be posed and solved; here, posing and solving a box *is* the
+problem, and the method inherits it twelve times over instead of once.
+
+What would change the answer is stated rather than guessed: a box start that
+finds the *best* feasible point of a box rather than the nearest interior one,
+and a master whose feasibility cuts are as relaxable as its objective cuts.
+Neither is a setting.

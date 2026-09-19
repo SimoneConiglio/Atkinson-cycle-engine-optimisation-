@@ -75,6 +75,17 @@ result of §5.1: the quasi-statically optimised design is still unbuildable at 4
 Adding a reliability target gives **3395 km/L at $P_f = 10^{-3}$** — 3 % less range for a
 design that survives its own manufacturing scatter.
 
+**A global method needs a design space it can stand in.** Cutting the box into boxes and
+letting a mixed-integer master choose between them — the
+[box-subdivision outer approximation](https://simoneconiglio.github.io/gemseo-box-subdivision/)
+— does not work here as it stands, and the reason is not the multimodality it targets:
+**94 %** of this design box cannot be analysed at all and reports a flat penalty, so a
+sub-problem started at the centre of its box returns that centre. Restoring a startable
+point per box makes it run, at 60 to 160 times the cost of the local solve it ties. Its
+headline tuning decision, the convexity margin, measurably does nothing here — with most
+boxes infeasible the master is steered by feasibility cuts, which that margin does not
+relax (§5.11).
+
 ## The problem, as GEMSEO assembles it
 
 ![N2 chart of the five disciplines](docs/figures/n2.png)

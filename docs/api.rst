@@ -81,6 +81,18 @@ Needs the optional ``gemseo-bilevel-outer-approximation`` plugin
 
 .. automodule:: exlink.minlp
 
+Global search by box subdivision
+--------------------------------
+
+The design space cut into a Cartesian grid of boxes, the choice of a box made a
+categorical variable, and a mixed-integer master deciding which one to open
+next.  Ninety-four per cent of this design box cannot be analysed at all, so
+most of this module is the box-start policy that makes a box somewhere a solver
+can begin.  Needs the optional ``gemseo-box-subdivision`` plugin
+(``pip install exlink-opt[subdivision]``).
+
+.. automodule:: exlink.subdivision
+
 Optimization
 ------------
 

@@ -116,6 +116,8 @@ src/exlink/
   slidercrank.py   the second mechanism, on identical terms
   synthesis.py     prescribed-motion targets, the constrained fit, and range
                    under every constraint with the target as a fallback
+  subdivision.py   the design box cut into boxes, and the per-box restoration
+                   that makes a box somewhere a solver can start
 ```
 
 ## Reproducing the results
@@ -135,6 +137,7 @@ src/exlink/
 | the third point on the dimensionality axis, §5.4 | `exlink.slidercrank.SliderCrank(offset=...)` |
 | the restoration and continuation of §5.5 | `exlink.restoration.restore`, `exlink.continuation.reliability_continuation` |
 | the topology synthesis of §5.6 and §5.7 | `python examples/12_topology_synthesis.py` |
+| the box subdivision of §5.11 | `python examples/13_box_subdivision.py` |
 | the tolerance study, ISO grades and coupling curve | `python examples/07_robustness.py` |
 
 ## Tests
