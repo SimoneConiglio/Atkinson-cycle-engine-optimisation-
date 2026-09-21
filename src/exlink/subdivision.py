@@ -1296,7 +1296,15 @@ def build_subdivided_range_scenario(
             not among them; the gear pair pins it, as in
             :func:`~exlink.scenarios.build_range_scenario`.
         bounds: The design box.
-        initial: Starting design; the refined reference if omitted.
+        initial: Starting design, and the incumbent tried first in every box;
+            :data:`~exlink.reference.COUPLED_DESIGN` if omitted.  This is
+            **not** the default of
+            :func:`~exlink.scenarios.build_range_scenario`, which starts from
+            the published design, and the difference is deliberate: here the
+            incumbent is also the warm start of every box, and the published
+            design does not run at all -- it scores 0 km/L, because friction
+            exceeds its indicated work -- so as a warm start it is worth
+            nothing and every box pays a full restoration instead.
         speed_rpm: Crankshaft speed [rev/min].
         samples: Crank angles per revolution.
         vehicle: The car.
@@ -1331,7 +1339,7 @@ def build_subdivided_range_scenario(
     )
     from .gears import lattice_inter_axle, size_pair, tooth_count
     from .materials import DEFAULT_MATERIAL, DEFAULT_SAFETY
-    from .reference import PUBLISHED_DESIGN
+    from .reference import COUPLED_DESIGN
     from .scenarios import (
         COUPLED_INEQUALITY_OUTPUTS,
         COUPLED_SAMPLES,
@@ -1354,7 +1362,7 @@ def build_subdivided_range_scenario(
     the_material = DEFAULT_MATERIAL if material is None else material
     the_safety = DEFAULT_SAFETY if safety is None else safety
 
-    start = PUBLISHED_DESIGN if initial is None else initial
+    start = COUPLED_DESIGN if initial is None else initial
     if module is None:
         module = size_pair(start.I, 1000.0).module
     if teeth is None:
