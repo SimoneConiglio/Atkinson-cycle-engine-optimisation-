@@ -51,7 +51,7 @@ three stages, run inside the box the master has just chosen and nowhere else:
 1. **Probe.** A uniform sample of the box, kept if
    :attr:`~exlink.model.Analysis.valid`.  An analysis costs 0.29 ms at 180
    crank angles, so a few hundred probes of a box cost a fraction of one
-   evaluation of the range problem, which costs 5.6 s.
+   evaluation of the range problem, which costs 10.4 s.
 2. **Descend to analysability**, when no probe lands there.  ``W`` is smooth on
    the plateau and its gradient is exact, so minimising it inside the box is an
    ordinary bound-constrained solve -- the one quantity of the penalised branch
@@ -1283,9 +1283,12 @@ def build_subdivided_range_scenario(
 
     What it costs
     -------------
-    One point of this problem is 5.6 s against 0.54 ms for the geometric one,
-    four orders of magnitude, and the box subdivision spends its budget on
-    boxes rather than on iterations.  The box starts stay geometric --
+    One point of this problem is 10.4 s against 0.29 ms for the geometric one,
+    measured over a forty-iteration solve rather than a handful of steps -- a
+    short run reports about half that, because the MDA is warm-started and has
+    less to converge near its own last answer.  Between the two problems that
+    is four and a half orders of magnitude, and the box subdivision spends its
+    budget on boxes rather than on iterations.  The box starts stay geometric --
     :func:`find_box_start` uses the cheap analysis -- because the gate that
     defeats a cold start is geometric: everything downstream of
     :class:`~exlink.disciplines.ExlinkDiscipline` is only reached by a design
