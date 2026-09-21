@@ -79,9 +79,16 @@ the box, and the difference is not small: on the box that holds the best design
 found anywhere, **one** of the sixty iterates the sub-problem passes through
 lands inside the band, and whether it does is not stable across seeds.
 
+And on the range problem a second obstacle arrives before this one does: the
+gear pair pins ``I`` to a lattice value, and on the incumbent that move -- 0.72
+mm -- costs seventeen characteristic magnitudes of constraint margin.  No box
+then has a usable warm start, including the box the incumbent is in.
+
 §5.11 reports what the method is worth here once all of that is paid for.  The
-short version is that it runs, it finds designs, and on this problem it does
-not reach anything the single SLSQP solve of §4.2 had not already reached.
+short version is that it runs, it explores -- on the range problem the best box
+is not the incumbent's -- and on neither problem does it reach what a single
+SLSQP solve reaches, at sixty to a hundred and sixty times the cost on the
+geometric one and ten times on the range.
 """
 
 from __future__ import annotations

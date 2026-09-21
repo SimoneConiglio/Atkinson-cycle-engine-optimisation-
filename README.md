@@ -84,7 +84,11 @@ sub-problem started at the centre of its box returns that centre. Restoring a st
 point per box makes it run, at 60 to 160 times the cost of the local solve it ties. Its
 headline tuning decision, the convexity margin, measurably does nothing here — with most
 boxes infeasible the master is steered by feasibility cuts, which that margin does not
-relax (§5.11).
+relax. On the range problem a second obstacle arrives first: pinning the gear pair moves
+the incumbent 0.72 mm and costs **seventeen** characteristic magnitudes of constraint
+margin, so no box has a usable warm start and the run lands 30 % short of a single solve
+at ten times the cost. The exploration is not what fails — the best box is not the
+incumbent's — the repair inside it is (§5.11).
 
 ## The problem, as GEMSEO assembles it
 

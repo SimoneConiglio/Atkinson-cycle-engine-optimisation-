@@ -1435,12 +1435,13 @@ one iterate in sixty fell elsewhere.
 
 ### What this establishes
 
-The method transfers to this problem in the sense that matters: with a box start
-it can evaluate, it runs, it explores, and it returns designs. It does not
-transfer in the sense a user cares about. It costs two orders of magnitude more
-than the local solve it matches, its headline tuning decision has no effect here,
-and the one better design its grid contains is found by exhaustive enumeration in
-one seed of three.
+The method transfers to both problems in the sense that matters: with a box
+start it can evaluate, it runs, it explores, and it returns designs. It does not
+transfer in the sense a user cares about. On the geometric problem it costs two
+orders of magnitude more than the local solve it matches, its headline tuning
+decision has no effect, and the one better design its grid contains is found by
+exhaustive enumeration in one seed of three. On the range problem it is thirty
+per cent short at ten times the cost.
 
 The obstacle is not the multimodality the method targets. It is that 94 % of this
 design box has no value at all and the feasible set inside the remaining 6 % is a
@@ -1452,3 +1453,80 @@ What would change the answer is stated rather than guessed: a box start that
 finds the *best* feasible point of a box rather than the nearest interior one,
 and a master whose feasibility cuts are as relaxable as its objective cuts.
 Neither is a setting.
+
+The range problem adds a third, and it is the one to try first, because the
+measurement above says the exploration is already working and the repair is
+not. Restoration there is asked to undo the gear pair's 0.72 mm and find a good
+design, in forty iterations, from an interior point chosen without reference to
+the objective. Splitting those two jobs — repair the equalities the pinned $I$
+broke, *then* optimise — is what §4.7 does at the top level and what every box
+here would need.
+
+### The range problem, where the gear pair gets there first
+
+Everything above is §4.2's geometric problem. The headline problem is §4.7's
+range, and posing it as a subdivision needs two things the geometric one did
+not: the relaxed equalities and the two positive-sense margins have to arrive
+as ordinary `<= 0` outputs, because the Benders adapter differentiates a
+sub-problem constraint by looking its *name* up among the discipline outputs
+and a renamed one is not there; and the sizing/inertia MDA has to be built
+explicitly and placed in the chain as one discipline, because the sub-problem
+is handed `DisciplinaryOpt` by the master and chaining the five disciplines
+instead would price an engine whose inertia and whose sections disagree.
+
+With that, over a $2\times3$ grid on $(q_1, \theta_f)$, starting from
+`COUPLED_DESIGN`:
+
+| | range | wall clock |
+|---|---|---|
+| one SLSQP solve, 40 iterations | **3331.3 km/L** | 415 s |
+| one SLSQP solve, 120 iterations | 3340.8 km/L | 1067 s |
+| box subdivision, 6 boxes at 40 iterations each | 2331.9 km/L | 4289 s |
+
+| box | box start | worst scaled margin | range |
+|---|---|---|---|
+| (0,1) | restoration | 0.887 | **2331.9** |
+| (0,2) | restoration | 0.876 | 1970.6 |
+| (0,0) | restoration | 0.751 | — |
+| (1,0) | probe | −50.0 | — |
+| (1,1) | probe | −50.0 | — |
+| (1,2) | probe | −50.0 | — |
+
+Thirty per cent short of the single solve, at ten times the cost. One part of
+that is the geometric story again — three of six boxes end at the margin floor,
+with analysable points but no route from them to the feasible set. The rest is
+specific to this problem, and it is not the master's fault.
+
+**The gear pair destroys the warm start before any box sees it.** The range
+problem pins $I = 1.5\,m\,z$ from a lattice, which is what makes it
+mixed-integer and is done before anything else. `COUPLED_DESIGN` sits in box
+(0,2) and scores 3351.5 km/L. Pinning its $I$ from 57.7845 mm to the lattice's
+58.5 mm — a change of 0.72 mm, module 1.5 and 26 teeth — takes it from feasible
+at a worst scaled margin of $+0.030$ to infeasible at $-17.3$. Seventeen
+characteristic magnitudes, for three quarters of a millimetre.
+
+That is §4.7's own "choose the integers, repair the continuum" structure,
+arriving one level earlier than it does there. The consequence for a
+subdivision is that **no box has a usable incumbent**, including the box the
+incumbent is in: every one of them falls through to a full restoration, which
+heads for whatever interior point is nearest, and forty sub-problem iterations
+do not walk back from there to the equalities. Box (0,2) is the clearest case —
+it starts from the design that scores 3351.5 and returns 1970.6.
+
+Two things are worth keeping from this.
+
+**The exploration works; the repair is what fails.** The best box, (0,1), is
+*not* the incumbent's. The master did prefer a box the local search had no
+reason to look in, which is the one thing a global method is for. What it could
+not do is get a good design out of it, and that is a property of the
+sub-problem, not of the box.
+
+**Keeping the box starts geometric is the design decision that transfers.** All
+six boxes together cost **4375 geometric analyses**, about 1.3 seconds, against
+71 minutes of range evaluations — a range point is 10.4 s, four and a half
+orders of magnitude more than the 0.29 ms geometric one. The gate that defeats
+a cold start is geometric, since everything downstream of the linkage is only
+reached by a linkage that closes, so the expensive model never pays for the
+search that finds a startable point. On a problem where an evaluation is a
+simulation rather than a closed form, that is the part of this construction
+worth copying.
